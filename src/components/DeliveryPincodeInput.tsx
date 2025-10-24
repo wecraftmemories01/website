@@ -60,6 +60,19 @@ async function fetchCustomer(customerId: string, token: string) {
     return { ok: res.ok, status: res.status, json };
 }
 
+/** New helper: check logistic serviceability for the pincode */
+async function checkPincodeServiceability(pincode: string) {
+    const url = `${API_BASE}/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`;
+    try {
+        const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
+        let json = null;
+        try { json = await res.json(); } catch { }
+        return { ok: res.ok, status: res.status, json };
+    } catch (err) {
+        return { ok: false, status: 0, json: null, error: err };
+    }
+}
+
 export default function DeliveryPincodeInput({ className }: { className?: string }) {
     const [value, setValue] = useState<string>(""); // visible saved PIN in header
     const [editValue, setEditValue] = useState<string>(""); // editor input inside popup
@@ -181,7 +194,43 @@ export default function DeliveryPincodeInput({ className }: { className?: string
             return;
         }
 
-        try { safeSetItem(LOCAL_KEY, trimmed); } catch { }
+        // 1) Check serviceability first (must support prepaid)
+        setLoading(true);
+        setStatusMessage("Checking serviceability for the PIN…");
+        try {
+            const svc = await checkPincodeServiceability(trimmed);
+            if (!svc.ok || !svc.json) {
+                // API failure -> treat as not serviceable (or network)
+                const errMsg = svc.json && (svc.json.error || svc.json.message) ? (svc.json.error || svc.json.message) : `HTTP ${svc.status || "network"}`;
+                setError("Unable to verify serviceability. Please try again.");
+                setStatusMessage(`Service check failed: ${errMsg}`);
+                setLoading(false);
+                setTimeout(() => setStatusMessage(null), 2500);
+                return;
+            }
+
+            // expected shape: { ack: "success", data: { prepaid: true, ... } }
+            const svcData = svc.json.data;
+            const prepaidAvailable = svcData && svcData.prepaid === true;
+
+            if (!prepaidAvailable) {
+                setError("Pincode is not serviceable for prepaid orders.");
+                setStatusMessage("Pincode not serviceable for prepaid (online payment).");
+                setLoading(false);
+                return;
+            }
+        } catch (err: any) {
+            setError("Failed to check pincode serviceability.");
+            setStatusMessage(`Network error: ${err?.message ?? String(err)}`);
+            setLoading(false);
+            setTimeout(() => setStatusMessage(null), 3000);
+            return;
+        }
+
+        // 2) If serviceable for prepaid, proceed to save locally and (if logged in) on server
+        try {
+            safeSetItem(LOCAL_KEY, trimmed);
+        } catch { }
         const now = Date.now();
         try { safeSetItem(`${LOCAL_KEY}:savedAt`, String(now)); } catch { }
         setValue(trimmed);
@@ -217,6 +266,7 @@ export default function DeliveryPincodeInput({ className }: { className?: string
             }
         } else {
             setStatusMessage("Saved locally (not synced — login required).");
+            setLoading(false);
             setTimeout(() => setStatusMessage(null), 2000);
         }
     }, [editValue]);
@@ -316,7 +366,6 @@ export default function DeliveryPincodeInput({ className }: { className?: string
                         Set Pincode
                     </button>
                 )}
-                {/* header no longer shows lastSavedAt or statusMessage */}
             </div>
 
             {popupOpen && typeof document !== "undefined" ? ReactDOM.createPortal(Popup, document.body) : null}
