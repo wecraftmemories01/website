@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import Select from "react-select";
 import { Plus, X, CreditCard, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const DELIVERY_CHARGE = 70;
+const DEFAULT_DELIVERY_CHARGE = 70; // fallback if API fails
 const CUSTOMER_KEY = "customerId";
 const TOKEN_KEY = "accessToken";
 
+/** Types (adjusted id to accept string|number) */
 export type Address = {
-    id: number;
+    id: string | number;
     serverId?: string | null;
     recipientName: string;
     recipientContact: string;
@@ -42,17 +43,22 @@ type Props = {
     initialCart?: CartItem[];
 };
 
+/** Helper: check Indian pincode rough validation */
+function isValidIndianPincode(pin: string) {
+    return /^[1-9][0-9]{5}$/.test(pin);
+}
+
 export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
     const router = useRouter();
     const [checkingAuth, setCheckingAuth] = useState(true);
 
     const [addresses, setAddresses] = useState<Address[]>(initialAddresses || []);
     const [cart, setCart] = useState<CartItem[]>(initialCart || []);
-    const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
     const [showModal, setShowModal] = useState(false);
 
     const blankAddress: Address = {
-        id: 0,
+        id: `local_${Date.now()}`,
         serverId: null,
         recipientName: "",
         recipientContact: "",
@@ -66,14 +72,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         pincode: "",
         isDefault: false,
     };
-    const [form, setForm] = useState<Address>(blankAddress);
+    const [form, setForm] = useState<Address>({ ...blankAddress });
 
     const [loadingAddresses, setLoadingAddresses] = useState(false);
 
     const [countries, setCountries] = useState<Array<{ _id: string; countryName: string }>>([]);
-    const [states, setStates] = useState<Array<{ _id: string; stateName: string; country?: { _id: string } }>>(
-        []
-    );
+    const [states, setStates] = useState<Array<{ _id: string; stateName: string; country?: { _id: string } }>>([]);
     const [cities, setCities] = useState<Array<{ _id: string; cityName: string; state?: { _id: string } }>>([]);
 
     const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false });
@@ -81,6 +85,23 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [countrySearch, setCountrySearch] = useState("");
     const [stateSearch, setStateSearch] = useState("");
     const [citySearch, setCitySearch] = useState("");
+
+    // serviceability cache keyed by pincode
+    type ServiceEntry = { checking: boolean; prepaid: boolean | null; error?: string };
+    const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>({});
+
+    // delivery charge (single value used in UI for selected address)
+    type DeliveryEntry = { checking: boolean; value: number | null; error?: string };
+    const [deliveryMap, setDeliveryMap] = useState<Record<string, DeliveryEntry>>({});
+
+    // mounted ref to avoid updating state after unmount
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
     useEffect(() => {
         try {
@@ -140,6 +161,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         setAddresses(mapped);
                         if (selectedAddressId === null && mapped.length > 0) setSelectedAddressId(mapped[0].id);
 
+                        // fetch geo for the first address
                         const first = mapped[0];
                         if (first?.countryId) {
                             try {
@@ -186,6 +208,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    /** API helpers (same shape as your original file, plus serviceability check) */
     function getApiBase(): string {
         if (typeof window === "undefined") return "";
         return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
@@ -340,10 +363,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
+    // Use stable server id as local id when available
     function mapServerAddressToLocal(serverRec: any): Address {
+        const serverId = serverRec._id ? String(serverRec._id) : null;
+        const localId = serverId ? `srv_${serverId}` : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
+
         return {
-            id: Date.now() + Math.floor(Math.random() * 1000),
-            serverId: serverRec._id ? String(serverRec._id) : null,
+            id: localId,
+            serverId: serverId,
             recipientName: serverRec.recipientName ?? "",
             recipientContact: serverRec.recipientContact ?? "",
             addressLine1: serverRec.addressLine1 ?? "",
@@ -413,53 +440,128 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return json;
     }
 
-    useEffect(() => {
-        let mounted = true;
+    /** New: call logistic serviceability and cache result per-pincode
+     *  Endpoint: /logistic_partner/get_pincode_serviceability/{pincode}
+     *  We treat serviceable if response.json.data?.prepaid === true
+     */
+    async function fetchPincodeServiceability(pincode: string) {
+        const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
         try {
-            const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
-            if (!cust) {
-                router.replace("/login");
-                return;
+            const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
+            if (!res.ok) {
+                const json = await safeJson(res);
+                return { ok: false, message: json?.error || json?.message || `HTTP ${res.status}` };
             }
+            const json = await safeJson(res);
+            const data = json?.data ?? null;
+            const prepaid = data && data.prepaid === true;
+            return { ok: true, prepaid, raw: json };
+        } catch (err: any) {
+            return { ok: false, message: err?.message ?? String(err) };
+        }
+    }
 
-            (async () => {
-                try {
-                    const serverCart = await apiGetCart(cust);
-                    if (!mounted) return;
-                    setCart(Array.isArray(serverCart) ? serverCart : []);
-                } catch (err) {
-                    console.warn("Could not load server cart, keeping current cart state", err);
-                }
-            })().finally(() => {
-                if (mounted) setCheckingAuth(false);
+    // Guarded serviceability checker
+    async function checkAndCacheServiceability(pincode: string) {
+        const key = String(pincode || "").trim();
+        if (!key || !isValidIndianPincode(key)) return;
+
+        const prev = serviceMap[key];
+        // if we already have entry and not checking -> skip
+        if (prev && prev.checking === false && typeof prev.prepaid === "boolean") return;
+        if (prev && prev.checking === true) return; // already in-flight
+
+        // set checking state
+        setServiceMap((m) => ({ ...m, [key]: { checking: true, prepaid: null } }));
+        try {
+            const result = await fetchPincodeServiceability(key);
+            if (!mountedRef.current) return;
+            if (result.ok) {
+                setServiceMap((m) => ({ ...m, [key]: { checking: false, prepaid: !!result.prepaid } }));
+            } else {
+                setServiceMap((m) => ({ ...m, [key]: { checking: false, prepaid: null, error: result.message || "Service check failed" } }));
+            }
+        } catch (err: any) {
+            if (!mountedRef.current) return;
+            setServiceMap((m) => ({ ...m, [key]: { checking: false, prepaid: null, error: (err?.message ?? String(err)) } }));
+        }
+    }
+
+    // ---------- Delivery charge API call & cache (GET with query param) ----------
+    async function apiFetchDeliveryCharge(pincode: string): Promise<{ ok: boolean; charge?: number; message?: string }> {
+        try {
+            const customerId = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
+            const token = getAuthToken();
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const path = `/logistic_partner/get_delivery_charge/${encodeURIComponent(pincode)}${customerId ? `?customerId=${encodeURIComponent(customerId)}` : ""}`;
+            const url = buildUrl(path);
+
+            const res = await fetch(url, {
+                method: "GET",
+                headers,
             });
-        } catch {
-            router.replace("/login");
-            return;
-        }
 
-        return () => {
-            mounted = false;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+            if (!res.ok) {
+                const payload = await safeJson(res);
+                const msg = payload?.message || payload?.error || `HTTP ${res.status}`;
+                return { ok: false, message: msg };
+            }
+
+            const json = (await safeJson(res)) || {};
+            const charge = json?.data?.computed?.totalDeliveryCharge;
+            if (typeof charge === "number") {
+                return { ok: true, charge };
+            }
+
+            const alt = json?.data?.totalDeliveryCharge ?? json?.totalDeliveryCharge;
+            if (typeof alt === "number") return { ok: true, charge: alt };
+
+            return { ok: false, message: "Delivery charge not found in response" };
+        } catch (err: any) {
+            return { ok: false, message: err?.message ?? String(err) };
+        }
+    }
+
+    // Guarded fetch + cache
+    async function fetchAndCacheDeliveryCharge(pincode: string) {
+        const key = String(pincode || "").trim();
+        if (!key || !isValidIndianPincode(key)) return;
+
+        const prev = deliveryMap[key];
+        if (prev && prev.checking === false && typeof prev.value === "number") return; // already cached
+        if (prev && prev.checking === true) return; // already in-flight
+
+        setDeliveryMap((d) => ({ ...d, [key]: { checking: true, value: null } }));
+        try {
+            const res = await apiFetchDeliveryCharge(key);
+            if (!mountedRef.current) return;
+            if (res.ok) {
+                setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: res.charge ?? DEFAULT_DELIVERY_CHARGE } }));
+            } else {
+                setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: null, error: res.message || "Failed to fetch" } }));
+            }
+        } catch (err: any) {
+            if (!mountedRef.current) return;
+            setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: null, error: err?.message ?? String(err) } }));
+        }
+    }
+    // ------------------------------------------------------------------------------
 
     useEffect(() => {
-        try {
-            const count = cart.reduce((s, it) => s + (Number(it.qty) || 1), 0);
-            try {
-                if (typeof window !== "undefined") localStorage.setItem("cartCount", String(count));
-            } catch {
-                /* ignore */
+        // On mount, proactively check serviceability for each loaded address (to show UI errors quickly)
+        addresses.forEach((a) => {
+            if (a.pincode && isValidIndianPincode(a.pincode)) {
+                checkAndCacheServiceability(a.pincode);
+                fetchAndCacheDeliveryCharge(a.pincode).catch(() => { });
             }
-            if (typeof window !== "undefined") window.dispatchEvent(new Event("cartChanged"));
-        } catch (err) {
-            console.error("[CheckoutPanel] update cartCount error", err);
-        }
-    }, [cart]);
+        });
+        // only depends on addresses length/chg — still a safe prefetch
+    }, [addresses.length]);
 
-    function openAdd() {
-        setForm({ ...blankAddress, id: Date.now() });
+    async function openAdd() {
+        setForm({ ...blankAddress, id: `local_${Date.now()}` });
 
         (async () => {
             if (!countries.length) {
@@ -486,7 +588,24 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return alert("Please fill at least recipient name, address line 1, city (id) and pincode");
         }
 
-        const id = Date.now();
+        // validate pincode format
+        if (!isValidIndianPincode(form.pincode)) {
+            return alert("Enter a valid 6-digit PIN code");
+        }
+
+        // check serviceability for this pincode before saving (must support prepaid)
+        setServiceMap((m) => ({ ...m, [form.pincode]: { checking: true, prepaid: null } }));
+        const svc = await fetchPincodeServiceability(form.pincode);
+        if (!svc.ok) {
+            setServiceMap((m) => ({ ...m, [form.pincode]: { checking: false, prepaid: null, error: svc.message || "Service check failed" } }));
+            return alert("Unable to verify pincode serviceability right now. Please try again.");
+        }
+        if (!svc.prepaid) {
+            setServiceMap((m) => ({ ...m, [form.pincode]: { checking: false, prepaid: false } }));
+            return alert("This pincode is not serviceable for prepaid (online) orders. Please use a different address or contact support.");
+        }
+
+        const id = `local_${Date.now()}`;
         const newAddr: Address = { ...form, id };
         setAddresses((prev) => [newAddr, ...prev]);
         setSelectedAddressId(id);
@@ -548,6 +667,45 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
+    useEffect(() => {
+        try {
+            const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
+            if (!cust) {
+                router.replace("/login");
+                return;
+            }
+
+            (async () => {
+                try {
+                    const serverCart = await apiGetCart(cust);
+                    setCart(Array.isArray(serverCart) ? serverCart : []);
+                } catch (err) {
+                    console.warn("Could not load server cart, keeping current cart state", err);
+                }
+            })().finally(() => {
+                setCheckingAuth(false);
+            });
+        } catch {
+            router.replace("/login");
+            return;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        try {
+            const count = cart.reduce((s, it) => s + (Number(it.qty) || 1), 0);
+            try {
+                if (typeof window !== "undefined") localStorage.setItem("cartCount", String(count));
+            } catch {
+                /* ignore */
+            }
+            if (typeof window !== "undefined") window.dispatchEvent(new Event("cartChanged"));
+        } catch (err) {
+            console.error("[CheckoutPanel] update cartCount error", err);
+        }
+    }, [cart]);
+
     function placeOrder() {
         const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
         if (!cust) {
@@ -557,6 +715,32 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (!selectedAddressId) {
             return alert("Please select or add a delivery address");
         }
+
+        const addr = addresses.find((a) => a.id === selectedAddressId);
+        if (!addr) return alert("Selected address not found");
+
+        const svc = serviceMap[addr.pincode];
+        if (svc?.checking) return alert("Checking pincode serviceability — please wait a moment");
+        if (svc && svc.prepaid === false) return alert("Selected address is not serviceable for prepaid orders. Choose another address.");
+
+        // final double-check if we have no cached data
+        if (!svc || svc.prepaid === null) {
+            (async () => {
+                try {
+                    const res = await fetchPincodeServiceability(addr.pincode);
+                    if (!res.ok || !res.prepaid) {
+                        setServiceMap((m) => ({ ...m, [addr.pincode]: { checking: false, prepaid: !!res.prepaid } }));
+                        return alert("Selected address is not serviceable for prepaid orders.");
+                    }
+                    setServiceMap((m) => ({ ...m, [addr.pincode]: { checking: false, prepaid: true } }));
+                    alert(`Order placed (demo)\nTotal: ₹${total}\nDeliver to address id: ${selectedAddressId}`);
+                } catch (err) {
+                    alert("Unable to verify pincode serviceability. Please try again.");
+                }
+            })();
+            return;
+        }
+
         alert(`Order placed (demo)\nTotal: ₹${total}\nDeliver to address id: ${selectedAddressId}`);
     }
 
@@ -570,11 +754,60 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     const subtotal = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
-    const total = subtotal + DELIVERY_CHARGE;
+
+    // Determine current delivery charge based on selected address/pincode
+    const currentDeliveryCharge = useMemo(() => {
+        if (!selectedAddressId) return DEFAULT_DELIVERY_CHARGE;
+        const addr = addresses.find((a) => a.id === selectedAddressId);
+        if (!addr) return DEFAULT_DELIVERY_CHARGE;
+
+        // If we have a cached delivery charge for this pincode, use it
+        const entry = deliveryMap[addr.pincode];
+        if (entry && typeof entry.value === "number") return entry.value;
+
+        // If checking or not yet fetched, show fallback
+        return DEFAULT_DELIVERY_CHARGE;
+    }, [selectedAddressId, addresses, deliveryMap]);
+
+    const total = subtotal + currentDeliveryCharge;
 
     const filteredCountries = countries.filter((c) => c.countryName.toLowerCase().includes(countrySearch.trim().toLowerCase()));
     const filteredStates = states.filter((s) => s.stateName.toLowerCase().includes(stateSearch.trim().toLowerCase()));
     const filteredCities = (cities ?? []).filter((c) => c.cityName.toLowerCase().includes(citySearch.trim().toLowerCase()));
+
+    // SAFER effect: only depend on selectedAddressId and addresses (not on serviceMap)
+    useEffect(() => {
+        if (!selectedAddressId) return;
+
+        const current = addresses.find((a) => a.id === selectedAddressId);
+        if (!current) {
+            // only set if it actually changes
+            const fallback = addresses.length ? addresses[0].id : null;
+            if (fallback !== selectedAddressId) setSelectedAddressId(fallback);
+            return;
+        }
+
+        // If the address is explicitly known to be NOT prepaid-serviceable, attempt to pick another
+        const svc = serviceMap[current.pincode];
+        if (svc && svc.prepaid === false) {
+            const firstGood = addresses.find((a) => {
+                const s = serviceMap[a.pincode];
+                return !(s && s.prepaid === false); // allow unknown or prepaid === true
+            }) ?? null;
+            if (firstGood && firstGood.id !== selectedAddressId) {
+                setSelectedAddressId(firstGood.id);
+            } else if (!firstGood && selectedAddressId !== null) {
+                setSelectedAddressId(null);
+            }
+            return;
+        }
+
+        // trigger service check and delivery charge fetch for the selected pincode (if needed)
+        if (current.pincode && isValidIndianPincode(current.pincode)) {
+            checkAndCacheServiceability(current.pincode);
+            fetchAndCacheDeliveryCharge(current.pincode).catch(() => { });
+        }
+    }, [selectedAddressId, addresses]); // intentionally NOT including serviceMap to avoid loops
 
     if (checkingAuth) {
         return (
@@ -621,52 +854,90 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 <div className="col-span-full text-center text-slate-500 p-6 border rounded-lg">No saved addresses. Add one to continue.</div>
                             )}
 
-                            {addresses.map((a) => (
-                                <label
-                                    key={a.id}
-                                    htmlFor={`addr-${a.id}`}
-                                    className={`flex flex-col gap-2 p-4 rounded-lg border hover:shadow-md transition-shadow cursor-pointer ${selectedAddressId === a.id ? "border-[#065975] bg-[#f6fbfb]" : "border-slate-100"
-                                        }`}
-                                >
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-[#065975] text-white grid place-items-center font-medium">
-                                                {a.recipientName
-                                                    .split(" ")
-                                                    .map((s) => (s && s[0] ? s[0] : ""))
-                                                    .slice(0, 2)
-                                                    .join("")}
+                            {addresses.map((a) => {
+                                const svc = serviceMap[a.pincode];
+                                const isChecking = svc?.checking === true;
+                                const prepaid = svc?.prepaid;
+                                const showError = prepaid === false;
+                                const isDisabled = prepaid === false; // <-- disable when known not serviceable
+
+                                return (
+                                    <label
+                                        key={String(a.id)}
+                                        htmlFor={`addr-${String(a.id)}`}
+                                        onClick={(e) => {
+                                            if (isDisabled) {
+                                                e.preventDefault();
+                                                const el = document.getElementById(`addr-${String(a.id)}`) as HTMLInputElement | null;
+                                                el?.blur();
+                                                return;
+                                            }
+                                        }}
+                                        className={`flex flex-col gap-2 p-4 rounded-lg border hover:shadow-md transition-shadow cursor-pointer ${selectedAddressId === a.id ? "border-[#065975] bg-[#f6fbfb]" : "border-slate-100"
+                                            }`}
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-[#065975] text-white grid place-items-center font-medium">
+                                                    {a.recipientName
+                                                        .split(" ")
+                                                        .map((s) => (s && s[0] ? s[0] : ""))
+                                                        .slice(0, 2)
+                                                        .join("")}
+                                                </div>
+                                                <div>
+                                                    <div className="font-semibold">{a.recipientName}</div>
+                                                    <div className="text-sm text-slate-500">{a.recipientContact}</div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div className="font-semibold">{a.recipientName}</div>
-                                                <div className="text-sm text-slate-500">{a.recipientContact}</div>
+
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    id={`addr-${String(a.id)}`}
+                                                    type="radio"
+                                                    name="selectedAddr"
+                                                    checked={selectedAddressId === a.id}
+                                                    onChange={() => {
+                                                        if (isDisabled) return;
+                                                        setSelectedAddressId(a.id);
+                                                    }}
+                                                    disabled={isDisabled}
+                                                    className="w-4 h-4 text-[#065975]"
+                                                    aria-label={`Select address for ${a.recipientName}`}
+                                                    aria-disabled={isDisabled}
+                                                    title={isDisabled ? "This address is not serviceable for prepaid orders" : undefined}
+                                                />
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                id={`addr-${a.id}`}
-                                                type="radio"
-                                                name="selectedAddr"
-                                                checked={selectedAddressId === a.id}
-                                                onChange={() => setSelectedAddressId(a.id)}
-                                                className="w-4 h-4 text-[#065975]"
-                                                aria-label={`Select address for ${a.recipientName}`}
-                                            />
+                                        <div className="text-sm text-slate-600 leading-snug">
+                                            {a.addressLine1}
+                                            {a.addressLine2 ? `, ${a.addressLine2}` : ""}
+                                            {a.addressLine3 ? `, ${a.addressLine3}` : ""}
+                                            {a.landmark ? `, ${a.landmark}` : ""}
+                                            {a.cityName ? `, ${a.cityName}` : ""}
+                                            {a.stateName ? `, ${a.stateName}` : ""}
+                                            {a.countryName ? `, ${a.countryName}` : ""} — {a.pincode}
                                         </div>
-                                    </div>
 
-                                    <div className="text-sm text-slate-600 leading-snug">
-                                        {a.addressLine1}
-                                        {a.addressLine2 ? `, ${a.addressLine2}` : ""}
-                                        {a.addressLine3 ? `, ${a.addressLine3}` : ""}
-                                        {a.landmark ? `, ${a.landmark}` : ""}
-                                        {a.cityName ? `, ${a.cityName}` : ""}
-                                        {a.stateName ? `, ${a.stateName}` : ""}
-                                        {a.countryName ? `, ${a.countryName}` : ""} — {a.pincode}
-                                    </div>
-                                </label>
-                            ))}
+                                        {/* serviceability UI */}
+                                        <div className="text-xs mt-1">
+                                            {isChecking ? (
+                                                <div className="text-slate-500">Checking serviceability…</div>
+                                            ) : showError ? (
+                                                <div className="text-rose-600">This pincode is not serviceable for prepaid (online) orders.</div>
+                                            ) : prepaid === true ? (
+                                                <div className="text-green-600">Serviceable for prepaid orders.</div>
+                                            ) : svc?.error ? (
+                                                <div className="text-rose-600">Service check failed: {svc.error}</div>
+                                            ) : (
+                                                <div className="text-slate-400">Serviceability unknown</div>
+                                            )}
+                                        </div>
+                                    </label>
+                                );
+                            })}
+
                         </div>
 
                         <hr className="my-6 border-slate-100" />
@@ -737,9 +1008,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 <div>Subtotal</div>
                                 <div>{formatINR(subtotal)}</div>
                             </div>
+
+                            {/* Single Delivery line below subtotal */}
                             <div className="flex justify-between">
                                 <div>Delivery</div>
-                                <div>{formatINR(DELIVERY_CHARGE)}</div>
+                                <div>
+                                    {formatINR(currentDeliveryCharge)}
+                                </div>
                             </div>
 
                             <div className="border-t pt-3 mt-3 flex justify-between items-center">
@@ -977,10 +1252,28 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="block text-sm text-slate-600 mb-1">Pincode</label>
                                         <input
                                             value={form.pincode}
-                                            onChange={(e) => setForm({ ...form, pincode: e.target.value })}
+                                            onChange={(e) => {
+                                                const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                                                setForm({ ...form, pincode: v });
+                                                // optionally trigger check as user completes 6 digits
+                                                if (v.length === 6 && isValidIndianPincode(v)) {
+                                                    checkAndCacheServiceability(v);
+                                                    fetchAndCacheDeliveryCharge(v).catch(() => { });
+                                                }
+                                            }}
                                             placeholder="Enter postal code"
                                             className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
                                         />
+                                        {/* Inline pincode check status for the form */}
+                                        <div className="text-xs mt-1">
+                                            {form.pincode && serviceMap[form.pincode]?.checking ? (
+                                                <div className="text-slate-500">Checking serviceability…</div>
+                                            ) : form.pincode && serviceMap[form.pincode]?.prepaid === false ? (
+                                                <div className="text-rose-600">This pincode is not serviceable for prepaid orders.</div>
+                                            ) : form.pincode && serviceMap[form.pincode]?.prepaid === true ? (
+                                                <div className="text-green-600">Serviceable for prepaid orders.</div>
+                                            ) : null}
+                                        </div>
                                     </div>
 
                                     {/* Default Address */}
