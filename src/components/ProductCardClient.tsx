@@ -1,67 +1,19 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Product as ProdType } from '../types/product'
 import { ShoppingCart, Check, Heart, Tag } from 'lucide-react'
 import { addToCart } from '../lib/cart'
+import favouritesClient from '../lib/favouritesClient' // adjust path if needed
 
 type Product = ProdType
 type Props = { product: Product; initialAdded?: boolean }
 
 const PLACEHOLDER = '/no-image-placeholder.png'
-const LOCAL_FAV_KEY = 'localFavourites'
-const FAV_CACHE_TTL_MS = 60 * 1000 // 1 minute
 
-/* -------------------- local storage helpers -------------------- */
-function getStoredCustomerId(): string | null {
-    if (typeof window === 'undefined') return null
-    try {
-        return localStorage.getItem('customerId')
-    } catch {
-        return null
-    }
-}
-
-function readLocalFavourites(): string[] {
-    if (typeof window === 'undefined') return []
-    try {
-        const raw = localStorage.getItem(LOCAL_FAV_KEY)
-        if (!raw) return []
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) return parsed.map(String)
-        return []
-    } catch {
-        return []
-    }
-}
-
-function writeLocalFavourites(list: string[]) {
-    if (typeof window === 'undefined') return
-    try {
-        localStorage.setItem(LOCAL_FAV_KEY, JSON.stringify(Array.from(new Set(list))))
-        window.dispatchEvent(new Event('localFavouritesUpdated'))
-    } catch {
-        // ignore
-    }
-}
-
-function addLocalFavourite(productId: string) {
-    const cur = readLocalFavourites()
-    if (!cur.includes(productId)) {
-        cur.push(productId)
-        writeLocalFavourites(cur)
-    }
-}
-
-function removeLocalFavourite(productId: string) {
-    const cur = readLocalFavourites()
-    const next = cur.filter((p) => p !== productId)
-    writeLocalFavourites(next)
-}
-
-/* -------------------- format helpers -------------------- */
+/* -------------------- format helpers (unchanged) -------------------- */
 function formatStock(q: unknown): { isInStock: boolean; label: string } {
     if (q === null || q === undefined || q === '') return { isInStock: false, label: 'Stock unknown' }
     if (typeof q === 'number') return q > 0 ? { isInStock: true, label: String(q) } : { isInStock: false, label: '0' }
@@ -85,28 +37,6 @@ function formatPrice(n?: number | string | null) {
     })
 }
 
-/* -------------------- shared favourites cache (optional) -------------------- */
-function getGlobalAny(): any {
-    if (typeof window === 'undefined') return {}
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    window.__favouritesCache = window.__favouritesCache ?? null
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    window.__favouritesPromise = window.__favouritesPromise ?? null
-    return window
-}
-
-function invalidateSharedFavourites() {
-    if (typeof window === 'undefined') return
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    window.__favouritesCache = null
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    window.__favouritesPromise = null
-}
-
 /* -------------------- Component -------------------- */
 
 export default function ProductCardClient({ product, initialAdded = false }: Props) {
@@ -116,56 +46,32 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
     const [imgError, setImgError] = useState(false)
     const [loadingAdd, setLoadingAdd] = useState(false)
     const [loadingWish, setLoadingWish] = useState(false)
-    const [syncingLocalFavs, setSyncingLocalFavs] = useState(false)
+    const [syncingFromServer, setSyncingFromServer] = useState(false)
 
     useEffect(() => {
         setMounted(true)
+        // initialize client once
+        favouritesClient.init()
 
-            ; (async () => {
-                const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-                const customerId = getStoredCustomerId()
-                if (token && customerId) {
-                    // try to sync local favourites -> server (if you have API endpoints)
-                    // We'll attempt to read shared cache first; if that fails fallback to local
-                    try {
-                        // If your app has a fetchSharedFavourites function, use it.
-                        // For now, fall back to local storage.
-                        const local = readLocalFavourites()
-                        setWish(local.includes(String(product._id)))
-                    } catch (e) {
-                        const local = readLocalFavourites()
-                        setWish(local.includes(String(product._id)))
-                    }
-                } else {
-                    const local = readLocalFavourites()
-                    setWish(local.includes(String(product._id)))
-                }
-            })()
+        // when component mounts, ensure we load server favourites if authorized
+        setSyncingFromServer(true)
+        favouritesClient.refreshFromServerIfAuthorized().finally(() => setSyncingFromServer(false))
 
-        const onStorage = () => {
-            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-            const customerId = getStoredCustomerId()
-            if (!token || !customerId) {
-                const local = readLocalFavourites()
-                setWish(local.includes(String(product._id)))
-            } else {
-                setTimeout(async () => {
-                    try {
-                        const local = readLocalFavourites()
-                        setWish(local.includes(String(product._id)))
-                    } catch {
-                        const local = readLocalFavourites()
-                        setWish(local.includes(String(product._id)))
-                    }
-                }, 0)
+        // subscribe to changes
+        const onChange = () => {
+            try {
+                setWish(favouritesClient.isFavourite(String(product._id)))
+            } catch {
+                // ignore
             }
         }
+        favouritesClient.subscribe(onChange)
 
-        window.addEventListener('storage', onStorage)
-        window.addEventListener('localFavouritesUpdated', onStorage)
+        // set initial
+        setWish(favouritesClient.isFavourite(String(product._id)))
+
         return () => {
-            window.removeEventListener('storage', onStorage)
-            window.removeEventListener('localFavouritesUpdated', onStorage)
+            favouritesClient.unsubscribe(onChange)
         }
     }, [product._id])
 
@@ -216,44 +122,49 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
         return 'SELL'
     }, [product.sellStockQuantity])
 
-    // Favourite toggle (local-only fallback if not logged in)
-    const handleToggleWish = async (e: React.MouseEvent) => {
-        e.preventDefault()
-        e.stopPropagation()
-        if (loadingWish) return
-        setLoadingWish(true)
+    const handleToggleWish = useCallback(
+        async (e: React.MouseEvent) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (loadingWish) return
+            setLoadingWish(true)
 
-        try {
-            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-            const customerId = getStoredCustomerId()
-            if (!token || !customerId) {
-                // local toggle
-                if (!wish) {
-                    addLocalFavourite(String(product._id))
-                    setWish(true)
-                } else {
-                    removeLocalFavourite(String(product._id))
-                    setWish(false)
+            try {
+                const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+                if (!token) {
+                    // not authenticated - prompt login (replace with your login modal/navigation)
+                    alert('Please log in to manage favourites.')
+                    return
                 }
+
+                // optimistic UI: flip immediately (optional)
+                const wasWish = wish
+                setWish(!wasWish)
+
+                const res = await favouritesClient.toggle(String(product._id))
+                if (!res.success) {
+                    // rollback
+                    setWish(wasWish)
+                    if (res.message === 'not_authenticated' || String(res.message).includes('401')) {
+                        // session expired: clear and ask to login
+                        alert('Session expired. Please login again.')
+                    } else if (res.message === 'favourite_id_not_found') {
+                        // attempt safe refresh
+                        await favouritesClient.refreshFromServerIfAuthorized()
+                        alert('Could not remove favourite; please try again.')
+                    } else {
+                        alert(res.message || 'Could not update favourite.')
+                    }
+                }
+            } catch (err) {
+                console.error('Favourite toggle error', err)
+                alert('Something went wrong while updating favourites.')
+            } finally {
                 setLoadingWish(false)
-                return
             }
-
-            // If logged in you should call server endpoints to add/remove favourites.
-            // For simplicity in this file we'll toggle local and rely on your server sync elsewhere.
-
-            if (!wish) {
-                setWish(true)
-                // ideally call server add favourite here, then invalidate shared cache
-                removeLocalFavourite(String(product._id)) // if it existed locally
-            } else {
-                setWish(false)
-                // ideally call server remove favourite here
-            }
-        } finally {
-            setLoadingWish(false)
-        }
-    }
+        },
+        [product._id, loadingWish, wish]
+    )
 
     return (
         <Link href={`/products/${product._id}`} className="block">
@@ -285,7 +196,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                     <button
                         aria-pressed={wish}
                         onClick={handleToggleWish}
-                        disabled={loadingWish || syncingLocalFavs}
+                        disabled={loadingWish || syncingFromServer}
                         className={`absolute top-2 right-2 p-2 rounded-md shadow-md transition-transform duration-150 focus:outline-none
               ${wish ? 'bg-rose-500 hover:bg-rose-600 active:scale-95' : 'bg-white hover:bg-gray-100 active:scale-95'}`}
                         title={loadingWish ? 'Working…' : wish ? 'Remove from favourites' : 'Add to favourites'}

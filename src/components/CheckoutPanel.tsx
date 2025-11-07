@@ -6,30 +6,14 @@ import Select from "react-select";
 import { Plus, X, CreditCard, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+// adjust this import to match where you placed AddressModal
+import AddressModal, { Address } from "./AddressModal";
+
 const DEFAULT_DELIVERY_CHARGE = 70; // fallback if API fails
 const CUSTOMER_KEY = "customerId";
 const TOKEN_KEY = "accessToken";
 
-/** Types (adjusted id to accept string|number) */
-export type Address = {
-    id: string | number;
-    serverId?: string | null;
-    recipientName: string;
-    recipientContact: string;
-    addressLine1: string;
-    addressLine2?: string;
-    addressLine3?: string;
-    landmark?: string;
-    countryId?: string;
-    stateId?: string;
-    cityId?: string;
-    countryName?: string;
-    stateName?: string;
-    cityName?: string;
-    pincode: string;
-    isDefault?: boolean;
-};
-
+/** Cart item type */
 export type CartItem = {
     id: string;
     title: string;
@@ -57,6 +41,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
     const [showModal, setShowModal] = useState(false);
 
+    // NEW: creating state to disable UI while order is being created
+    const [creating, setCreating] = useState(false);
+
     const blankAddress: Address = {
         id: `local_${Date.now()}`,
         serverId: null,
@@ -72,7 +59,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         pincode: "",
         isDefault: false,
     };
-    const [form, setForm] = useState<Address>({ ...blankAddress });
 
     const [loadingAddresses, setLoadingAddresses] = useState(false);
 
@@ -112,103 +98,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }, [addresses]);
 
-    useEffect(() => {
-        let mounted = true;
-        try {
-            if (typeof window === "undefined") return;
-
-            const raw = localStorage.getItem("wcm_addresses");
-            if (raw) {
-                try {
-                    const parsed: Address[] = JSON.parse(raw);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setAddresses(parsed);
-                        if (selectedAddressId === null) setSelectedAddressId(parsed[0].id);
-                    }
-                } catch {
-                    // ignore parse err
-                }
-            } else if (initialAddresses && initialAddresses.length && selectedAddressId === null) {
-                setAddresses(initialAddresses);
-                setSelectedAddressId(initialAddresses[0].id);
-            }
-
-            (async () => {
-                try {
-                    setGeoLoading((g) => ({ ...g, countries: true }));
-                    const list = await apiFetchCountries();
-                    if (!mounted) return;
-                    setCountries(list);
-                } catch {
-                    // ignore
-                } finally {
-                    if (mounted) setGeoLoading((g) => ({ ...g, countries: false }));
-                }
-            })();
-
-            (async () => {
-                const cust = localStorage.getItem(CUSTOMER_KEY);
-                if (!cust) {
-                    router.replace("/login");
-                    return;
-                }
-                setLoadingAddresses(true);
-                try {
-                    const server = await apiFetchAddresses(cust);
-                    if (!mounted) return;
-                    if (Array.isArray(server) && server.length > 0) {
-                        const mapped = server.map((s) => mapServerAddressToLocal(s));
-                        setAddresses(mapped);
-                        if (selectedAddressId === null && mapped.length > 0) setSelectedAddressId(mapped[0].id);
-
-                        // fetch geo for the first address
-                        const first = mapped[0];
-                        if (first?.countryId) {
-                            try {
-                                setGeoLoading((g) => ({ ...g, states: true }));
-                                const st = await apiFetchStates(first.countryId);
-                                if (!mounted) return;
-                                setStates(st);
-                            } finally {
-                                if (mounted) setGeoLoading((g) => ({ ...g, states: false }));
-                            }
-
-                            if (first?.stateId) {
-                                try {
-                                    setGeoLoading((g) => ({ ...g, cities: true }));
-                                    const ct = await apiFetchCities(first.stateId);
-                                    if (!mounted) return;
-                                    setCities(ct);
-                                } finally {
-                                    if (mounted) setGeoLoading((g) => ({ ...g, cities: false }));
-                                }
-                            }
-                        }
-                    }
-                } catch (err) {
-                    // ignore
-                } finally {
-                    if (mounted) {
-                        setLoadingAddresses(false);
-                        setCheckingAuth(false);
-                    }
-                }
-            })();
-        } catch {
-            if (initialAddresses && initialAddresses.length && selectedAddressId === null) {
-                setAddresses(initialAddresses);
-                setSelectedAddressId(initialAddresses[0].id);
-            }
-            setCheckingAuth(false);
-        }
-
-        return () => {
-            mounted = false;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    /** API helpers (same shape as your original file, plus serviceability check) */
+    // --------------- helper API utilities (self-contained) ----------------
     function getApiBase(): string {
         if (typeof window === "undefined") return "";
         return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
@@ -252,25 +142,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             }
         }
         return null;
-    }
-
-    function normalizeImageUrl(raw?: string | null | undefined) {
-        if (!raw) return null;
-        const str = String(raw).trim();
-        if (str === "") return null;
-
-        try {
-            const u = new URL(str, typeof window !== "undefined" ? window.location.origin : undefined);
-
-            if (typeof window !== "undefined" && u.hostname === window.location.hostname && u.port === window.location.port) {
-                return u.pathname + u.search + u.hash;
-            }
-            return u.toString();
-        } catch {
-            const apiBase = getApiBase().replace(/\/$/, "");
-            if (str.startsWith("/")) return apiBase ? `${apiBase}${str}` : str;
-            return apiBase ? `${apiBase}/${str.replace(/^\/+/, "")}` : `/${str.replace(/^\/+/, "")}`;
-        }
     }
 
     async function apiGetCart(customerId: string): Promise<CartItem[]> {
@@ -550,6 +421,106 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     // ------------------------------------------------------------------------------
 
     useEffect(() => {
+        let mounted = true;
+        try {
+            if (typeof window === "undefined") return;
+
+            const raw = localStorage.getItem("wcm_addresses");
+            if (raw) {
+                try {
+                    const parsed: Address[] = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setAddresses(parsed);
+                        if (selectedAddressId === null) setSelectedAddressId(parsed[0].id);
+                    }
+                } catch {
+                    // ignore parse err
+                }
+            } else if (initialAddresses && initialAddresses.length && selectedAddressId === null) {
+                setAddresses(initialAddresses);
+                setSelectedAddressId(initialAddresses[0].id);
+            }
+
+            (async () => {
+                try {
+                    setGeoLoading((g) => ({ ...g, countries: true }));
+                    const list = await apiFetchCountries();
+                    if (!mounted) return;
+                    setCountries(list);
+                } catch {
+                    // ignore
+                } finally {
+                    if (mounted) setGeoLoading((g) => ({ ...g, countries: false }));
+                }
+            })();
+
+            (async () => {
+                const cust = localStorage.getItem(CUSTOMER_KEY);
+                if (!cust) {
+                    router.replace("/login");
+                    return;
+                }
+                setLoadingAddresses(true);
+                try {
+                    const server = await apiFetchAddresses(cust);
+                    if (!mounted) return;
+                    if (Array.isArray(server) && server.length > 0) {
+                        const mapped = server.map((s) => mapServerAddressToLocal(s));
+                        setAddresses(mapped);
+                        if (selectedAddressId === null && mapped.length > 0) setSelectedAddressId(mapped[0].id);
+
+                        // fetch geo for the first address
+                        const first = mapped[0];
+                        if (first?.countryId) {
+                            try {
+                                setGeoLoading((g) => ({ ...g, states: true }));
+                                const st = await apiFetchStates(first.countryId);
+                                if (!mounted) return;
+                                setStates(st);
+                            } finally {
+                                if (mounted) setGeoLoading((g) => ({ ...g, states: false }));
+                            }
+
+                            if (first?.stateId) {
+                                try {
+                                    setGeoLoading((g) => ({ ...g, cities: true }));
+                                    const ct = await apiFetchCities(first.stateId);
+                                    if (!mounted) return;
+                                    setCities(ct);
+                                } finally {
+                                    if (mounted) setGeoLoading((g) => ({ ...g, cities: false }));
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    // ignore
+                } finally {
+                    // always clear loading / auth check when effect finishes
+                    try {
+                        if (mounted) {
+                            setLoadingAddresses(false);
+                        }
+                    } finally {
+                        setCheckingAuth(false);
+                    }
+                }
+            })();
+        } catch {
+            if (initialAddresses && initialAddresses.length && selectedAddressId === null) {
+                setAddresses(initialAddresses);
+                setSelectedAddressId(initialAddresses[0].id);
+            }
+            setCheckingAuth(false);
+        }
+
+        return () => {
+            mounted = false;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
         // On mount, proactively check serviceability for each loaded address (to show UI errors quickly)
         addresses.forEach((a) => {
             if (a.pincode && isValidIndianPincode(a.pincode)) {
@@ -561,110 +532,39 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }, [addresses.length]);
 
     async function openAdd() {
-        setForm({ ...blankAddress, id: `local_${Date.now()}` });
+        // open modal immediately
+        setShowModal(true);
 
+        // ensure countries are prefetched non-blocking
         (async () => {
-            if (!countries.length) {
-                try {
+            try {
+                if (!countries.length) {
                     setGeoLoading((g) => ({ ...g, countries: true }));
                     const list = await apiFetchCountries();
-                    setCountries(list);
-                } finally {
-                    setGeoLoading((g) => ({ ...g, countries: false }));
+                    if (mountedRef.current) setCountries(list);
                 }
+            } catch {
+                // ignore
+            } finally {
+                if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
             }
         })();
-
-        setStates([]);
-        setCities([]);
-        setCountrySearch("");
-        setStateSearch("");
-        setCitySearch("");
-        setShowModal(true);
     }
 
-    async function saveAddress() {
-        if (!form.recipientName?.trim() || !form.addressLine1?.trim() || !(form.cityId?.trim()) || !form.pincode?.trim()) {
-            return alert("Please fill at least recipient name, address line 1, city (id) and pincode");
-        }
-
-        // validate pincode format
-        if (!isValidIndianPincode(form.pincode)) {
-            return alert("Enter a valid 6-digit PIN code");
-        }
-
-        // check serviceability for this pincode before saving (must support prepaid)
-        setServiceMap((m) => ({ ...m, [form.pincode]: { checking: true, prepaid: null } }));
-        const svc = await fetchPincodeServiceability(form.pincode);
-        if (!svc.ok) {
-            setServiceMap((m) => ({ ...m, [form.pincode]: { checking: false, prepaid: null, error: svc.message || "Service check failed" } }));
-            return alert("Unable to verify pincode serviceability right now. Please try again.");
-        }
-        if (!svc.prepaid) {
-            setServiceMap((m) => ({ ...m, [form.pincode]: { checking: false, prepaid: false } }));
-            return alert("This pincode is not serviceable for prepaid (online) orders. Please use a different address or contact support.");
-        }
-
-        const id = `local_${Date.now()}`;
-        const newAddr: Address = { ...form, id };
-        setAddresses((prev) => [newAddr, ...prev]);
-        setSelectedAddressId(id);
-        setShowModal(false);
-
-        try {
-            const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
-            if (!cust) {
-                return;
+    // Optimistic save handled by modal -> parent handler updates state & localStorage
+    function handleAddressCreated(localAddr: Address) {
+        setAddresses((prev) => {
+            const next = [localAddr, ...prev];
+            try {
+                if (typeof window !== "undefined") {
+                    localStorage.setItem("wcm_addresses", JSON.stringify(next));
+                }
+            } catch {
+                // ignore
             }
-            await apiCreateAddress(cust, newAddr);
-            const fresh = await apiFetchAddresses(cust);
-            if (Array.isArray(fresh)) {
-                const mapped = fresh.map((s) => mapServerAddressToLocal(s));
-                setAddresses(mapped);
-                if (mapped.length > 0) setSelectedAddressId(mapped[0].id);
-            }
-        } catch (err: any) {
-            console.warn("Failed to save address to server", err);
-            alert(err?.message ?? "Failed to save address to server. Saved locally.");
-        }
-    }
-
-    async function onCountryChange(value: string) {
-        setForm((f) => ({ ...f, countryId: value, stateId: "", cityId: "" }));
-        setStateSearch("");
-        setCitySearch("");
-        setStates([]);
-        setCities([]);
-        if (!value) return;
-
-        try {
-            setGeoLoading((g) => ({ ...g, states: true }));
-            const s = await apiFetchStates(value);
-            setStates(s);
-        } catch (err) {
-            console.warn("Failed to load states", err);
-            setStates([]);
-        } finally {
-            setGeoLoading((g) => ({ ...g, states: false }));
-        }
-    }
-
-    async function onStateChange(value: string) {
-        setForm((f) => ({ ...f, stateId: value, cityId: "" }));
-        setCitySearch("");
-        setCities([]);
-        if (!value) return;
-
-        try {
-            setGeoLoading((g) => ({ ...g, cities: true }));
-            const c = await apiFetchCities(value);
-            setCities(c);
-        } catch (err) {
-            console.warn("Failed to load cities", err);
-            setCities([]);
-        } finally {
-            setGeoLoading((g) => ({ ...g, cities: false }));
-        }
+            return next;
+        });
+        setSelectedAddressId(localAddr.id);
     }
 
     useEffect(() => {
@@ -733,7 +633,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         return alert("Selected address is not serviceable for prepaid orders.");
                     }
                     setServiceMap((m) => ({ ...m, [addr.pincode]: { checking: false, prepaid: true } }));
-                    alert(`Order placed (demo)\nTotal: ₹${total}\nDeliver to address id: ${selectedAddressId}`);
+                    // proceed to create the order
+                    await createOrderAndRedirect(cust, addr);
                 } catch (err) {
                     alert("Unable to verify pincode serviceability. Please try again.");
                 }
@@ -741,11 +642,102 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
-        alert(`Order placed (demo)\nTotal: ₹${total}\nDeliver to address id: ${selectedAddressId}`);
+        // If we have serviceable flag, proceed to create order
+        (async () => {
+            await createOrderAndRedirect(cust, addr);
+        })();
+    }
+
+    // NEW: create order API call and redirect logic
+    async function createOrderAndRedirect(customerId: string, addr: Address) {
+        if (creating) return;
+        setCreating(true);
+
+        try {
+            // Build request body: using serverId when available (prefer serverId) else pass whatever id you have
+            const deliveryAddressId = addr.serverId ?? String(addr.id);
+            const billingAddressId = addr.serverId ?? String(addr.id);
+
+            // IMPORTANT: use /v1 prefix so endpoint becomes /v1/sell_order/create
+            const url = buildUrl("/sell_order/create");
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            const token = getAuthToken();
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const body = {
+                customerId: String(customerId),
+                deliveryAddressId: String(deliveryAddressId),
+                billingAddressId: String(billingAddressId),
+            };
+
+            console.debug("[createOrder] POST", url, body);
+            const res = await fetch(url, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(body),
+            });
+
+            // handle unauthorized
+            if (res.status === 401) {
+                handleUnauthorized();
+                return;
+            }
+
+            const json = (await safeJson(res)) || {};
+            console.debug("[createOrder] response", res.status, json);
+
+            // Expecting { ack: "success", message: "order created successfully", orderId: 1003 }
+            if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId)) {
+                const orderId = json.orderId ?? json?.data?.orderId ?? null;
+                // build total to send to success page (best-effort)
+                const subtotalLocal = subtotal;
+                const totalLocal = subtotalLocal + (Number(currentDeliveryCharge) || 0);
+
+                // redirect to success page, include order id
+                if (orderId) {
+                    router.replace(`/order-success?orderId=${encodeURIComponent(String(orderId))}`);
+                } else {
+                    router.replace(`/order-success?total=${encodeURIComponent(String(totalLocal))}`);
+                }
+            } else {
+                // server returned non-2xx or ack not success
+                const msg = json?.message || json?.error || `Order creation failed (${res.status})`;
+                console.warn("[createOrder] failed", msg, json);
+
+                const orderId = json?.orderId ?? json?.data?.orderId ?? null;
+                const reason = String(msg || "Unknown error");
+
+                router.replace(`/order-failed?reason=${encodeURIComponent(reason)}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`);
+            }
+        } catch (err: any) {
+            console.error("[createOrder] network error", err);
+            router.replace(`/order-failed?reason=${encodeURIComponent(String(err?.message ?? err ?? "Network error"))}`);
+        } finally {
+            if (mountedRef.current) setCreating(false);
+        }
     }
 
     function formatINR(n: number) {
         return `₹${n.toLocaleString("en-IN")}`;
+    }
+
+    function normalizeImageUrl(raw?: string | null | undefined) {
+        if (!raw) return null;
+        const str = String(raw).trim();
+        if (str === "") return null;
+
+        try {
+            const u = new URL(str, typeof window !== "undefined" ? window.location.origin : undefined);
+
+            if (typeof window !== "undefined" && u.hostname === window.location.hostname && u.port === window.location.port) {
+                return u.pathname + u.search + u.hash;
+            }
+            return u.toString();
+        } catch {
+            const apiBase = getApiBase().replace(/\/$/, "");
+            if (str.startsWith("/")) return apiBase ? `${apiBase}${str}` : str;
+            return apiBase ? `${apiBase}/${str.replace(/^\/+/, "")}` : `/${str.replace(/^\/+/, "")}`;
+        }
     }
 
     function safeImg(src?: string) {
@@ -901,7 +893,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                         if (isDisabled) return;
                                                         setSelectedAddressId(a.id);
                                                     }}
-                                                    disabled={isDisabled}
+                                                    disabled={isDisabled || creating}
                                                     className="w-4 h-4 text-[#065975]"
                                                     aria-label={`Select address for ${a.recipientName}`}
                                                     aria-disabled={isDisabled}
@@ -937,7 +929,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     </label>
                                 );
                             })}
-
                         </div>
 
                         <hr className="my-6 border-slate-100" />
@@ -1040,8 +1031,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         </div>
 
                         <div className="mt-6 hidden md:flex gap-3">
-                            <button onClick={placeOrder} className="flex-1 bg-gradient-to-r from-[#065975] to-[#0ea5a0] text-white py-3 rounded-xl font-semibold shadow hover:brightness-95">
-                                Place order • {formatINR(total)}
+                            <button
+                                onClick={placeOrder}
+                                className={`flex-1 py-3 rounded-xl font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed" : "bg-gradient-to-r from-[#065975] to-[#0ea5a0] text-white hover:brightness-95"}`}
+                                disabled={creating}
+                            >
+                                {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
                             </button>
                         </div>
 
@@ -1058,249 +1053,18 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <div className="text-sm text-slate-500">Total</div>
                             <div className="text-lg font-extrabold">{formatINR(total)}</div>
                         </div>
-                        <button onClick={placeOrder} className="ml-2 inline-flex items-center gap-2 bg-[#065975] text-white px-4 py-3 rounded-lg font-semibold shadow">
-                            Place order • {formatINR(total)}
+                        <button
+                            onClick={placeOrder}
+                            className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-lg font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed bg-gray-200 text-slate-500" : "bg-[#065975] text-white"}`}
+                            disabled={creating}
+                        >
+                            {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
                         </button>
                     </div>
                 </div>
 
-                {/* modal for add address only */}
-                {showModal && (
-                    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4 py-6">
-                        {/* modal panel: make it limited height and scrollable when content overflows */}
-                        <div
-                            className="bg-white rounded-2xl shadow w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-                            role="dialog"
-                            aria-modal="true"
-                        >
-                            {/* header */}
-                            <div className="flex items-start justify-between px-5 py-4 border-b">
-                                <div>
-                                    <h3 className="text-lg font-semibold">Add address</h3>
-                                </div>
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="text-slate-400 p-2 rounded-md hover:bg-slate-50"
-                                    aria-label="Close modal"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* body: scrollable area */}
-                            <div className="p-5 overflow-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {/* Recipient Name */}
-                                    <div>
-                                        <label className="block text-sm text-slate-600 mb-1">Recipient Name</label>
-                                        <input
-                                            value={form.recipientName}
-                                            onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
-                                            placeholder="Enter recipient name"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                    </div>
-
-                                    {/* Recipient Contact */}
-                                    <div>
-                                        <label className="block text-sm text-slate-600 mb-1">Recipient Contact</label>
-                                        <input
-                                            value={form.recipientContact}
-                                            onChange={(e) => setForm({ ...form, recipientContact: e.target.value })}
-                                            placeholder="Enter recipient contact"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                    </div>
-
-                                    {/* Address Line 1 */}
-                                    <div className="sm:col-span-2">
-                                        <label className="block text-sm text-slate-600 mb-1">Address Line 1</label>
-                                        <input
-                                            value={form.addressLine1}
-                                            onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
-                                            placeholder="House, Building, Street"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                    </div>
-
-                                    {/* Address Line 2 */}
-                                    <div className="sm:col-span-2">
-                                        <label className="block text-sm text-slate-600 mb-1">Address Line 2</label>
-                                        <input
-                                            value={form.addressLine2}
-                                            onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
-                                            placeholder="Apartment, Floor, Area (optional)"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                    </div>
-
-                                    {/* Address Line 3 */}
-                                    <div className="sm:col-span-2">
-                                        <label className="block text-sm text-slate-600 mb-1">Address Line 3</label>
-                                        <input
-                                            value={form.addressLine3}
-                                            onChange={(e) => setForm({ ...form, addressLine3: e.target.value })}
-                                            placeholder="Additional directions (optional)"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                    </div>
-
-                                    {/* Landmark */}
-                                    <div className="sm:col-span-2">
-                                        <label className="block text-sm text-slate-600 mb-1">Landmark</label>
-                                        <input
-                                            value={form.landmark}
-                                            onChange={(e) => setForm({ ...form, landmark: e.target.value })}
-                                            placeholder="Nearby place or landmark (optional)"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                    </div>
-
-                                    {/* Country */}
-                                    <div>
-                                        <label className="block text-sm text-slate-600 mb-1">Country</label>
-                                        <Select
-                                            isSearchable
-                                            isLoading={geoLoading.countries}
-                                            options={countries.map((c) => ({ value: c._id, label: c.countryName }))}
-                                            value={
-                                                form.countryId
-                                                    ? {
-                                                        value: form.countryId,
-                                                        label: countries.find((c) => c._id === form.countryId)?.countryName || "Selected",
-                                                    }
-                                                    : null
-                                            }
-                                            onChange={(opt) => onCountryChange(opt?.value || "")}
-                                            placeholder={geoLoading.countries ? "Loading countries..." : "Select country"}
-                                            styles={{
-                                                control: (base) => ({
-                                                    ...base,
-                                                    borderRadius: "8px",
-                                                    borderColor: "#d1d5db",
-                                                    boxShadow: "none",
-                                                    minHeight: "44px",
-                                                }),
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* State */}
-                                    <div>
-                                        <label className="block text-sm text-slate-600 mb-1">State</label>
-                                        <Select
-                                            isSearchable
-                                            isDisabled={!form.countryId}
-                                            isLoading={geoLoading.states}
-                                            options={states.map((s) => ({ value: s._id, label: s.stateName }))}
-                                            value={
-                                                form.stateId
-                                                    ? {
-                                                        value: form.stateId,
-                                                        label: states.find((s) => s._id === form.stateId)?.stateName || "Selected",
-                                                    }
-                                                    : null
-                                            }
-                                            onChange={(opt) => onStateChange(opt?.value || "")}
-                                            placeholder={
-                                                !form.countryId ? "Select country first" : geoLoading.states ? "Loading states..." : "Select state"
-                                            }
-                                            styles={{
-                                                control: (base) => ({
-                                                    ...base,
-                                                    borderRadius: "8px",
-                                                    borderColor: "#d1d5db",
-                                                    boxShadow: "none",
-                                                    minHeight: "44px",
-                                                }),
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* City */}
-                                    <div>
-                                        <label className="block text-sm text-slate-600 mb-1">City</label>
-                                        <Select
-                                            isSearchable
-                                            isDisabled={!form.stateId}
-                                            isLoading={geoLoading.cities}
-                                            options={(cities ?? []).map((c) => ({ value: c._id, label: c.cityName }))}
-                                            value={
-                                                form.cityId
-                                                    ? {
-                                                        value: form.cityId,
-                                                        label: cities?.find((c) => c._id === form.cityId)?.cityName || "Selected",
-                                                    }
-                                                    : null
-                                            }
-                                            onChange={(opt) => setForm((f) => ({ ...f, cityId: opt?.value || "" }))}
-                                            placeholder={!form.stateId ? "Select state first" : geoLoading.cities ? "Loading cities..." : "Select city"}
-                                            styles={{
-                                                control: (base) => ({
-                                                    ...base,
-                                                    borderRadius: "8px",
-                                                    borderColor: "#d1d5db",
-                                                    boxShadow: "none",
-                                                    minHeight: "44px",
-                                                }),
-                                            }}
-                                        />
-                                    </div>
-
-                                    {/* Pincode */}
-                                    <div>
-                                        <label className="block text-sm text-slate-600 mb-1">Pincode</label>
-                                        <input
-                                            value={form.pincode}
-                                            onChange={(e) => {
-                                                const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                                                setForm({ ...form, pincode: v });
-                                                // optionally trigger check as user completes 6 digits
-                                                if (v.length === 6 && isValidIndianPincode(v)) {
-                                                    checkAndCacheServiceability(v);
-                                                    fetchAndCacheDeliveryCharge(v).catch(() => { });
-                                                }
-                                            }}
-                                            placeholder="Enter postal code"
-                                            className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
-                                        />
-                                        {/* Inline pincode check status for the form */}
-                                        <div className="text-xs mt-1">
-                                            {form.pincode && serviceMap[form.pincode]?.checking ? (
-                                                <div className="text-slate-500">Checking serviceability…</div>
-                                            ) : form.pincode && serviceMap[form.pincode]?.prepaid === false ? (
-                                                <div className="text-rose-600">This pincode is not serviceable for prepaid orders.</div>
-                                            ) : form.pincode && serviceMap[form.pincode]?.prepaid === true ? (
-                                                <div className="text-green-600">Serviceable for prepaid orders.</div>
-                                            ) : null}
-                                        </div>
-                                    </div>
-
-                                    {/* Default Address */}
-                                    <label className="sm:col-span-2 flex items-center gap-3 mt-1">
-                                        <input
-                                            type="checkbox"
-                                            checked={!!form.isDefault}
-                                            onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-                                            className="w-4 h-4 text-[#065975]"
-                                        />
-                                        <span className="text-sm text-slate-700">Set as default address</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            {/* footer: fixed within modal so save is always visible */}
-                            <div className="px-5 py-3 border-t flex justify-end gap-3">
-                                <button onClick={() => setShowModal(false)} className="px-4 py-2 rounded-md border text-slate-600 hover:bg-slate-50">
-                                    Cancel
-                                </button>
-                                <button onClick={saveAddress} className="px-4 py-2 rounded-md bg-[#065975] text-white hover:brightness-95">
-                                    Save address
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* modal for add address (extracted component) */}
+                <AddressModal show={showModal} onClose={() => setShowModal(false)} onCreated={handleAddressCreated} />
             </div>
         </div>
     );

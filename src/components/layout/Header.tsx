@@ -74,7 +74,9 @@ export default function Header({
     containerClass = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
     headerHeight = "h-16",
 }: HeaderProps): React.ReactElement {
-    const [open, setOpen] = useState(false); // account dropdown
+    // split states: mobile menu vs account dropdown
+    const [mobileOpen, setMobileOpen] = useState(false); // mobile menu
+    const [accountOpen, setAccountOpen] = useState(false); // account dropdown
     const [collectionsOpen, setCollectionsOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -84,9 +86,13 @@ export default function Header({
 
     const { ready: authReady, isAuthed } = useAuthGuard({ verifyWithServer: true });
 
-    // separate refs: trigger (button) and panel (mega)
+    // separate refs: collections trigger (button) and panel (mega)
     const triggerRef = useRef<HTMLButtonElement | null>(null);
     const panelRef = useRef<HTMLDivElement | null>(null);
+
+    // account trigger + panel refs
+    const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const accountPanelRef = useRef<HTMLDivElement | null>(null);
 
     // hover/leave close helpers
     const hoverInsideRef = useRef(false);
@@ -143,27 +149,69 @@ export default function Header({
         }
     }, []);
 
-    // click outside handler: works reliably because we use TWO refs
+    // click / escape / blur handlers: cover collections + account + mobile
     useEffect(() => {
         function onDocClick(e: MouseEvent) {
             const t = e.target as Node | null;
-            const clickedTrigger = triggerRef.current && t && triggerRef.current.contains(t);
-            const clickedPanel = panelRef.current && t && panelRef.current.contains(t);
-            if (!clickedTrigger && !clickedPanel) {
+
+            // collections: if click not on trigger nor inside panel -> close
+            const clickedCollectionsTrigger = triggerRef.current && t && triggerRef.current.contains(t);
+            const clickedCollectionsPanel = panelRef.current && t && panelRef.current.contains(t);
+            if (!clickedCollectionsTrigger && !clickedCollectionsPanel) {
                 setCollectionsOpen(false);
+            }
+
+            // account: if click not on account trigger nor account panel -> close
+            const clickedAccountTrigger = accountTriggerRef.current && t && accountTriggerRef.current.contains(t);
+            const clickedAccountPanel = accountPanelRef.current && t && accountPanelRef.current.contains(t);
+            if (!clickedAccountTrigger && !clickedAccountPanel) {
+                setAccountOpen(false);
             }
         }
         function onKey(e: KeyboardEvent) {
             if (e.key === "Escape") {
                 setCollectionsOpen(false);
-                setOpen(false);
+                setAccountOpen(false);
+                setMobileOpen(false);
             }
         }
+
+        function onWindowBlur() {
+            // user moved out of browser window — close dropdowns
+            setAccountOpen(false);
+            // optionally also close collections if desired:
+            // setCollectionsOpen(false);
+        }
+
+        function onVisibilityChange() {
+            if (document.hidden) {
+                setAccountOpen(false);
+                // setCollectionsOpen(false);
+            }
+        }
+
+        function onWindowMouseOut(e: MouseEvent) {
+            // when the mouse leaves the window, relatedTarget is null
+            // e.toElement also null in some browsers — use relatedTarget check
+            // @ts-ignore
+            const related = (e as any).relatedTarget || (e as any).toElement;
+            if (!related) {
+                setAccountOpen(false);
+            }
+        }
+
         document.addEventListener("click", onDocClick);
         document.addEventListener("keydown", onKey);
+        window.addEventListener("blur", onWindowBlur);
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        window.addEventListener("mouseout", onWindowMouseOut);
+
         return () => {
             document.removeEventListener("click", onDocClick);
             document.removeEventListener("keydown", onKey);
+            window.removeEventListener("blur", onWindowBlur);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+            window.removeEventListener("mouseout", onWindowMouseOut);
         };
     }, []);
 
@@ -236,25 +284,20 @@ export default function Header({
         const prevPaddingRight = document.body.style.paddingRight || "";
 
         function getScrollbarWidth() {
-            // difference between viewport width and document root client width
-            // returns 0 if no scrollbar present
             return window.innerWidth - document.documentElement.clientWidth;
         }
 
         if (collectionsOpen) {
             const scrollBarWidth = getScrollbarWidth();
-            // prevent content shift by adding equal padding-right
             if (scrollBarWidth > 0) {
                 document.body.style.paddingRight = `${scrollBarWidth}px`;
             }
             document.body.style.overflow = "hidden";
         } else {
-            // restore prior values
             document.body.style.overflow = prevOverflow || "";
             document.body.style.paddingRight = prevPaddingRight;
         }
 
-        // cleanup on unmount: restore prior values
         return () => {
             document.body.style.overflow = prevOverflow || "";
             document.body.style.paddingRight = prevPaddingRight;
@@ -339,8 +382,8 @@ export default function Header({
                 <div className={`flex items-center justify-between ${headerHeight}`}>
                     {/* left */}
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setOpen((v) => !v)} aria-label="menu" className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition">
-                            {open ? <X size={18} /> : <Menu size={18} />}
+                        <button onClick={() => setMobileOpen((v) => !v)} aria-label="menu" className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition">
+                            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
                         </button>
 
                         <Link href="/" className="flex items-center">
@@ -414,7 +457,7 @@ export default function Header({
                                                 </div>
                                             </div>
 
-                                            {/* body: left categories list + right detail */}
+                                            {/* body... (kept same as your original) */}
                                             <div className="flex gap-4 p-4" style={{ minHeight: 220 }}>
                                                 {/* left column */}
                                                 <div className="w-64 border-r pr-4">
@@ -565,15 +608,26 @@ export default function Header({
 
                             {authReady && isAuthed && (
                                 <div className="relative">
-                                    <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 transition" aria-haspopup="true" onClick={() => setOpen((v) => !v)}>
+                                    <button
+                                        ref={accountTriggerRef}
+                                        className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 transition"
+                                        aria-haspopup="true"
+                                        onClick={() => setAccountOpen((v) => !v)}
+                                    >
                                         <UserIcon size={16} />
                                         <span className="text-sm font-medium">Account</span>
                                         <ChevronDown size={14} />
                                     </button>
 
                                     <AnimatePresence>
-                                        {open && (
-                                            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border z-50 py-2">
+                                        {accountOpen && (
+                                            <motion.div
+                                                ref={accountPanelRef}
+                                                initial={{ opacity: 0, y: -6 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -6 }}
+                                                className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border z-50 py-2"
+                                            >
                                                 <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-50">Profile</Link>
                                                 <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50">Logout</button>
                                             </motion.div>
@@ -588,7 +642,7 @@ export default function Header({
 
             {/* mobile menu */}
             <AnimatePresence>
-                {open && (
+                {mobileOpen && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="md:hidden px-4 pb-4 bg-white border-t">
                         <div className="flex flex-col gap-3 text-slate-800">
                             <Link href="/products" className="py-2">Shop</Link>

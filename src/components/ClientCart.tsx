@@ -260,19 +260,12 @@ async function apiGetSaved(customerId: string): Promise<SavedItem[]> {
     return arr.map((s: any) => {
         const product = s.product || s.productObj || s;
         const rawProdId =
-            (product && ((product as any).productId ?? (product as any)._id ?? (product as any).id)) ??
-            s.productId ??
-            s.product_id ??
-            s._id ??
-            s.id ??
-            "";
+            (product && ((product as any).productId ?? (product as any)._id ?? (product as any).id)) ?? s.productId ?? s.product_id ?? s._id ?? s.id ?? "";
 
         const prodId = rawProdId === null || rawProdId === undefined ? "" : String(rawProdId);
 
         const title =
-            (product && ((product as any).productName ?? (product as any).name ?? (product as any).title)) ??
-            s.title ??
-            "Untitled";
+            (product && ((product as any).productName ?? (product as any).name ?? (product as any).title)) ?? s.title ?? "Untitled";
 
         let priceVal: number | undefined = undefined;
         try {
@@ -302,16 +295,12 @@ async function apiGetSaved(customerId: string): Promise<SavedItem[]> {
     });
 }
 
-async function apiAddSaved(
-    customerId: string,
-    product: any // intentionally loose to accept CartItem | saved-shape
-) {
+async function apiAddSaved(customerId: string, product: any) {
     const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product`;
 
     const pAny = product as any;
 
-    const resolvedProductId =
-        (pAny.productId ?? pAny.id ?? pAny._id ?? pAny.product_id ?? "") || "";
+    const resolvedProductId = (pAny.productId ?? pAny.id ?? pAny._id ?? pAny.product_id ?? "") || "";
 
     const resolvedTitle = (pAny.productPublicName ?? pAny.productName ?? pAny.title ?? pAny.name ?? "") || "";
 
@@ -352,7 +341,6 @@ async function apiDeleteSaved(customerId: string, savedId: string) {
     return json;
 }
 
-// Fallback: delete saved by productId query param (some backends implement this)
 async function apiDeleteSavedByProduct(customerId: string, productId: string) {
     const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product?productId=${encodeURIComponent(productId)}`;
     const res = await authFetch(url, { method: "DELETE" });
@@ -368,26 +356,27 @@ export default function ClientCart() {
     const [cart, setCart] = useState<Cart | null>(null);
     const [localCart, setLocalCart] = useState<Cart | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
-    const [saving, setSaving] = useState<boolean>(false); // used for broad operations like delete
-    const [savingItemId, setSavingItemId] = useState<string | null>(null); // per-item saving for quantity updates
+    const [saving, setSaving] = useState<boolean>(false);
+    const [savingItemId, setSavingItemId] = useState<string | null>(null);
     const [error, setError] = useState<string>("");
 
-    // saved for later states
     const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
     const [savedLoading, setSavedLoading] = useState<boolean>(false);
 
-    // Cart delete confirm (existing)
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [toDeleteItemId, setToDeleteItemId] = useState<string | undefined>(undefined);
     const [deleting, setDeleting] = useState(false);
 
-    // Saved-item delete confirm (new)
     const [confirmSavedOpen, setConfirmSavedOpen] = useState(false);
     const [toDeleteSavedId, setToDeleteSavedId] = useState<string | undefined>(undefined);
     const [deletingSaved, setDeletingSaved] = useState(false);
     const [toDeleteSavedTitle, setToDeleteSavedTitle] = useState<string | undefined>(undefined);
 
     const router = useRouter();
+
+    // derived counts used for disabling checkout
+    const totalItemsCount = (localCart?.sellItems ?? []).reduce((c, it) => c + (it.inUse === false ? 0 : Number(it.quantity ?? 0)), 0);
+    const hasItems = totalItemsCount > 0;
 
     function redirectToLogin(): void {
         clearAuthStorage();
@@ -661,7 +650,6 @@ export default function ClientCart() {
                         ? item.price!.actualPrice
                         : undefined;
 
-            // Call your saved-product endpoint (server will also remove from cart)
             await apiAddSaved(customerId, {
                 id: item.productId ?? item._id,
                 productId: item.productId,
@@ -670,14 +658,11 @@ export default function ClientCart() {
                 image: item.imagePath ?? item.thumbnail ?? null,
             });
 
-            // Do NOT call removeFromCart here — backend already does it.
-            // Just refresh both lists from server to ensure canonical state.
             await Promise.all([fetchCart(), fetchSavedItems()]);
         } catch (err: any) {
             console.error("saveForLater error:", err);
             setError(err?.message || "Could not save item for later");
 
-            // If save failed, re-sync with server so UI matches reality
             await fetchCart();
             await fetchSavedItems();
         } finally {
@@ -685,8 +670,6 @@ export default function ClientCart() {
         }
     }
 
-    // Move saved item back to cart:
-    // Calls addToCart robustly and then removes saved entry (by savedId or by productId fallback).
     async function moveSavedToCart(saved: SavedItem) {
         const customerId = getStoredCustomerId();
         const token = getStoredAccessToken();
@@ -723,7 +706,6 @@ export default function ClientCart() {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || data?.message || "Failed to move item to cart");
 
-            // Success — your backend will auto-remove it from saved list
             await Promise.all([fetchCart(), fetchSavedItems()]);
         } catch (err: any) {
             console.error("moveSavedToCart error:", err);
@@ -735,7 +717,6 @@ export default function ClientCart() {
         }
     }
 
-    // previous direct deleteSaved() still available as helper but we now show a confirm modal before calling it
     async function deleteSaved(saved: SavedItem) {
         const customerId = getStoredCustomerId();
         if (!customerId) {
@@ -760,7 +741,6 @@ export default function ClientCart() {
         }
     }
 
-    // NEW: open confirm for saved item deletion
     function openSavedConfirm(saved: SavedItem) {
         const id = saved._savedId ?? saved.id;
         setToDeleteSavedId(id ? String(id) : undefined);
@@ -773,7 +753,6 @@ export default function ClientCart() {
         setConfirmSavedOpen(false);
     }
 
-    // NEW: perform actual saved delete after confirmation
     async function performSavedDelete() {
         const customerId = getStoredCustomerId();
         if (!customerId) {
@@ -789,12 +768,10 @@ export default function ClientCart() {
         setDeletingSaved(true);
         setError("");
         try {
-            // Try direct saved-id delete first
             await apiDeleteSaved(customerId, String(toDeleteSavedId));
             await fetchSavedItems();
             closeSavedConfirm();
         } catch (err: any) {
-            // If deletion by savedId fails, attempt fallback by productId (some backends implement this)
             console.warn("performSavedDelete direct delete failed, trying fallback by productId:", err);
             try {
                 await apiDeleteSavedByProduct(customerId, String(toDeleteSavedId));
@@ -911,10 +888,7 @@ export default function ClientCart() {
                                                 className={`flex items-start gap-4 bg-gray-50 rounded-lg p-3 hover:shadow transition-shadow ${item.isAvailableForSale === false ? "opacity-60" : ""}`}
                                             >
                                                 <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-white border">
-                                                    <Link
-                                                        href={item.productId ? `/products/${item.productId}` : "/products"}
-                                                        className="block w-full h-full"
-                                                    >
+                                                    <Link href={item.productId ? `/products/${item.productId}` : "/products"} className="block w-full h-full">
                                                         <Image
                                                             alt={item.productPublicName ?? "product image"}
                                                             src={item.imagePath ?? item.thumbnail ?? "/placeholder-80x80.png"}
@@ -1043,7 +1017,7 @@ export default function ClientCart() {
                                                 Move to cart
                                             </button>
                                             <button
-                                                onClick={() => openSavedConfirm(s)} // <-- open confirm dialog instead of direct delete
+                                                onClick={() => openSavedConfirm(s)}
                                                 disabled={saving || deletingSaved}
                                                 className="px-3 py-1 rounded border text-rose-600 hover:bg-rose-50"
                                             >
@@ -1066,7 +1040,7 @@ export default function ClientCart() {
                     <div className="mt-4 space-y-3">
                         <div className="flex justify-between text-sm">
                             <span>Items</span>
-                            <span className="font-medium">{(localCart?.sellItems ?? []).reduce((c, it) => c + (it.inUse === false ? 0 : (it.quantity ?? 0)), 0)}</span>
+                            <span className="font-medium">{totalItemsCount}</span>
                         </div>
 
                         <div className="border-t pt-3 mt-3 flex justify-between font-medium">
@@ -1076,9 +1050,23 @@ export default function ClientCart() {
                     </div>
 
                     <div className="mt-6 flex flex-col gap-3">
-                        <a href="/checkout" className="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-md shadow">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!hasItems) return;
+                                try {
+                                    router.push("/checkout");
+                                } catch {
+                                    window.location.href = "/checkout";
+                                }
+                            }}
+                            disabled={!hasItems || loading || saving}
+                            aria-disabled={!hasItems || loading || saving}
+                            className={`w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-md shadow
+                ${hasItems && !loading && !saving ? "bg-emerald-600 hover:bg-emerald-700" : "bg-emerald-400 cursor-not-allowed opacity-60"}`}
+                        >
                             Proceed to Checkout
-                        </a>
+                        </button>
 
                         <a href="/products" className="w-full inline-flex items-center justify-center gap-2 border px-4 py-3 rounded-md text-center">
                             Continue shopping
@@ -1100,7 +1088,6 @@ export default function ClientCart() {
                 onCancel={closeConfirmDialog}
             />
 
-            {/* Confirm modal for saved items */}
             <ConfirmModal
                 open={confirmSavedOpen}
                 title={toDeleteSavedTitle ? `Remove “${toDeleteSavedTitle}” from saved items?` : "Remove saved item?"}

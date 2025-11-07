@@ -424,11 +424,6 @@ export default function LoginPage() {
                                     <div className="flex-1 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-3">
                                         {errorMsg}
                                     </div>
-                                    {errorCode !== null && (
-                                        <div className="shrink-0 text-xs font-medium text-red-700 bg-red-100 border border-red-200 px-3 py-2 rounded-md">
-                                            Error #{errorCode}
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
