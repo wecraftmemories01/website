@@ -11,6 +11,40 @@ export default function OrderFailedPage() {
     const reason = params?.get("reason") ?? null;
     const orderId = params?.get("orderId") ?? null;
 
+    const TOKEN_KEY = "accessToken";
+    function getStoredAccessToken(): string | null {
+        if (typeof window === "undefined") return null;
+        try {
+            return localStorage.getItem(TOKEN_KEY);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Centralized fetch that injects Authorization header when token exists.
+     */
+    async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+        const token = getStoredAccessToken();
+        // debug - remove in production
+        // eslint-disable-next-line no-console
+        console.debug("authFetch token present:", !!token);
+
+        const headers = new Headers(init?.headers ?? {});
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+        // only set content-type when there's a body and none provided
+        if (init?.body && !headers.get("Content-Type")) headers.set("Content-Type", "application/json");
+
+        const res = await fetch(input, { ...init, headers });
+        if (res.status === 401) {
+            if (typeof window !== "undefined") {
+                localStorage.removeItem(TOKEN_KEY);
+                router.replace("/login");
+            }
+        }
+        return res;
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#fff7f7] to-white flex items-center justify-center p-6">
             <div className="min-w-4xl w-full bg-white rounded-3xl shadow-xl p-12 md:p-12 flex flex-col md:flex-row gap-8 items-center">

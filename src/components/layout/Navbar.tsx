@@ -85,6 +85,7 @@ export default function NavbarEcommerce(): React.ReactElement {
     // cart count state
     const [cartCount, setCartCount] = useState<number | null>(null); // null => unknown/loading
     const [cartLoading, setCartLoading] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     // close menus on outside click / escape
     useEffect(() => {
@@ -118,24 +119,22 @@ export default function NavbarEcommerce(): React.ReactElement {
     }, []);
 
     const doLogout = () => {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        // optionally remove customerId if your flow requires it:
-        // localStorage.removeItem("customerId");
-        window.dispatchEvent(new Event("authChanged"));
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("refreshToken");
+            window.dispatchEvent(new Event("authChanged"));
+        }
     };
 
     /** Read cart service and set count */
     async function fetchCartCount() {
+        if (typeof window === "undefined") return;
         setCartLoading(true);
         setCartCount(null);
         try {
             const customerId = getStoredCustomerId();
-            // Debug log so you can see whether we had a customerId at mount
             console.debug("[Navbar] fetchCartCount called. customerId:", customerId);
 
-            // If backend requires customerId you may want to skip and set 0.
-            // We'll attempt a call anyway (without customerId) — many APIs also return anonymous cart if supported.
             const param = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
             const url = `${API_BASE}/cart${param}`;
             console.debug("[Navbar] calling cart service:", url);
@@ -145,7 +144,6 @@ export default function NavbarEcommerce(): React.ReactElement {
 
             if (!res.ok) {
                 console.warn("[Navbar] cart fetch failed:", res.status, body);
-                // If backend requires customerId and returned 400, show 0
                 setCartCount(0);
                 return;
             }
@@ -156,7 +154,6 @@ export default function NavbarEcommerce(): React.ReactElement {
                 return;
             }
 
-            // prefer explicit totalItems, fallback to summing sellItems[].quantity
             let count: number;
             if (typeof raw.totalItems === "number") {
                 count = raw.totalItems;
@@ -176,19 +173,22 @@ export default function NavbarEcommerce(): React.ReactElement {
         }
     }
 
+    // mounted flag
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     // fetch on mount, and also when authChanged or storage events occur
     useEffect(() => {
-        // attempt immediately on mount
+        if (!mounted) return;
         fetchCartCount();
 
         function onAuthChanged() {
             console.debug("[Navbar] authChanged event -> refetch cart");
             fetchCartCount();
         }
-        // listen to authChanged (your app already dispatches this after login/logout)
         window.addEventListener("authChanged", onAuthChanged);
 
-        // listen to storage event (helps when customerId is set in another tab or by other code)
         function onStorage(e: StorageEvent) {
             if (!e.key) return;
             if (e.key === CUSTOMER_KEY || e.key === TOKEN_KEY) {
@@ -203,16 +203,17 @@ export default function NavbarEcommerce(): React.ReactElement {
             window.removeEventListener("storage", onStorage);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [mounted]);
 
-    // also refresh when the auth guard becomes ready (helps when verifyWithServer was used)
+    // also refresh when the auth guard becomes ready
     useEffect(() => {
+        if (!mounted) return;
         if (authReady) {
             console.debug("[Navbar] authReady -> refetch cart");
             fetchCartCount();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authReady, isAuthed]);
+    }, [authReady, isAuthed, mounted]);
 
     return (
         <header className="w-full bg-white border-b sticky top-0 z-40">
@@ -348,16 +349,18 @@ export default function NavbarEcommerce(): React.ReactElement {
                             <span className="text-sm font-medium">Cart</span>
 
                             <span className="sr-only" aria-live="polite">
-                                {cartLoading ? "Cart count loading" : `Cart has ${cartCount ?? 0} items`}
+                                {mounted ? (cartLoading ? "Cart count loading" : `Cart has ${cartCount ?? 0} items`) : "Cart info unavailable"}
                             </span>
 
                             <div className="ml-1">
-                                {cartLoading ? (
-                                    <Spinner size={14} />
+                                {mounted ? (
+                                    cartLoading ? <Spinner size={14} /> : (
+                                        <span className="inline-flex items-center justify-center min-w-[22px] h-6 px-2 text-xs font-medium rounded-full bg-rose-600 text-white">
+                                            {cartCount ?? 0}
+                                        </span>
+                                    )
                                 ) : (
-                                    <span className="inline-flex items-center justify-center min-w-[22px] h-6 px-2 text-xs font-medium rounded-full bg-rose-600 text-white">
-                                        {cartCount ?? 0}
-                                    </span>
+                                    <span className="inline-block w-[22px] h-6" aria-hidden />
                                 )}
                             </div>
                         </Link>

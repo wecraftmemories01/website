@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -16,7 +17,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
 import { getCategories, apiFetch } from "../../lib/api";
-import DeliveryPincodeInput from "../../components/DeliveryPincodeInput";
+
+/* dynamic import for client-only widget */
+const DeliveryPincodeInput = dynamic(() => import("../../components/DeliveryPincodeInput"), { ssr: false });
 
 /* ---------------- Theme ---------------- */
 const ACCENT = "#065975";
@@ -100,13 +103,15 @@ export default function Header({
     const CLOSE_DELAY = 200; // ms
 
     function scheduleCloseCollections() {
-        if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = window.setTimeout(() => {
-            if (!hoverInsideRef.current) setCollectionsOpen(false);
-        }, CLOSE_DELAY) as unknown as number;
+        if (closeTimerRef.current && typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
+        if (typeof window !== "undefined") {
+            closeTimerRef.current = window.setTimeout(() => {
+                if (!hoverInsideRef.current) setCollectionsOpen(false);
+            }, CLOSE_DELAY) as unknown as number;
+        }
     }
     function cancelCloseCollections() {
-        if (closeTimerRef.current) {
+        if (closeTimerRef.current && typeof window !== "undefined") {
             window.clearTimeout(closeTimerRef.current);
             closeTimerRef.current = null;
         }
@@ -125,13 +130,18 @@ export default function Header({
 
     const catsAbortRef = useRef<AbortController | null>(null);
 
-    // debounce search locally (kept for parity)
+    // debounce search locally (kept for parity) - only uses window.setTimeout inside effect (safe)
     useEffect(() => {
-        const t = window.setTimeout(() => setDebouncedQuery(query), 300);
-        return () => window.clearTimeout(t);
+        const t = (typeof window !== "undefined") ? window.setTimeout(() => setDebouncedQuery(query), 300) : null;
+        return () => {
+            if (t && typeof window !== "undefined") window.clearTimeout(t);
+        };
     }, [query]);
 
-    useEffect(() => setMounted(true), []);
+    // mounted flag to avoid rendering client-only values server-side
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleLogout = useCallback(() => {
         try {
@@ -177,22 +187,17 @@ export default function Header({
         }
 
         function onWindowBlur() {
-            // user moved out of browser window — close dropdowns
             setAccountOpen(false);
-            // optionally also close collections if desired:
-            // setCollectionsOpen(false);
         }
 
         function onVisibilityChange() {
-            if (document.hidden) {
+            if (typeof document !== "undefined" && document.hidden) {
                 setAccountOpen(false);
-                // setCollectionsOpen(false);
             }
         }
 
         function onWindowMouseOut(e: MouseEvent) {
             // when the mouse leaves the window, relatedTarget is null
-            // e.toElement also null in some browsers — use relatedTarget check
             // @ts-ignore
             const related = (e as any).relatedTarget || (e as any).toElement;
             if (!related) {
@@ -202,16 +207,20 @@ export default function Header({
 
         document.addEventListener("click", onDocClick);
         document.addEventListener("keydown", onKey);
-        window.addEventListener("blur", onWindowBlur);
+        if (typeof window !== "undefined") {
+            window.addEventListener("blur", onWindowBlur);
+            window.addEventListener("mouseout", onWindowMouseOut);
+        }
         document.addEventListener("visibilitychange", onVisibilityChange);
-        window.addEventListener("mouseout", onWindowMouseOut);
 
         return () => {
             document.removeEventListener("click", onDocClick);
             document.removeEventListener("keydown", onKey);
-            window.removeEventListener("blur", onWindowBlur);
+            if (typeof window !== "undefined") {
+                window.removeEventListener("blur", onWindowBlur);
+                window.removeEventListener("mouseout", onWindowMouseOut);
+            }
             document.removeEventListener("visibilitychange", onVisibilityChange);
-            window.removeEventListener("mouseout", onWindowMouseOut);
         };
     }, []);
 
@@ -271,7 +280,8 @@ export default function Header({
             }
         }
 
-        load();
+        // load categories only on client (avoid SSR fetch differences)
+        if (typeof window !== "undefined") load();
         return () => ctrl.abort();
     }, []);
 
@@ -307,7 +317,7 @@ export default function Header({
     // cleanup close timer on unmount
     useEffect(() => {
         return () => {
-            if (closeTimerRef.current) {
+            if (closeTimerRef.current && typeof window !== "undefined") {
                 window.clearTimeout(closeTimerRef.current);
                 closeTimerRef.current = null;
             }
@@ -349,6 +359,7 @@ export default function Header({
         }
     }
 
+    // only fetch cart after mount to avoid SSR/CSR mismatch
     useEffect(() => {
         if (!mounted) return;
         fetchCartCount();
@@ -422,7 +433,7 @@ export default function Header({
                             </button>
 
                             <AnimatePresence>
-                                {collectionsOpen && (
+                                {collectionsOpen && mounted && ( // only mount the heavy panel on client to avoid SSR mismatch
                                     <motion.div
                                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -564,8 +575,8 @@ export default function Header({
                             </AnimatePresence>
                         </div>
 
-                        <Link href="#sale" className="flex items-center gap-1 text-sm font-medium text-rose-600 hover:text-rose-700 transition"><Tag size={14} /> Sale</Link>
-                        <Link href="#inspiration" className="flex items-center gap-1 text-sm font-medium text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>
+                        <Link href="/coming_soon" className="flex items-center gap-1 text-sm font-medium text-rose-600 hover:text-rose-700 transition"><Tag size={14} /> Sale</Link>
+                        <Link href="/coming_soon" className="flex items-center gap-1 text-sm font-medium text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>
                             <Sparkles size={14} /> Inspiration
                         </Link>
                     </nav>
@@ -582,7 +593,13 @@ export default function Header({
                         </button>
 
                         <div className="hidden sm:flex items-center">
-                            <DeliveryPincodeInput />
+                            {/* DeliveryPincodeInput is client-only (dynamically imported with ssr:false) */}
+                            {/* Render a stable placeholder when not mounted to keep DOM identical */}
+                            {!mounted ? (
+                                <div aria-hidden={true} className="w-[160px] h-8 rounded-md bg-transparent" />
+                            ) : (
+                                <DeliveryPincodeInput />
+                            )}
                         </div>
 
                         <Link href="/cart" className="relative group flex items-center" aria-label="View cart">
@@ -590,50 +607,63 @@ export default function Header({
                                 <ShoppingCart size={18} />
                             </button>
 
-                            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-400 text-slate-900 text-xs flex items-center justify-center font-semibold"
-                                style={{ visibility: cartLoading || cartCount > 0 ? "visible" : "hidden" }}>
-                                {cartLoading ? <Spinner size={12} /> : String(cartCount)}
+                            {/* Cart badge: same span node both server and client to avoid node replacement */}
+                            <span
+                                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-400 text-slate-900 text-xs flex items-center justify-center font-semibold"
+                                style={{ visibility: (mounted && (cartLoading || cartCount > 0)) ? "visible" : "hidden" }}
+                                aria-hidden={!mounted}
+                            >
+                                {mounted ? (cartLoading ? <Spinner size={12} /> : String(cartCount)) : ""}
                             </span>
                         </Link>
 
                         <div className="hidden md:flex items-center gap-3">
-                            {!authReady && <div className="w-6 h-6 flex items-center justify-center"><Spinner size={14} /></div>}
-
-                            {authReady && !isAuthed && (
+                            {/* To avoid hydration mismatch we only render auth-dependent UI after mount.
+                                During SSR we render a stable placeholder of the same node shape. */}
+                            {!mounted ? (
+                                // stable placeholder area (same DOM footprint)
+                                <div className="w-40 h-8 rounded-md bg-transparent" aria-hidden />
+                            ) : (
                                 <>
-                                    <Link href="/login" className="text-sm text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>Login</Link>
-                                    <Link href="/register" className="px-3 py-1.5 rounded-md" style={{ background: ACCENT, color: "#fff" }}>Register</Link>
-                                </>
-                            )}
+                                    {!authReady && <div className="w-6 h-6 flex items-center justify-center"><Spinner size={14} /></div>}
 
-                            {authReady && isAuthed && (
-                                <div className="relative">
-                                    <button
-                                        ref={accountTriggerRef}
-                                        className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 transition"
-                                        aria-haspopup="true"
-                                        onClick={() => setAccountOpen((v) => !v)}
-                                    >
-                                        <UserIcon size={16} />
-                                        <span className="text-sm font-medium">Account</span>
-                                        <ChevronDown size={14} />
-                                    </button>
+                                    {authReady && !isAuthed && (
+                                        <>
+                                            <Link href="/login" className="text-sm text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>Login</Link>
+                                            <Link href="/register" className="px-3 py-1.5 rounded-md" style={{ background: ACCENT, color: "#fff" }}>Register</Link>
+                                        </>
+                                    )}
 
-                                    <AnimatePresence>
-                                        {accountOpen && (
-                                            <motion.div
-                                                ref={accountPanelRef}
-                                                initial={{ opacity: 0, y: -6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -6 }}
-                                                className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border z-50 py-2"
+                                    {authReady && isAuthed && (
+                                        <div className="relative">
+                                            <button
+                                                ref={accountTriggerRef}
+                                                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 transition"
+                                                aria-haspopup="true"
+                                                onClick={() => setAccountOpen((v) => !v)}
                                             >
-                                                <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-50">Profile</Link>
-                                                <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50">Logout</button>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
+                                                <UserIcon size={16} />
+                                                <span className="text-sm font-medium">Account</span>
+                                                <ChevronDown size={14} />
+                                            </button>
+
+                                            <AnimatePresence>
+                                                {accountOpen && (
+                                                    <motion.div
+                                                        ref={accountPanelRef}
+                                                        initial={{ opacity: 0, y: -6 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -6 }}
+                                                        className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border z-50 py-2"
+                                                    >
+                                                        <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-50">Profile</Link>
+                                                        <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50">Logout</button>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
@@ -647,9 +677,11 @@ export default function Header({
                         <div className="flex flex-col gap-3 text-slate-800">
                             <Link href="/products" className="py-2">Shop</Link>
                             <button onClick={() => setCollectionsOpen(s => !s)} className="py-2 text-left">Collections</button>
-                            <Link href="#gifts" className="py-2">Gifts</Link>
-                            <Link href="#sale" className="py-2 text-rose-600 font-semibold">Sale</Link>
-                            <Link href="#inspiration" className="py-2">Inspiration</Link>
+                            <Link href="/gifts" className="py-2">Gifts</Link>
+
+                            {/* Match mobile hrefs with desktop to avoid hydration mismatches */}
+                            <Link href="/coming_soon" className="py-2 text-rose-600 font-semibold">Sale</Link>
+                            <Link href="/coming_soon" className="py-2">Inspiration</Link>
 
                             <hr className="my-2 border-slate-200" />
 
@@ -661,11 +693,18 @@ export default function Header({
 
                             <div className="py-2">
                                 <div className="text-sm font-medium pb-1">Delivery Pincode</div>
-                                <DeliveryPincodeInput />
+                                {/* DeliveryPincodeInput (client-only) - placeholder for SSR */}
+                                {!mounted ? (
+                                    <div aria-hidden className="w-full h-10 rounded-md bg-transparent" />
+                                ) : (
+                                    <DeliveryPincodeInput />
+                                )}
                             </div>
 
                             <div className="flex gap-2">
-                                {!authReady ? (
+                                {!mounted ? (
+                                    <div className="py-2 px-3 rounded-md w-full text-center bg-slate-100">Checking…</div>
+                                ) : !authReady ? (
                                     <div className="py-2 px-3 rounded-md w-full text-center bg-slate-100">Checking…</div>
                                 ) : !isAuthed ? (
                                     <>

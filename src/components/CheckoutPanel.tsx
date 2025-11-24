@@ -2,14 +2,12 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
-import Select from "react-select";
-import { Plus, X, CreditCard, Wallet } from "lucide-react";
+import { Plus, CreditCard, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // adjust this import to match where you placed AddressModal
 import AddressModal, { Address } from "./AddressModal";
 
-const DEFAULT_DELIVERY_CHARGE = 70; // fallback if API fails
 const CUSTOMER_KEY = "customerId";
 const TOKEN_KEY = "accessToken";
 
@@ -36,12 +34,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const router = useRouter();
     const [checkingAuth, setCheckingAuth] = useState(true);
 
-    const [addresses, setAddresses] = useState<Address[]>(initialAddresses || []);
-    const [cart, setCart] = useState<CartItem[]>(initialCart || []);
+    const [addresses, setAddresses] = useState<Address[]>([]);
+    const [cart, setCart] = useState<CartItem[]>([]);
+    const [cartLoaded, setCartLoaded] = useState<boolean>(false);
     const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
     const [showModal, setShowModal] = useState(false);
 
-    // NEW: creating state to disable UI while order is being created
     const [creating, setCreating] = useState(false);
 
     const blankAddress: Address = {
@@ -67,20 +65,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [cities, setCities] = useState<Array<{ _id: string; cityName: string; state?: { _id: string } }>>([]);
 
     const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false });
-
     const [countrySearch, setCountrySearch] = useState("");
     const [stateSearch, setStateSearch] = useState("");
     const [citySearch, setCitySearch] = useState("");
 
-    // serviceability cache keyed by pincode
     type ServiceEntry = { checking: boolean; prepaid: boolean | null; error?: string };
     const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>({});
 
-    // delivery charge (single value used in UI for selected address)
     type DeliveryEntry = { checking: boolean; value: number | null; error?: string };
     const [deliveryMap, setDeliveryMap] = useState<Record<string, DeliveryEntry>>({});
 
-    // mounted ref to avoid updating state after unmount
     const mountedRef = useRef(true);
     useEffect(() => {
         mountedRef.current = true;
@@ -98,7 +92,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }, [addresses]);
 
-    // --------------- helper API utilities (self-contained) ----------------
+    // --- API helpers ---
     function getApiBase(): string {
         if (typeof window === "undefined") return "";
         return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
@@ -141,7 +135,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 return null;
             }
         }
-        return null;
+        try {
+            return await res.text();
+        } catch {
+            return null;
+        }
     }
 
     async function apiGetCart(customerId: string): Promise<CartItem[]> {
@@ -234,7 +232,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
-    // Use stable server id as local id when available
     function mapServerAddressToLocal(serverRec: any): Address {
         const serverId = serverRec._id ? String(serverRec._id) : null;
         const localId = serverId ? `srv_${serverId}` : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
@@ -311,10 +308,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return json;
     }
 
-    /** New: call logistic serviceability and cache result per-pincode
-     *  Endpoint: /logistic_partner/get_pincode_serviceability/{pincode}
-     *  We treat serviceable if response.json.data?.prepaid === true
-     */
     async function fetchPincodeServiceability(pincode: string) {
         const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
         try {
@@ -332,17 +325,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
-    // Guarded serviceability checker
     async function checkAndCacheServiceability(pincode: string) {
         const key = String(pincode || "").trim();
         if (!key || !isValidIndianPincode(key)) return;
 
         const prev = serviceMap[key];
-        // if we already have entry and not checking -> skip
         if (prev && prev.checking === false && typeof prev.prepaid === "boolean") return;
-        if (prev && prev.checking === true) return; // already in-flight
+        if (prev && prev.checking === true) return;
 
-        // set checking state
         setServiceMap((m) => ({ ...m, [key]: { checking: true, prepaid: null } }));
         try {
             const result = await fetchPincodeServiceability(key);
@@ -358,7 +348,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
-    // ---------- Delivery charge API call & cache (GET with query param) ----------
     async function apiFetchDeliveryCharge(pincode: string): Promise<{ ok: boolean; charge?: number; message?: string }> {
         try {
             const customerId = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
@@ -395,21 +384,20 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
-    // Guarded fetch + cache
     async function fetchAndCacheDeliveryCharge(pincode: string) {
         const key = String(pincode || "").trim();
         if (!key || !isValidIndianPincode(key)) return;
 
         const prev = deliveryMap[key];
-        if (prev && prev.checking === false && typeof prev.value === "number") return; // already cached
-        if (prev && prev.checking === true) return; // already in-flight
+        if (prev && prev.checking === false && typeof prev.value === "number") return;
+        if (prev && prev.checking === true) return;
 
         setDeliveryMap((d) => ({ ...d, [key]: { checking: true, value: null } }));
         try {
             const res = await apiFetchDeliveryCharge(key);
             if (!mountedRef.current) return;
             if (res.ok) {
-                setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: res.charge ?? DEFAULT_DELIVERY_CHARGE } }));
+                setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: res.charge ?? null } }));
             } else {
                 setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: null, error: res.message || "Failed to fetch" } }));
             }
@@ -418,10 +406,191 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: null, error: err?.message ?? String(err) } }));
         }
     }
-    // ------------------------------------------------------------------------------
+
+    // ---------- RAZORPAY HELPERS ----------
+    function loadRazorpayScript(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (typeof window === "undefined") return reject(new Error("window is undefined"));
+            if ((window as any).Razorpay) return resolve();
+            const id = "razorpay-js";
+            if (document.getElementById(id)) {
+                const checkTimer = setInterval(() => {
+                    if ((window as any).Razorpay) {
+                        clearInterval(checkTimer);
+                        resolve();
+                    }
+                }, 100);
+                const to = setTimeout(() => {
+                    clearInterval(checkTimer);
+                    if ((window as any).Razorpay) resolve();
+                    else reject(new Error("Razorpay script load timeout"));
+                }, 10000);
+                // if we resolved earlier we should clear timeout - Promise consumers don't get a handle, but we kept it local to clear on resolution above
+                return;
+            }
+            const s = document.createElement("script");
+            s.id = id;
+            s.src = "https://checkout.razorpay.com/v1/checkout.js";
+            s.async = true;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+            document.head.appendChild(s);
+        });
+    }
+
+    // helper to detect objectId (24 hex)
+    function looksLikeObjectId(v: any) {
+        return typeof v === "string" && /^[0-9a-fA-F]{24}$/.test(v);
+    }
+
+    async function openRazorpayCheckout({
+        key,
+        razorpayOrder,
+        orderId,
+    }: {
+        key: string;
+        razorpayOrder: any;
+        orderId?: string | null;
+    }) {
+        await loadRazorpayScript();
+        const rp = (window as any).Razorpay;
+        if (!rp) throw new Error("Razorpay SDK not available");
+
+        const prefillCustomer = (() => {
+            try {
+                const json = localStorage.getItem("customerProfile");
+                if (!json) return {};
+                const c = JSON.parse(json);
+                return {
+                    name: c.name || "",
+                    email: c.email || "",
+                    contact: c.contact || c.phone || "",
+                };
+            } catch {
+                return {};
+            }
+        })();
+
+        type RazorpayHandlerResponse = {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+        };
+
+        const options: any = {
+            key,
+            amount: Number(razorpayOrder.amount) || 0,
+            currency: razorpayOrder.currency ?? "INR",
+            name: "We Craft Memories",
+            description: `Order ${orderId ?? razorpayOrder.receipt ?? ""}`,
+            order_id: razorpayOrder.id,
+            handler: async function (response: RazorpayHandlerResponse) {
+                try {
+                    const verifyUrl = buildUrl("/sell_order/verify_payment");
+
+                    const basePayload: any = {
+                        razorpayOrderId: response.razorpay_order_id,
+                        razorpayPaymentId: response.razorpay_payment_id,
+                        razorpaySignature: response.razorpay_signature,
+                    };
+
+                    const payloadWithOrder =
+                        orderId && String(orderId).trim() ? { ...basePayload, orderId: String(orderId).trim() } : basePayload;
+
+                    const headers: Record<string, string> = { "Content-Type": "application/json" };
+                    const token = getAuthToken();
+                    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+                    let res = await fetch(verifyUrl, { method: "POST", headers, body: JSON.stringify(payloadWithOrder) });
+                    let body = await safeJson(res);
+
+                    // retry without orderId if server couldn't find it
+                    if (!res.ok && payloadWithOrder.orderId) {
+                        const msg = body?.message || body?.error || "";
+                        if (msg === "order_not_found" || msg === "order_not_found_from_notes") {
+                            console.warn("verify_payment returned order_not_found; retrying without orderId");
+                            res = await fetch(verifyUrl, { method: "POST", headers, body: JSON.stringify(basePayload) });
+                            body = await safeJson(res);
+                        }
+                    }
+
+                    if (res.ok) {
+                        if (body?.ack === "success" || body?.status === "success") {
+                            // Prefer explicit numeric orderNumber field, otherwise try numeric orderId.
+                            const numericOrderNumber =
+                                body?.orderNumber ?? (typeof body?.orderId === "number" || (/^\d+$/).test(String(body?.orderId)) ? body.orderId : null);
+
+                            // Prefer _id / object id, then fallback to payload's orderId (if it was objectId)
+                            const objectOrderId = body?._id && looksLikeObjectId(body._id)
+                                ? String(body._id)
+                                : (body?.orderId && looksLikeObjectId(body.orderId) ? String(body.orderId) : (payloadWithOrder.orderId && looksLikeObjectId(payloadWithOrder.orderId) ? String(payloadWithOrder.orderId) : null));
+
+                            const qp: string[] = [];
+                            if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
+                            if (objectOrderId) qp.push(`orderId=${encodeURIComponent(String(objectOrderId))}`);
+
+                            if (qp.length > 0) {
+                                router.replace(`/order-success?${qp.join("&")}`);
+                            } else {
+                                const fallback = payloadWithOrder.orderId ? `?orderId=${encodeURIComponent(String(payloadWithOrder.orderId))}` : "";
+                                router.replace(`/order-success${fallback}`);
+                            }
+                            return;
+                        } else {
+                            const reason = body?.message || body?.error || "Payment verification failed";
+                            const serverOrderId = body?.orderId ?? payloadWithOrder.orderId ?? "";
+                            router.replace(
+                                `/order-failed?reason=${encodeURIComponent(String(reason))}${serverOrderId ? `&orderId=${encodeURIComponent(String(serverOrderId))}` : ""}`
+                            );
+                            return;
+                        }
+                    }
+
+                    // non-ok HTTP
+                    const finalReason = body?.message || body?.error || `Verification HTTP ${res.status}`;
+                    const finalOrderId = body?.orderId ?? payloadWithOrder.orderId ?? "";
+                    console.warn("Payment verification failed:", res.status, body);
+                    router.replace(
+                        `/order-failed?reason=${encodeURIComponent(String(finalReason))}${finalOrderId ? `&orderId=${encodeURIComponent(String(finalOrderId))}` : ""}`
+                    );
+                    return;
+                } catch (err: any) {
+                    console.error("Verify request threw:", err);
+                    const reason = err?.message || "Verification request failed";
+                    router.replace(`/order-failed?reason=${encodeURIComponent(String(reason))}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`);
+                    return;
+                }
+            },
+            modal: { ondismiss: () => console.info("Razorpay modal dismissed") },
+            prefill: prefillCustomer,
+            notes: orderId ? { orderId: String(orderId) } : undefined,
+            display: {
+                hide: [{ method: "paylater" }, { method: "emi" }, { method: "cardless_emi" }],
+                preferences: { show_default_blocks: false },
+                sequence: [],
+            },
+            method: {
+                upi: true,
+                card: true,
+                netbanking: true,
+                wallet: true,
+                emi: false,
+                paylater: false,
+            },
+            emi: false,
+            cardlessEmi: false,
+            paylater: false,
+        };
+
+        console.info("Razorpay checkout options:", options);
+
+        const rzpInstance = new rp(options);
+        rzpInstance.open();
+    }
+
+    // --- End Razorpay helpers ---
 
     useEffect(() => {
-        let mounted = true;
         try {
             if (typeof window === "undefined") return;
 
@@ -445,12 +614,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 try {
                     setGeoLoading((g) => ({ ...g, countries: true }));
                     const list = await apiFetchCountries();
-                    if (!mounted) return;
+                    if (!mountedRef.current) return;
                     setCountries(list);
                 } catch {
                     // ignore
                 } finally {
-                    if (mounted) setGeoLoading((g) => ({ ...g, countries: false }));
+                    if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
                 }
             })();
 
@@ -463,32 +632,31 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 setLoadingAddresses(true);
                 try {
                     const server = await apiFetchAddresses(cust);
-                    if (!mounted) return;
+                    if (!mountedRef.current) return;
                     if (Array.isArray(server) && server.length > 0) {
                         const mapped = server.map((s) => mapServerAddressToLocal(s));
                         setAddresses(mapped);
                         if (selectedAddressId === null && mapped.length > 0) setSelectedAddressId(mapped[0].id);
 
-                        // fetch geo for the first address
                         const first = mapped[0];
                         if (first?.countryId) {
                             try {
                                 setGeoLoading((g) => ({ ...g, states: true }));
                                 const st = await apiFetchStates(first.countryId);
-                                if (!mounted) return;
+                                if (!mountedRef.current) return;
                                 setStates(st);
                             } finally {
-                                if (mounted) setGeoLoading((g) => ({ ...g, states: false }));
+                                if (mountedRef.current) setGeoLoading((g) => ({ ...g, states: false }));
                             }
 
                             if (first?.stateId) {
                                 try {
                                     setGeoLoading((g) => ({ ...g, cities: true }));
                                     const ct = await apiFetchCities(first.stateId);
-                                    if (!mounted) return;
+                                    if (!mountedRef.current) return;
                                     setCities(ct);
                                 } finally {
-                                    if (mounted) setGeoLoading((g) => ({ ...g, cities: false }));
+                                    if (mountedRef.current) setGeoLoading((g) => ({ ...g, cities: false }));
                                 }
                             }
                         }
@@ -496,9 +664,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 } catch (err) {
                     // ignore
                 } finally {
-                    // always clear loading / auth check when effect finishes
                     try {
-                        if (mounted) {
+                        if (mountedRef.current) {
                             setLoadingAddresses(false);
                         }
                     } finally {
@@ -513,29 +680,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             }
             setCheckingAuth(false);
         }
-
-        return () => {
-            mounted = false;
-        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
-        // On mount, proactively check serviceability for each loaded address (to show UI errors quickly)
-        addresses.forEach((a) => {
-            if (a.pincode && isValidIndianPincode(a.pincode)) {
+        (addresses || []).forEach((a) => {
+            if (a?.pincode && isValidIndianPincode(a.pincode)) {
                 checkAndCacheServiceability(a.pincode);
                 fetchAndCacheDeliveryCharge(a.pincode).catch(() => { });
             }
         });
-        // only depends on addresses length/chg — still a safe prefetch
-    }, [addresses.length]);
+    }, [addresses]);
 
     async function openAdd() {
-        // open modal immediately
         setShowModal(true);
 
-        // ensure countries are prefetched non-blocking
         (async () => {
             try {
                 if (!countries.length) {
@@ -551,7 +710,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         })();
     }
 
-    // Optimistic save handled by modal -> parent handler updates state & localStorage
     function handleAddressCreated(localAddr: Address) {
         setAddresses((prev) => {
             const next = [localAddr, ...prev];
@@ -581,10 +739,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     setCart(Array.isArray(serverCart) ? serverCart : []);
                 } catch (err) {
                     console.warn("Could not load server cart, keeping current cart state", err);
+                } finally {
+                    setCartLoaded(true);
+                    setCheckingAuth(false);
                 }
-            })().finally(() => {
-                setCheckingAuth(false);
-            });
+            })();
         } catch {
             router.replace("/login");
             return;
@@ -606,6 +765,22 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }, [cart]);
 
+    useEffect(() => {
+        if (!cartLoaded) return;
+        if (checkingAuth) return;
+        if (creating) return;
+
+        if (typeof total === "number" && total <= 0) {
+            try {
+                if (typeof window !== "undefined" && !window.location.pathname.startsWith("/cart")) {
+                    router.replace("/cart");
+                }
+            } catch (err) {
+                console.warn("Redirect to cart failed", err);
+            }
+        }
+    }, [cartLoaded, checkingAuth, creating, cart.length]);
+
     function placeOrder() {
         const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
         if (!cust) {
@@ -623,7 +798,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (svc?.checking) return alert("Checking pincode serviceability — please wait a moment");
         if (svc && svc.prepaid === false) return alert("Selected address is not serviceable for prepaid orders. Choose another address.");
 
-        // final double-check if we have no cached data
         if (!svc || svc.prepaid === null) {
             (async () => {
                 try {
@@ -633,7 +807,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         return alert("Selected address is not serviceable for prepaid orders.");
                     }
                     setServiceMap((m) => ({ ...m, [addr.pincode]: { checking: false, prepaid: true } }));
-                    // proceed to create the order
                     await createOrderAndRedirect(cust, addr);
                 } catch (err) {
                     alert("Unable to verify pincode serviceability. Please try again.");
@@ -642,23 +815,19 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
-        // If we have serviceable flag, proceed to create order
         (async () => {
             await createOrderAndRedirect(cust, addr);
         })();
     }
 
-    // NEW: create order API call and redirect logic
     async function createOrderAndRedirect(customerId: string, addr: Address) {
         if (creating) return;
         setCreating(true);
 
         try {
-            // Build request body: using serverId when available (prefer serverId) else pass whatever id you have
             const deliveryAddressId = addr.serverId ?? String(addr.id);
             const billingAddressId = addr.serverId ?? String(addr.id);
 
-            // IMPORTANT: use /v1 prefix so endpoint becomes /v1/sell_order/create
             const url = buildUrl("/sell_order/create");
             const headers: Record<string, string> = { "Content-Type": "application/json" };
             const token = getAuthToken();
@@ -668,6 +837,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 customerId: String(customerId),
                 deliveryAddressId: String(deliveryAddressId),
                 billingAddressId: String(billingAddressId),
+                cart: cart.map((it) => ({ productId: it.id, qty: it.qty, price: it.price })),
             };
 
             console.debug("[createOrder] POST", url, body);
@@ -677,7 +847,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 body: JSON.stringify(body),
             });
 
-            // handle unauthorized
             if (res.status === 401) {
                 handleUnauthorized();
                 return;
@@ -686,21 +855,57 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             const json = (await safeJson(res)) || {};
             console.debug("[createOrder] response", res.status, json);
 
-            // Expecting { ack: "success", message: "order created successfully", orderId: 1003 }
-            if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId)) {
-                const orderId = json.orderId ?? json?.data?.orderId ?? null;
-                // build total to send to success page (best-effort)
-                const subtotalLocal = subtotal;
-                const totalLocal = subtotalLocal + (Number(currentDeliveryCharge) || 0);
+            if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId || json?.data)) {
+                // --- Extract numeric order number vs object id ---
+                // numericOrderNumber: prefer explicit json.orderId if numeric, otherwise json.data.orderNumber
+                const numericOrderNumber =
+                    (typeof json.orderId === "number" ? json.orderId : (typeof json.orderId === "string" && /^\d+$/.test(json.orderId) ? Number(json.orderId) : null))
+                    ?? (json?.data && (typeof json.data.orderNumber === "number" ? json.data.orderNumber : (typeof json.data.orderNumber === "string" && /^\d+$/.test(json.data.orderNumber) ? Number(json.data.orderNumber) : null)))
+                    ?? null;
 
-                // redirect to success page, include order id
-                if (orderId) {
-                    router.replace(`/order-success?orderId=${encodeURIComponent(String(orderId))}`);
+                // objectId detection - check common fields for 24-hex _id
+                const maybeObjectId =
+                    (json && json._id && typeof json._id === "string" && /^[0-9a-fA-F]{24}$/.test(json._id) ? String(json._id)
+                        : (json?.data && json.data._id && typeof json.data._id === "string" && /^[0-9a-fA-F]{24}$/.test(json.data._id) ? String(json.data._id)
+                            : null));
+
+                // The field 'orderId' in your earlier example was numeric (1047).
+                // serverObjectIdForCheckout: prefer explicit object id above, otherwise try json.data.orderId if object-like
+                const serverObjectIdForCheckout =
+                    maybeObjectId
+                    ?? (json?.data && json.data.orderId && typeof json.data.orderId === "string" && /^[0-9a-fA-F]{24}$/.test(json.data.orderId) ? String(json.data.orderId) : null)
+                    ?? (json && json.orderId && typeof json.orderId === "string" && /^[0-9a-fA-F]{24}$/.test(json.orderId) ? String(json.orderId) : null);
+
+                const razorpayOrder = json.razorpayOrder ?? json?.data?.razorpayOrder ?? null;
+                const rzpKey = json.key ?? json?.data?.key ?? null;
+
+                if (razorpayOrder && rzpKey) {
+                    try {
+                        // Pass the server's objectId (if available) to Razorpay checkout notes/handler so verify can match it.
+                        await openRazorpayCheckout({ key: rzpKey, razorpayOrder, orderId: serverObjectIdForCheckout ?? null });
+                        return;
+                    } catch (err: any) {
+                        console.error("Failed to open Razorpay", err);
+                        router.replace(`/order-failed?reason=${encodeURIComponent("Failed to open Razorpay checkout")}`);
+                        return;
+                    }
+                }
+
+                const subtotalLocal = subtotal;
+                const deliveryChargeVal = Number(currentDeliveryCharge || 0);
+                const totalLocal = subtotalLocal + deliveryChargeVal;
+
+                // Build redirect qp with numeric order number + object id when available
+                const qp: string[] = [];
+                if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
+                if (serverObjectIdForCheckout) qp.push(`orderId=${encodeURIComponent(String(serverObjectIdForCheckout))}`);
+
+                if (qp.length > 0) {
+                    router.replace(`/order-success?${qp.join("&")}`);
                 } else {
                     router.replace(`/order-success?total=${encodeURIComponent(String(totalLocal))}`);
                 }
             } else {
-                // server returned non-2xx or ack not success
                 const msg = json?.message || json?.error || `Order creation failed (${res.status})`;
                 console.warn("[createOrder] failed", msg, json);
 
@@ -747,44 +952,38 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const subtotal = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
 
-    // Determine current delivery charge based on selected address/pincode
     const currentDeliveryCharge = useMemo(() => {
-        if (!selectedAddressId) return DEFAULT_DELIVERY_CHARGE;
+        if (!selectedAddressId) return 0;
         const addr = addresses.find((a) => a.id === selectedAddressId);
-        if (!addr) return DEFAULT_DELIVERY_CHARGE;
+        if (!addr) return 0;
 
-        // If we have a cached delivery charge for this pincode, use it
         const entry = deliveryMap[addr.pincode];
         if (entry && typeof entry.value === "number") return entry.value;
 
-        // If checking or not yet fetched, show fallback
-        return DEFAULT_DELIVERY_CHARGE;
+        return 0;
     }, [selectedAddressId, addresses, deliveryMap]);
 
-    const total = subtotal + currentDeliveryCharge;
+    const total = subtotal + (Number(currentDeliveryCharge) || 0);
 
     const filteredCountries = countries.filter((c) => c.countryName.toLowerCase().includes(countrySearch.trim().toLowerCase()));
     const filteredStates = states.filter((s) => s.stateName.toLowerCase().includes(stateSearch.trim().toLowerCase()));
     const filteredCities = (cities ?? []).filter((c) => c.cityName.toLowerCase().includes(citySearch.trim().toLowerCase()));
 
-    // SAFER effect: only depend on selectedAddressId and addresses (not on serviceMap)
     useEffect(() => {
         if (!selectedAddressId) return;
 
         const current = addresses.find((a) => a.id === selectedAddressId);
         if (!current) {
-            // only set if it actually changes
             const fallback = addresses.length ? addresses[0].id : null;
             if (fallback !== selectedAddressId) setSelectedAddressId(fallback);
             return;
         }
 
-        // If the address is explicitly known to be NOT prepaid-serviceable, attempt to pick another
         const svc = serviceMap[current.pincode];
         if (svc && svc.prepaid === false) {
             const firstGood = addresses.find((a) => {
                 const s = serviceMap[a.pincode];
-                return !(s && s.prepaid === false); // allow unknown or prepaid === true
+                return !(s && s.prepaid === false);
             }) ?? null;
             if (firstGood && firstGood.id !== selectedAddressId) {
                 setSelectedAddressId(firstGood.id);
@@ -794,12 +993,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
-        // trigger service check and delivery charge fetch for the selected pincode (if needed)
         if (current.pincode && isValidIndianPincode(current.pincode)) {
             checkAndCacheServiceability(current.pincode);
             fetchAndCacheDeliveryCharge(current.pincode).catch(() => { });
         }
-    }, [selectedAddressId, addresses]); // intentionally NOT including serviceMap to avoid loops
+    }, [selectedAddressId, addresses]);
 
     if (checkingAuth) {
         return (
@@ -851,7 +1049,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 const isChecking = svc?.checking === true;
                                 const prepaid = svc?.prepaid;
                                 const showError = prepaid === false;
-                                const isDisabled = prepaid === false; // <-- disable when known not serviceable
+                                const isDisabled = prepaid === false;
 
                                 return (
                                     <label
@@ -912,7 +1110,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             {a.countryName ? `, ${a.countryName}` : ""} — {a.pincode}
                                         </div>
 
-                                        {/* serviceability UI */}
                                         <div className="text-xs mt-1">
                                             {isChecking ? (
                                                 <div className="text-slate-500">Checking serviceability…</div>
@@ -933,53 +1130,37 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                         <hr className="my-6 border-slate-100" />
 
-                        {/* --- CART SECTION: 4 items per row on md+ --- */}
+                        {/* --- CART SECTION --- */}
                         <div>
                             <h3 className="text-lg font-semibold">Your cart</h3>
                             <p className="text-sm text-slate-500">Items you are about to purchase</p>
 
                             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                                 {cart.map((it) => (
-                                    <div
-                                        key={it.id}
-                                        className="flex flex-col p-2 rounded-xl border bg-white hover:shadow-md transition-all h-full"
-                                    >
-                                        {/* Image (fixed smaller height) */}
+                                    <div key={it.id} className="flex flex-col p-2 rounded-xl border bg-white hover:shadow-md transition-all h-full">
                                         <div className="relative w-full h-28 rounded-lg overflow-hidden mb-3 bg-gradient-to-br from-[#fff7f9] to-[#f3fcfb]">
                                             <Image src={safeImg(it.img)} alt={it.title} fill className="object-cover" />
                                         </div>
 
-                                        {/* Details - stretch to keep uniform card height */}
                                         <div className="flex-1 flex flex-col justify-between">
                                             <div>
-                                                <div className="font-semibold text-slate-800 line-clamp-2 leading-tight">
-                                                    {it.title}
-                                                </div>
-                                                <div className="text-sm text-slate-400 mt-1">
-                                                    {formatINR(it.price)} each
-                                                </div>
+                                                <div className="font-semibold text-slate-800 line-clamp-2 leading-tight">{it.title}</div>
+                                                <div className="text-sm text-slate-400 mt-1">{formatINR(it.price)} each</div>
                                             </div>
 
-                                            {/* Qty + Total */}
                                             <div className="flex items-center justify-between mt-3">
                                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-[#f6fbfb] text-sm font-medium">
                                                     <div className="text-slate-600">Qty</div>
-                                                    <div className="px-2 py-0.5 rounded-full bg-white border text-sm font-semibold">
-                                                        {it.qty}
-                                                    </div>
+                                                    <div className="px-2 py-0.5 rounded-full bg-white border text-sm font-semibold">{it.qty}</div>
                                                 </div>
 
-                                                <div className="text-base font-bold text-[#065975]">
-                                                    {formatINR(it.price * it.qty)}
-                                                </div>
+                                                <div className="text-base font-bold text-[#065975]">{formatINR(it.price * it.qty)}</div>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
 
-                                {cart.length === 0 && (
-                                    <div className="col-span-full text-center text-slate-500 py-6 border rounded-lg">Your cart is empty</div>
-                                )}
+                                {cart.length === 0 && <div className="col-span-full text-center text-slate-500 py-6 border rounded-lg">Your cart is empty</div>}
                             </div>
                         </div>
                         {/* --- end cart --- */}
@@ -1000,12 +1181,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 <div>{formatINR(subtotal)}</div>
                             </div>
 
-                            {/* Single Delivery line below subtotal */}
                             <div className="flex justify-between">
                                 <div>Delivery</div>
-                                <div>
-                                    {formatINR(currentDeliveryCharge)}
-                                </div>
+                                <div>{formatINR(Number(currentDeliveryCharge || 0))}</div>
                             </div>
 
                             <div className="border-t pt-3 mt-3 flex justify-between items-center">
@@ -1018,12 +1196,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <h3 className="text-md font-medium">Payment</h3>
                             <div className="mt-3 grid grid-cols-2 gap-2">
                                 <label className="flex items-center gap-2 p-3 rounded-lg border hover:shadow-sm cursor-pointer">
-                                    <input type="radio" name="pay" defaultChecked className="w-4 h-4 text-[#065975]" />
+                                    <input type="radio" name="pay" defaultChecked aria-label="Pay by card" className="w-4 h-4 text-[#065975]" />
                                     <CreditCard className="w-4 h-4 text-slate-400" />
                                     <div className="text-sm">Card</div>
                                 </label>
                                 <label className="flex items-center gap-2 p-3 rounded-lg border hover:shadow-sm cursor-pointer">
-                                    <input type="radio" name="pay" className="w-4 h-4 text-[#065975]" />
+                                    <input type="radio" name="pay" aria-label="Pay by UPI or wallet" className="w-4 h-4 text-[#065975]" />
                                     <Wallet className="w-4 h-4 text-slate-400" />
                                     <div className="text-sm">UPI / Wallet</div>
                                 </label>
@@ -1034,7 +1212,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <button
                                 onClick={placeOrder}
                                 className={`flex-1 py-3 rounded-xl font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed" : "bg-gradient-to-r from-[#065975] to-[#0ea5a0] text-white hover:brightness-95"}`}
-                                disabled={creating}
+                                disabled={creating || cart.length === 0}
+                                aria-disabled={creating || cart.length === 0}
                             >
                                 {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
                             </button>
@@ -1046,7 +1225,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     </aside>
                 </main>
 
-                {/* MOBILE FIXED BOTTOM BAR (visible on small screens only) */}
+                {/* MOBILE FIXED BOTTOM BAR */}
                 <div className="fixed left-0 right-0 bottom-0 z-40 md:hidden bg-white border-t px-4 py-3 shadow-lg">
                     <div className="max-w-6xl mx-auto flex items-center gap-3">
                         <div className="flex-1">
@@ -1056,14 +1235,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <button
                             onClick={placeOrder}
                             className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-lg font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed bg-gray-200 text-slate-500" : "bg-[#065975] text-white"}`}
-                            disabled={creating}
+                            disabled={creating || cart.length === 0}
+                            aria-disabled={creating || cart.length === 0}
                         >
                             {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
                         </button>
                     </div>
                 </div>
 
-                {/* modal for add address (extracted component) */}
                 <AddressModal show={showModal} onClose={() => setShowModal(false)} onCreated={handleAddressCreated} />
             </div>
         </div>

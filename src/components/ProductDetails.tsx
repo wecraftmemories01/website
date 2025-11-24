@@ -734,10 +734,10 @@ export default function ProductClient({ product }: { product: Product }) {
                                 </div>
                             </div>
 
-                            <div className="hidden md:flex items-center gap-3">
+                            {/* <div className="hidden md:flex items-center gap-3">
                                 <div className="text-sm text-gray-600">Stock:</div>
                                 <div className={`text-sm font-semibold ${isOutOfStock ? 'text-red-600' : 'text-green-700'}`}>{isOutOfStock ? 'Out of stock' : `${stockNumber} available`}</div>
-                            </div>
+                            </div> */}
                         </div>
                     </div>
                 </div>
@@ -775,9 +775,9 @@ export default function ProductClient({ product }: { product: Product }) {
                         </div>
 
                         {/* Reviews Module inserted here */}
-                        <ReviewModule productName={productName} />
+                        {/* <ReviewModule productName={productName} /> */}
 
-                        <div>
+                        {/* <div>
                             <h4 className="text-sm font-semibold text-gray-700 mb-3">You may also like</h4>
                             <div className="flex gap-4 overflow-x-auto pb-2">
                                 {[
@@ -792,7 +792,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </div> */}
                     </div>
 
                     <aside className="space-y-6">

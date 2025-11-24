@@ -139,7 +139,7 @@ export default function TestimonialsPages({
             className="bg-gradient-to-b from-white to-slate-50 py-12"
             aria-label="Testimonials"
         >
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h3 className="text-2xl sm:text-3xl font-bold text-slate-800">
