@@ -79,6 +79,7 @@ export default function OrdersCompact({
     customerId?: string;
     apiBase?: string;
 }) {
+    // server-provided page items
     const [orders, setOrders] = useState<ApiOrder[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -86,10 +87,11 @@ export default function OrdersCompact({
     const [query, setQuery] = useState("");
     const [refreshToggle, setRefreshToggle] = useState(0);
 
-    // Pagination
+    // Pagination (server-driven)
     const [page, setPage] = useState(1);
-    const perPageOptions = [5, 10, 20];
-    const [perPage, setPerPage] = useState<number>(5);
+    const perPageOptions = [10, 25, 50];
+    const [perPage, setPerPage] = useState<number>(10);
+    const [serverTotalRecords, setServerTotalRecords] = useState<number>(0);
 
     // Filters UI
     const [filtersOpen, setFiltersOpen] = useState(false);
@@ -98,105 +100,92 @@ export default function OrdersCompact({
     const [minItems, setMinItems] = useState<number | "">("");
     const [minTotal, setMinTotal] = useState<number | "">("");
 
+    // Build the request URL and fetch the server page (sends page & limit + filter params)
     useEffect(() => {
         let mounted = true;
+
         async function fetchOrders() {
             setLoading(true);
             setError(null);
+
             try {
-                const url = `${apiBase.replace(/\/$/, "")}/sell_order/orders?customerId=${encodeURIComponent(customerId)}`;
+                if (!customerId) {
+                    setOrders([]);
+                    setServerTotalRecords(0);
+                    setLoading(false);
+                    return;
+                }
+
+                const base = apiBase.replace(/\/$/, "");
+                const params = new URLSearchParams();
+
+                params.set("customerId", customerId);
+                params.set("page", String(page));
+                params.set("limit", String(perPage));
+
+                // pass search + filters as query params — backend may or may not honor them
+                if (query && query.trim() !== "") params.set("q", query.trim());
+                if (dateFrom) params.set("dateFrom", dateFrom);
+                if (dateTo) params.set("dateTo", dateTo);
+                if (minItems !== "") params.set("minItems", String(minItems));
+                if (minTotal !== "") params.set("minTotal", String(minTotal));
+
+                const url = `${base}/sell_order/orders?${params.toString()}`;
+
                 const res = await authFetch(url, { method: "GET" });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const json = (await res.json().catch(() => ({}))) as any;
+                if (!res.ok) {
+                    const txt = await res.text().catch(() => "");
+                    throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`);
+                }
+
+                const json = await res.json().catch(() => ({} as any));
                 if (!mounted) return;
-                if (json.ack !== "success") throw new Error(json.message ?? "API ack != success");
-                setOrders(Array.isArray(json.data) ? json.data : (json || []));
+
+                // Expect server to return: { ack, page, limit, totalRecords, data }
+                if (json.ack !== undefined && json.ack !== "success") {
+                    throw new Error(json.message ?? "API ack != success");
+                }
+
+                const raw = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+                setOrders(raw as ApiOrder[]);
+
+                const total = typeof json.totalRecords === "number" ? json.totalRecords : 0;
+                setServerTotalRecords(total);
+
+                // If backend normalized the page/limit, respect it
+                if (typeof json.page === "number" && json.page !== page) setPage(json.page);
+                if (typeof json.limit === "number" && json.limit !== perPage) {
+                    // keep perPage in sync only if you want the server to control limit
+                    // setPerPage(json.limit);
+                }
             } catch (err: any) {
-                setError(err?.message ?? "Failed to fetch orders");
+                console.error("fetchOrders error", err);
+                if (mounted) setError(err?.message ?? "Failed to fetch orders");
             } finally {
                 if (mounted) setLoading(false);
             }
         }
-        if (customerId) fetchOrders();
+
+        fetchOrders();
+
         return () => {
             mounted = false;
         };
-    }, [customerId, apiBase, refreshToggle]);
+    }, [customerId, apiBase, page, perPage, query, dateFrom, dateTo, minItems, minTotal, refreshToggle]);
 
-    // Apply search + filter logic
-    const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        let list = orders.slice();
-
-        // search by order number / product name
-        if (q) {
-            list = list.filter(
-                (o) =>
-                    (o.orderNumber + "").toLowerCase().includes(q) ||
-                    o.orderProductsDetails.some((p) => p.productNameSnapshot.toLowerCase().includes(q))
-            );
-        }
-
-        // date filters (inclusive)
-        if (dateFrom) {
-            const fromMs = Date.parse(dateFrom);
-            if (!Number.isNaN(fromMs)) {
-                list = list.filter((o) => Date.parse(o.purchaseDate) >= fromMs);
-            }
-        }
-        if (dateTo) {
-            // include the whole day by adding 1 day to dateTo end
-            const toMs = Date.parse(dateTo);
-            if (!Number.isNaN(toMs)) {
-                const endOfDay = toMs + 24 * 60 * 60 * 1000 - 1;
-                list = list.filter((o) => Date.parse(o.purchaseDate) <= endOfDay);
-            }
-        }
-
-        // min items filter (sum of quantities)
-        if (minItems !== "") {
-            const min = Number(minItems) || 0;
-            list = list.filter((o) => {
-                const cnt = (o.orderProductsDetails || []).reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
-                return cnt >= min;
-            });
-        }
-
-        // min total (items subtotal from API or computed)
-        if (minTotal !== "") {
-            const min = Number(minTotal) || 0;
-            list = list.filter((o) => {
-                const apiItemsTotal = Number(o.orderTotal ?? 0);
-                const computedItemsTotal = (o.orderProductsDetails || []).reduce(
-                    (s, p) => s + (Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0)),
-                    0
-                );
-                const itemsTotal = apiItemsTotal || computedItemsTotal;
-                return itemsTotal >= min;
-            });
-        }
-
-        // sort by latest
-        list.sort((a, b) => Number(new Date(b.purchaseDate)) - Number(new Date(a.purchaseDate)));
-
-        return list;
-    }, [orders, query, dateFrom, dateTo, minItems, minTotal]);
-
-    // reset page when filters/search/perPage change
-    useEffect(() => {
-        setPage(1);
-    }, [query, dateFrom, dateTo, minItems, minTotal, perPage, orders]);
-
-    const total = filtered.length;
+    // Derived pagination info
+    const total = serverTotalRecords;
     const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-    // slice for current page
-    const pageItems = useMemo(() => {
-        const start = (page - 1) * perPage;
-        return filtered.slice(start, start + perPage);
-    }, [filtered, page, perPage]);
+    // When user changes a filter/search/perPage, jump back to page 1 (and refetch via effect)
+    useEffect(() => {
+        setPage(1);
+    }, [query, dateFrom, dateTo, minItems, minTotal, perPage]);
 
-    // build grouped from pageItems
+    // Because server returns only the current page, pageItems are the server `orders`
+    const pageItems = orders;
+
+    // Group pageItems by month (server returned page's items)
     const grouped = useMemo(() => {
         const map = new Map<string, ApiOrder[]>();
         pageItems.forEach((o) => {
@@ -241,7 +230,6 @@ export default function OrdersCompact({
                         />
                     </div>
 
-                    {/* Filters button replaces the Refresh button */}
                     <button
                         onClick={() => setFiltersOpen((s) => !s)}
                         title="Filters"
@@ -253,29 +241,19 @@ export default function OrdersCompact({
                 </div>
             </header>
 
-            {/* Filter panel (simple slide-over style) */}
+            {/* Filter panel */}
             {filtersOpen && (
                 <div className="mt-4">
                     <div className="bg-white border rounded-lg p-4 shadow-sm">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             <div>
                                 <label className="block text-xs text-slate-600">Date from</label>
-                                <input
-                                    type="date"
-                                    value={dateFrom}
-                                    onChange={(e) => setDateFrom(e.target.value)}
-                                    className="mt-1 w-full text-sm px-2 py-1 border rounded-md"
-                                />
+                                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="mt-1 w-full text-sm px-2 py-1 border rounded-md" />
                             </div>
 
                             <div>
                                 <label className="block text-xs text-slate-600">Date to</label>
-                                <input
-                                    type="date"
-                                    value={dateTo}
-                                    onChange={(e) => setDateTo(e.target.value)}
-                                    className="mt-1 w-full text-sm px-2 py-1 border rounded-md"
-                                />
+                                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="mt-1 w-full text-sm px-2 py-1 border rounded-md" />
                             </div>
 
                             <div>
@@ -304,23 +282,11 @@ export default function OrdersCompact({
                         </div>
 
                         <div className="mt-3 flex items-center gap-3">
-                            <button
-                                onClick={() => {
-                                    // close and keep filters applied (they already apply live)
-                                    setFiltersOpen(false);
-                                }}
-                                className="px-3 py-1 rounded-md bg-[#065975] text-white text-sm"
-                            >
+                            <button onClick={() => setFiltersOpen(false)} className="px-3 py-1 rounded-md bg-[#065975] text-white text-sm">
                                 Apply
                             </button>
 
-                            <button
-                                onClick={() => {
-                                    clearFilters();
-                                    setFiltersOpen(false);
-                                }}
-                                className="px-3 py-1 rounded-md border text-sm"
-                            >
+                            <button onClick={() => { clearFilters(); setFiltersOpen(false); }} className="px-3 py-1 rounded-md border text-sm">
                                 Clear
                             </button>
 
@@ -403,7 +369,6 @@ export default function OrdersCompact({
                                         const extra = Math.max(0, aggregated.length - collapsedPreview.length);
                                         const isExpanded = !!expanded[id];
 
-                                        // Use API totals, falling back to computed items total as sanity check
                                         const apiItemsTotal = Number(o.orderTotal ?? 0);
                                         const computedItemsTotal = (o.orderProductsDetails || []).reduce(
                                             (s, p) => s + (Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0)),
@@ -413,9 +378,7 @@ export default function OrdersCompact({
                                         const delivery = Number(o.quotedDeliveryCharge ?? 0);
                                         const grandTotal = itemsTotal + delivery;
 
-                                        // total number of pieces in the order
                                         const totalItemsCount = (o.orderProductsDetails || []).reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
-                                        // also derive from aggregated to be safe (aggregated sums duplicates)
                                         const aggTotalCount = aggregated.reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
                                         const totalCount = Math.max(totalItemsCount, aggTotalCount);
 
@@ -437,21 +400,14 @@ export default function OrdersCompact({
                                                     </div>
 
                                                     {!isExpanded && (
-                                                        // COLLAPSED: show products stacked vertically (one below the other)
                                                         <div className="mt-3 space-y-2">
                                                             {collapsedPreview.map((p, i) => {
-                                                                const href = p.productId
-                                                                    ? `/products/${encodeURIComponent(String(p.productId))}`
-                                                                    : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
-
+                                                                const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
                                                                 return (
                                                                     <Link
                                                                         href={href}
                                                                         key={`${p.productId ?? p.productNameSnapshot}-${i}`}
-                                                                        onClick={(e) => {
-                                                                            // prevent toggling the order expand when user clicks product link
-                                                                            e.stopPropagation();
-                                                                        }}
+                                                                        onClick={(e) => e.stopPropagation()}
                                                                         className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
                                                                     >
                                                                         <div className="w-12 h-12 rounded overflow-hidden relative bg-white border flex-shrink-0">
@@ -462,37 +418,25 @@ export default function OrdersCompact({
                                                                             )}
                                                                         </div>
                                                                         <div className="min-w-0">
-                                                                            {/* allow wrapping for long names */}
                                                                             <div className="text-sm font-medium break-words leading-tight">{p.productNameSnapshot}</div>
                                                                             <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
                                                                         </div>
                                                                     </Link>
                                                                 );
                                                             })}
-                                                            {extra > 0 && (
-                                                                <div className="flex items-center justify-center text-sm text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border">
-                                                                    +{extra} more
-                                                                </div>
-                                                            )}
+                                                            {extra > 0 && <div className="flex items-center justify-center text-sm text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border">+{extra} more</div>}
                                                         </div>
                                                     )}
 
                                                     {isExpanded && (
-                                                        // EXPANDED: stack all products vertically
                                                         <div className="mt-3 text-sm text-slate-700 space-y-2">
                                                             {aggregated.map((p, i) => {
-                                                                const href = p.productId
-                                                                    ? `/products/${encodeURIComponent(String(p.productId))}`
-                                                                    : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
-
+                                                                const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
                                                                 return (
                                                                     <Link
                                                                         href={href}
                                                                         key={`${p.productId ?? p.productNameSnapshot}-expanded-${i}`}
-                                                                        onClick={(e) => {
-                                                                            // prevent toggling the order expand when user clicks product link
-                                                                            e.stopPropagation();
-                                                                        }}
+                                                                        onClick={(e) => e.stopPropagation()}
                                                                         className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
                                                                     >
                                                                         <div className="w-12 h-12 rounded overflow-hidden relative bg-white border flex-shrink-0">
@@ -503,7 +447,6 @@ export default function OrdersCompact({
                                                                             )}
                                                                         </div>
                                                                         <div className="min-w-0">
-                                                                            {/* allow wrapping for long names */}
                                                                             <div className="text-sm font-medium break-words leading-tight">{p.productNameSnapshot}</div>
                                                                             <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
                                                                         </div>
@@ -514,10 +457,8 @@ export default function OrdersCompact({
                                                     )}
                                                 </div>
 
-                                                {/* ---- Totals / Invoice aside (aligned + compact) ---- */}
                                                 <aside className="flex flex-col items-end justify-between gap-3 md:gap-4">
                                                     <div className="w-full md:w-44 bg-slate-50 border rounded-lg p-3 text-sm">
-                                                        {/* Top row: Items label + count on left, subtotal on right (horizontal alignment) */}
                                                         <div className="flex justify-between items-center">
                                                             <div className="text-xs text-slate-600">
                                                                 <div className="font-medium">Items <span className="text-xs text-slate-500">({totalCount})</span></div>
@@ -525,12 +466,9 @@ export default function OrdersCompact({
                                                             <div className="text-slate-800 font-medium">{currency(itemsTotal)}</div>
                                                         </div>
 
-                                                        {/* Delivery row */}
                                                         <div className="flex justify-between items-center text-slate-600 mt-2">
                                                             <span className="text-xs">Delivery</span>
-                                                            <span className="font-medium text-slate-800">
-                                                                {delivery > 0 ? currency(delivery) : "—"}
-                                                            </span>
+                                                            <span className="font-medium text-slate-800">{delivery > 0 ? currency(delivery) : "—"}</span>
                                                         </div>
 
                                                         <hr className="my-2 border-slate-200" />
@@ -540,7 +478,6 @@ export default function OrdersCompact({
                                                             <span className="text-[#065975] text-sm font-bold">{currency(grandTotal)}</span>
                                                         </div>
 
-                                                        {/* optional: show if API total mismatches computed total */}
                                                         {apiItemsTotal && apiItemsTotal !== computedItemsTotal && (
                                                             <div className="mt-1 text-xs text-rose-600">Note: subtotal mismatch</div>
                                                         )}

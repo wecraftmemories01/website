@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import Pagination from "../components/ui/Pagination";
 import ConfirmModal from "./ui/ConfirmModal";
@@ -8,6 +8,7 @@ import AddressModalEdit, { Address as EditAddressType } from "./AddressModalEdit
 
 const TOKEN_KEY = "accessToken";
 const CUSTOMER_KEY = "customerId";
+const PER_PAGE = 25; // 25 records per page
 
 /* ---- Types ---- */
 export type Address = {
@@ -83,6 +84,7 @@ function mapServerAddressToLocal(serverRec: any): Address {
 export default function ProfileAddresses(props: ProfileAddressesProps) {
     const { addresses: externalAddresses, onAdd, onEdit, onDelete, onSetDefault } = props;
 
+    // When server-driven pagination is used, `addresses` will hold only the current page's items.
     const [addresses, setAddresses] = useState<Address[]>(externalAddresses ?? []);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -99,34 +101,39 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editAddress, setEditAddress] = useState<EditAddressType | null>(null);
 
-    const [page, setPage] = useState(1);
-    const perPage = 10;
-    const total = addresses.length;
-    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    /* --- Pagination state (server-driven) --- */
+    const [page, setPage] = useState<number>(1);
+    const [serverTotalRecords, setServerTotalRecords] = useState<number>(0);
 
+    // If parent passed externalAddresses, keep old client-side behaviour
     useEffect(() => {
         if (Array.isArray(externalAddresses)) {
             setAddresses(externalAddresses);
+            // set serverTotalRecords so pagination still works client-side
+            setServerTotalRecords(externalAddresses.length);
         }
     }, [externalAddresses]);
 
-    /* ---- Fetch Addresses from server if parent didn't provide them ---- */
-    useEffect(() => {
-        if (Array.isArray(externalAddresses)) return;
+    // Fetch helper (useCallback so we can call it from other handlers)
+    const fetchAddresses = useCallback(
+        async (opts?: { pageOverride?: number }) => {
+            // If parent provided addresses, we skip server fetch
+            if (Array.isArray(externalAddresses)) return;
 
-        let mounted = true;
-        async function fetchAddresses() {
             setLoading(true);
             setError(null);
+
             try {
                 const cust = localStorage.getItem(CUSTOMER_KEY);
                 if (!cust) {
                     setError("Customer not logged in");
+                    setLoading(false);
                     return;
                 }
 
+                const usePage = opts?.pageOverride ?? page;
                 const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1").replace(/\/$/, "");
-                const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address`;
+                const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address?page=${encodeURIComponent(String(usePage))}&limit=${encodeURIComponent(String(PER_PAGE))}`;
 
                 const res = await authFetch(url, { method: "GET" });
                 if (!res.ok) {
@@ -135,29 +142,51 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 }
                 const json = await res.json();
 
-                if (!mounted) return;
-                const data = Array.isArray(json.addressData) ? json.addressData.map(mapServerAddressToLocal) : [];
-                setAddresses(data);
+                // expect backend returns: { ack, page, limit, totalRecords, data: [...] }
+                const rawData = Array.isArray(json.data) ? json.data : [];
+                const mapped = rawData.map(mapServerAddressToLocal);
+
+                // set addresses and totals
+                setAddresses(mapped);
+                const total = typeof json.totalRecords === "number" ? json.totalRecords : mapped.length;
+                setServerTotalRecords(total);
+
+                // if server returns page/limit ensure client follows server (avoid loops: only set when different)
+                if (typeof json.page === "number" && json.page !== usePage) {
+                    setPage(json.page);
+                }
+                // note: we keep PER_PAGE constant; if you want to accept server `json.limit`, convert PER_PAGE to state
             } catch (err: any) {
                 console.error("[ProfileAddresses] fetchAddresses error:", err);
                 setError(err?.message ?? "Failed to fetch addresses");
             } finally {
-                if (mounted) setLoading(false);
+                setLoading(false);
             }
-        }
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [page, externalAddresses] // page here only for dependency lint; fetchAddresses invoked explicitly
+    );
 
+    /* ---- Effect: fetch when page changes (only in server mode) ---- */
+    useEffect(() => {
+        if (Array.isArray(externalAddresses)) return;
         fetchAddresses();
-        return () => {
-            mounted = false;
-        };
-    }, [externalAddresses]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, externalAddresses]);
 
-    const pageItems = useMemo(() => {
-        const start = (page - 1) * perPage;
-        return addresses.slice(start, start + perPage);
-    }, [addresses, page, perPage]);
+    /* ---- Derived values for pagination UI ---- */
+    const total = serverTotalRecords;
+    const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
-    /* ---- Internal Handlers ---- */
+    // 1) Clamp page to available pages whenever server totalPages changes
+    useEffect(() => {
+        if (page > totalPages) {
+            setPage(totalPages);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [totalPages]);
+
+    /* ---- Internal Handlers (unchanged) ---- */
     const internalAdd = () => {
         setEditAddress(null);
         setEditModalOpen(true);
@@ -222,18 +251,51 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
         try {
             setDeletingId(String(id));
             const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1").replace(/\/$/, "");
-            const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address/${encodeURIComponent(useId)}`;
+            // send page & limit so backend can respond with current pagination if desired
+            const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address/${encodeURIComponent(useId)}?page=${encodeURIComponent(
+                String(page)
+            )}&limit=${encodeURIComponent(String(PER_PAGE))}`;
 
             console.debug("[ProfileAddresses] DELETE ->", { url, useId, originalId: id, addr });
             const res = await authFetch(url, { method: "DELETE" });
-
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`);
             }
 
-            // success: remove from UI
-            setAddresses((prev) => prev.filter((a) => !(a.serverId === useId || a.id === String(id) || a.id === `srv_${useId}`)));
+            // If API returns paginated data after delete, use it. Otherwise fallback to optimistic update + refetch.
+            const json = await res.json().catch(() => null);
+
+            if (json && Array.isArray(json.data)) {
+                // server returns paginated payload
+                const mapped = json.data.map(mapServerAddressToLocal);
+                setAddresses(mapped);
+                const total = typeof json.totalRecords === "number" ? json.totalRecords : mapped.length;
+                setServerTotalRecords(total);
+                if (typeof json.page === "number") setPage(json.page);
+            } else {
+                // success: optimistic update and refetch logic
+                setAddresses((prev) => {
+                    const next = prev.filter((a) => !(a.serverId === useId || a.id === String(id) || a.id === `srv_${useId}`));
+
+                    // If we've removed the last item on this page, move to previous page (if available)
+                    if (next.length === 0) {
+                        const newTotal = Math.max(0, serverTotalRecords - 1); // optimistic
+                        const newTotalPages = Math.max(1, Math.ceil(newTotal / PER_PAGE));
+                        if (page > newTotalPages) {
+                            setPage(newTotalPages);
+                        } else {
+                            // refetch same page to ensure canonical state
+                            fetchAddresses();
+                        }
+                    }
+
+                    return next;
+                });
+
+                // update serverTotalRecords optimistically
+                setServerTotalRecords((prev) => Math.max(0, prev - 1));
+            }
 
             // call parent callback if provided
             if (typeof onDelete === "function") {
@@ -248,6 +310,8 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
         } catch (err: any) {
             console.error("[ProfileAddresses] delete error:", err);
             alert(err?.message ?? "Failed to delete address");
+            // refetch to ensure canonical state after failure
+            fetchAddresses();
         } finally {
             setDeletingId(null);
         }
@@ -282,18 +346,31 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
         try {
             setSettingDefaultId(String(id));
             const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1").replace(/\/$/, "");
-            const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address/${encodeURIComponent(useId)}/default`;
+            // include page/limit so server can return updated paginated list if it wants
+            const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address/${encodeURIComponent(useId)}/default?page=${encodeURIComponent(
+                String(page)
+            )}&limit=${encodeURIComponent(String(PER_PAGE))}`;
 
             console.debug("[ProfileAddresses] PUT", url);
             const res = await authFetch(url, { method: "PUT" });
-
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`);
             }
 
-            // Update UI (only after success)
-            setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.serverId === useId || a.id === String(id) })));
+            // If server returns updated paginated data, use it
+            const json = await res.json().catch(() => null);
+            if (json && Array.isArray(json.data)) {
+                const mapped = json.data.map(mapServerAddressToLocal);
+                setAddresses(mapped);
+                const total = typeof json.totalRecords === "number" ? json.totalRecords : mapped.length;
+                setServerTotalRecords(total);
+                if (typeof json.page === "number") setPage(json.page);
+            } else {
+                // Update UI (only after success) - set default flag locally and refetch
+                setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.serverId === useId || a.id === String(id) })));
+                fetchAddresses();
+            }
 
             // If parent provided onSetDefault, call it too (pass serverId)
             if (typeof onSetDefault === "function") {
@@ -306,6 +383,8 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
         } catch (err: any) {
             console.error("[ProfileAddresses] setDefault error:", err);
             alert(err?.message ?? "Failed to set default address");
+            // refetch to sync state
+            fetchAddresses();
         } finally {
             setSettingDefaultId(null);
         }
@@ -331,8 +410,6 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
 
         try {
             if (confirmAction === 'delete') {
-                // call internal delete (which talks to server). If parent wanted to own network calls,
-                // they could have passed their own onDelete prop and we'd call that instead.
                 await Promise.resolve(internalDelete(confirmTargetId));
             } else if (confirmAction === 'setDefault') {
                 await Promise.resolve(internalSetDefault(confirmTargetId));
@@ -355,7 +432,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
     }
 
     /* ---- AddressModal callbacks (create/update) ---- */
-    function onAddressCreated(localAddr: EditAddressType) {
+    async function onAddressCreated(localAddr: EditAddressType) {
         const newAddr: Address = {
             id: localAddr.id as string,
             serverId: localAddr.serverId ?? null,
@@ -373,10 +450,21 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             cityId: localAddr.cityId ?? null,
             isDefault: !!localAddr.isDefault,
         };
-        setAddresses((prev) => [...prev, newAddr]);
+
+        // If server mode (no externalAddresses), prefer to refetch so we get canonical server ids
+        if (Array.isArray(externalAddresses)) {
+            // parent owns data - just add locally
+            setAddresses((prev) => [newAddr, ...prev]);
+            setServerTotalRecords((prev) => prev + 1);
+        } else {
+            // Move to page 1 (new address typically shows up there) and refetch.
+            setPage(1);
+            // optionally you can call: await fetchAddresses({ pageOverride: 1 });
+        }
     }
 
-    function onAddressUpdated(updated: EditAddressType) {
+    async function onAddressUpdated(updated: EditAddressType) {
+        // Try to update locally; also refetch to get canonical state (server may have different snapshot)
         setAddresses((prev) =>
             prev.map((a) => {
                 const matches = (a.serverId && updated.serverId && a.serverId === updated.serverId) || a.id === updated.id;
@@ -401,14 +489,13 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             })
         );
 
-        if (updated.isDefault) {
-            setAddresses((prev) =>
-                prev.map((a) => {
-                    const matches = (a.serverId && updated.serverId && a.serverId === updated.serverId) || a.id === updated.id;
-                    return matches ? { ...a, isDefault: true } : { ...a, isDefault: false };
-                })
-            );
+        if (Array.isArray(externalAddresses)) {
+            // parent-managed: done
+            return;
         }
+
+        // server-managed: refetch current page to ensure canonical state
+        fetchAddresses();
     }
 
     /* ---- UI ---- */
@@ -430,9 +517,9 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             {error && !loading && <div className="mt-6 text-sm text-rose-600 p-4 border rounded-xl">{error}</div>}
             {!loading && !error && addresses.length === 0 && <div className="mt-6 text-sm text-slate-500 p-4 border rounded-xl">No addresses yet.</div>}
 
-            {!loading && !error && pageItems.length > 0 && (
+            {!loading && !error && addresses.length > 0 && (
                 <div className="mt-6 grid gap-4">
-                    {pageItems.map((a) => (
+                    {addresses.map((a) => (
                         <div key={a.id} className="flex items-start justify-between p-5 border rounded-2xl hover:shadow-md transition bg-white">
                             <div>
                                 <div className="flex items-center gap-3">
@@ -483,7 +570,8 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 </div>
             )}
 
-            {!loading && !error && total > perPage && (
+            {/* Show pagination only when serverTotalRecords > PER_PAGE */}
+            {!loading && !error && total > PER_PAGE && (
                 <div className="mt-6 flex items-center justify-center">
                     <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
                 </div>
