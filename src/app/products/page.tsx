@@ -5,12 +5,14 @@ import ProductGrid from '../../components/ProductGrid'
 import Pagination from '../../components/ui/Pagination'
 import type { Product } from '../../types/product'
 import SidebarFilters from '../../components/SidebarFilters'
+import { useSearchParams } from 'next/navigation' // <-- added
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:3000/v1'
 
 type IdLabel = { _id: string; publicName?: string; name?: string }
 
 export default function ProductsPage() {
+    const searchParams = useSearchParams() // read query params
     const [products, setProducts] = useState<Product[]>([])
     const [filtered, setFiltered] = useState<Product[]>([])
     const [loading, setLoading] = useState(true)
@@ -94,6 +96,17 @@ export default function ProductsPage() {
             mounted = false
         }
     }, [])
+
+    // If URL contains ?q=..., set the page search field to that value.
+    // useSearchParams returns a reactive object — include its string representation to trigger effect when params change.
+    useEffect(() => {
+        const urlQ = searchParams?.get('q') ?? ''
+        // only update if different to avoid stomping user typing
+        if (urlQ !== (q ?? '')) {
+            setQ(urlQ)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams?.toString()]) // intentionally depend on searchParams string
 
     // derive available filter options from fetched products (only show options that exist in products)
     const availableFilterSets = useMemo(() => {

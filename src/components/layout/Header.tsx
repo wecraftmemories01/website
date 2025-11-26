@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
     Menu,
     Search,
@@ -86,6 +87,8 @@ export default function Header({
     const [mounted, setMounted] = useState(false);
     const [cartCount, setCartCount] = useState<number>(0);
     const [cartLoading, setCartLoading] = useState<boolean>(false);
+
+    const router = useRouter();
 
     const { ready: authReady, isAuthed } = useAuthGuard({ verifyWithServer: true });
 
@@ -387,6 +390,25 @@ export default function Header({
     const totalSubCount = useMemo(() => Object.values(subsMap).reduce((s, arr) => s + arr.length, 0), [subsMap]);
     const selectedSubs = selectedCat ? (subsMap[selectedCat] || []) : [];
 
+    // ----- Search redirect logic -----
+    const doHeaderSearch = useCallback((q: string) => {
+        const trimmed = (q ?? "").trim();
+        if (trimmed.length === 0) {
+            router.push("/products");
+        } else {
+            const encoded = encodeURIComponent(trimmed);
+            router.push(`/products?q=${encoded}`);
+        }
+    }, [router]);
+
+    // allow Enter key to submit search
+    const onHeaderKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            doHeaderSearch(query);
+        }
+    };
+
     return (
         <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100">
             <div className={containerClass}>
@@ -585,7 +607,21 @@ export default function Header({
                     <div className="flex items-center gap-3">
                         <div className="hidden sm:flex items-center bg-slate-100 rounded-full px-3 py-1 gap-2">
                             <Search size={14} className="text-slate-600" />
-                            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products..." className="bg-transparent outline-none text-sm text-slate-800 placeholder-slate-400 w-44" aria-label="Search products" />
+                            <input
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                onKeyDown={onHeaderKeyDown}
+                                placeholder="Search products..."
+                                className="bg-transparent outline-none text-sm text-slate-800 placeholder-slate-400 w-44"
+                                aria-label="Search products"
+                            />
+                            <button
+                                onClick={() => doHeaderSearch(query)}
+                                aria-label="Search"
+                                className="ml-2 px-2 py-1 rounded-md hover:bg-slate-200 transition text-sm hidden sm:inline"
+                            >
+                                Search
+                            </button>
                         </div>
 
                         <button onClick={() => { /* mobile search */ }} className="sm:hidden p-2 rounded-md hover:bg-slate-100 transition" aria-label="Open search">
