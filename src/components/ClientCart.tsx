@@ -237,13 +237,54 @@ function normalizeCartResponse(raw: any): Cart | null {
     return out;
 }
 
-/* ---------------- Saved API helpers ---------------- */
+/* ---------------- Error helpers & ApiError ---------------- */
+
+class ApiError extends Error {
+    code?: number | string | null;
+    details?: any;
+    constructor(message: string, code?: number | string | null, details?: any) {
+        super(message);
+        this.name = "ApiError";
+        this.code = code ?? null;
+        this.details = details;
+    }
+}
+
+function extractErrorMessage(json: any, fallback = "Unknown error"): string {
+    if (!json) return fallback;
+
+    if (typeof json.error === "string") return json.error;
+    if (typeof json.message === "string") return json.message;
+
+    if (json.error && typeof json.error === "object") {
+        if (typeof json.error.message === "string") return json.error.message;
+        if (typeof json.error.msg === "string") return json.error.msg;
+    }
+
+    if (json.ack === "failure" && json.error && typeof json.error === "object") {
+        if (typeof json.error.message === "string") return json.error.message;
+    }
+
+    if (typeof json === "string") return json;
+
+    try {
+        const s = JSON.stringify(json);
+        return s.length > 200 ? s.slice(0, 200) + "…" : s;
+    } catch {
+        return fallback;
+    }
+}
+
+/* ---------------- Saved API helpers (updated to throw ApiError) ---------------- */
 async function apiGetSaved(customerId: string): Promise<SavedItem[]> {
     const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product`;
     const res = await authFetch(url, { method: "GET" });
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-        throw new Error((json?.error || json?.message) ?? `Failed to fetch saved (${res.status})`);
+        const message = extractErrorMessage(json, `Failed to fetch saved (${res.status})`);
+        const code = json?.error?.code ?? json?.code ?? null;
+        console.warn("apiGetSaved failed response json:", json);
+        throw new ApiError(message, code, json);
     }
 
     const arr =
@@ -325,9 +366,21 @@ async function apiAddSaved(customerId: string, product: any) {
 
     const res = await authFetch(url, { method: "POST", body: JSON.stringify(body) });
     const json = await res.json().catch(() => null);
+
     if (!res.ok) {
-        throw new Error((json?.error || json?.message) ?? `Failed to add saved (${res.status})`);
+        const message = extractErrorMessage(json, `Failed to add saved (${res.status})`);
+        const code = json?.error?.code ?? json?.code ?? null;
+        console.warn("apiAddSaved failed response json:", json);
+        throw new ApiError(message, code, json);
     }
+
+    if (json && (json.ack === "failure" || json.status === "failure")) {
+        const message = extractErrorMessage(json, "Unable to save item");
+        const code = json?.error?.code ?? json?.code ?? null;
+        console.warn("apiAddSaved returned ack failure:", json);
+        throw new ApiError(message, code, json);
+    }
+
     return json;
 }
 
@@ -336,7 +389,15 @@ async function apiDeleteSaved(customerId: string, savedId: string) {
     const res = await authFetch(url, { method: "DELETE" });
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-        throw new Error((json?.error || json?.message) ?? `Failed to delete saved (${res.status})`);
+        const message = extractErrorMessage(json, `Failed to delete saved (${res.status})`);
+        const code = json?.error?.code ?? json?.code ?? null;
+        console.warn("apiDeleteSaved failed response json:", json);
+        throw new ApiError(message, code, json);
+    }
+    if (json && (json.ack === "failure" || json.status === "failure")) {
+        const message = extractErrorMessage(json, "Unable to delete saved item");
+        const code = json?.error?.code ?? json?.code ?? null;
+        throw new ApiError(message, code, json);
     }
     return json;
 }
@@ -346,7 +407,15 @@ async function apiDeleteSavedByProduct(customerId: string, productId: string) {
     const res = await authFetch(url, { method: "DELETE" });
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-        throw new Error((json?.error || json?.message) ?? `Failed to delete saved by productId (${res.status})`);
+        const message = extractErrorMessage(json, `Failed to delete saved by productId (${res.status})`);
+        const code = json?.error?.code ?? json?.code ?? null;
+        console.warn("apiDeleteSavedByProduct failed response json:", json);
+        throw new ApiError(message, code, json);
+    }
+    if (json && (json.ack === "failure" || json.status === "failure")) {
+        const message = extractErrorMessage(json, "Unable to delete saved item by product");
+        const code = json?.error?.code ?? json?.code ?? null;
+        throw new ApiError(message, code, json);
     }
     return json;
 }
@@ -371,6 +440,10 @@ export default function ClientCart() {
     const [toDeleteSavedId, setToDeleteSavedId] = useState<string | undefined>(undefined);
     const [deletingSaved, setDeletingSaved] = useState(false);
     const [toDeleteSavedTitle, setToDeleteSavedTitle] = useState<string | undefined>(undefined);
+
+    // NEW: modal for "already saved" message
+    const [savedExistsModalOpen, setSavedExistsModalOpen] = useState(false);
+    const [savedExistsTitle, setSavedExistsTitle] = useState<string | undefined>(undefined);
 
     const router = useRouter();
 
@@ -457,7 +530,8 @@ export default function ClientCart() {
             setSavedItems(items);
         } catch (err: any) {
             console.error("fetchSavedItems error:", err);
-            setError(err?.message || "Unable to load saved items");
+            if (err instanceof ApiError) setError(err.message);
+            else setError(err?.message || "Unable to load saved items");
         } finally {
             setSavedLoading(false);
         }
@@ -610,7 +684,7 @@ export default function ClientCart() {
         }
     }
 
-    /* ---------------- Save-for-later actions ---------------- */
+    /* ---------------- Save-for-later actions (with ApiError handling) ---------------- */
 
     async function saveForLater(itemId?: string): Promise<void> {
         if (!itemId || !localCart) return;
@@ -661,8 +735,32 @@ export default function ClientCart() {
             await Promise.all([fetchCart(), fetchSavedItems()]);
         } catch (err: any) {
             console.error("saveForLater error:", err);
+
+            // If this is our ApiError (contains server message and code), show that message.
+            if (err instanceof ApiError) {
+                // If server says 'already exists' (code 1003) - show friendly popup
+                if (err.code === 1003 || String(err.code) === "1003") {
+                    // open a friendly modal instead of showing raw ApiError
+                    setSavedExistsTitle(item.productPublicName ?? item.productId ?? "This item");
+                    setSavedExistsModalOpen(true);
+
+                    // re-sync state from server so optimistic removal is undone
+                    await fetchCart();
+                    await fetchSavedItems();
+                    return;
+                }
+
+                // For other ApiError codes, show message banner
+                setError(err.message || "Could not save item for later");
+                await fetchCart();
+                await fetchSavedItems();
+                return;
+            }
+
+            // generic fallback
             setError(err?.message || "Could not save item for later");
 
+            // restore state
             await fetchCart();
             await fetchSavedItems();
         } finally {
@@ -734,7 +832,8 @@ export default function ClientCart() {
             await fetchSavedItems();
         } catch (err: any) {
             console.error("deleteSaved error:", err);
-            setError(err?.message || "Unable to delete saved item");
+            if (err instanceof ApiError) setError(err.message);
+            else setError(err?.message || "Unable to delete saved item");
             await fetchSavedItems();
         } finally {
             setSaving(false);
@@ -779,7 +878,7 @@ export default function ClientCart() {
                 closeSavedConfirm();
             } catch (err2: any) {
                 console.error("performSavedDelete fallback also failed:", err2);
-                setError(err2?.message || "Unable to delete saved item");
+                setError(err2 instanceof ApiError ? err2.message : err2?.message || "Unable to delete saved item");
             }
         } finally {
             setDeletingSaved(false);
@@ -853,6 +952,15 @@ export default function ClientCart() {
 
     return (
         <>
+            {/* Error banner */}
+            {error ? (
+                <div className="max-w-4xl mx-auto mb-4">
+                    <div className="rounded-md bg-rose-50 border border-rose-100 text-rose-800 px-4 py-2 text-sm">
+                        {error}
+                    </div>
+                </div>
+            ) : null}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                 <section className="md:col-span-2 space-y-6">
                     <div className="bg-white rounded-xl shadow-lg p-5">
@@ -1098,6 +1206,43 @@ export default function ClientCart() {
                 onConfirm={performSavedDelete}
                 onCancel={closeSavedConfirm}
             />
+
+            {/* --------- Saved-exists modal (friendly popup) --------- */}
+            {savedExistsModalOpen ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setSavedExistsModalOpen(false)} />
+                    <div className="relative max-w-md w-full bg-white rounded-lg shadow-lg p-6 z-10">
+                        <h3 className="text-lg font-semibold mb-2">Already saved</h3>
+                        <p className="text-sm text-gray-700 mb-4">
+                            {savedExistsTitle ? `"${savedExistsTitle}"` : "This item"} is already in your <strong>Save for later</strong> list.
+                        </p>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => {
+                                    setSavedExistsModalOpen(false);
+                                    setSavedExistsTitle(undefined);
+                                }}
+                                className="px-4 py-2 rounded border"
+                            >
+                                Close
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    // optionally navigate to saved items area
+                                    setSavedExistsModalOpen(false);
+                                    setSavedExistsTitle(undefined);
+                                    // refresh saved items and cart to ensure sync
+                                    await fetchSavedItems();
+                                    await fetchCart();
+                                }}
+                                className="px-4 py-2 rounded bg-emerald-600 text-white"
+                            >
+                                View saved items
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </>
     );
 }

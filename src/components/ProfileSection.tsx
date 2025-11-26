@@ -59,30 +59,30 @@ export default function ProfileSection({
     }, [localUser.email]);
 
     // Fetch pending email (if any)
-    useEffect(() => {
-        const token = localStorage.getItem("accessToken");
-        if (!token) return;
+    // useEffect(() => {
+    //     const token = localStorage.getItem("accessToken");
+    //     if (!token) return;
 
-        (async () => {
-            try {
-                const res = await fetch(`${API_BASE}/customer/email-pending`, {
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
-                if (!res.ok) return;
-                const contentType = res.headers.get("content-type") || "";
-                const j = contentType.includes("application/json")
-                    ? await res.json().catch(() => ({}))
-                    : {};
-                setPendingEmail(j.pendingEmail ?? null);
-                setPendingSince(j.since ?? null);
-            } catch {
-                // ignore
-            }
-        })();
-    }, []);
+    //     (async () => {
+    //         try {
+    //             const res = await fetch(`${API_BASE}/customer/email-pending`, {
+    //                 headers: {
+    //                     "Content-Type": "application/json",
+    //                     Authorization: `Bearer ${token}`,
+    //                 },
+    //             });
+    //             if (!res.ok) return;
+    //             const contentType = res.headers.get("content-type") || "";
+    //             const j = contentType.includes("application/json")
+    //                 ? await res.json().catch(() => ({}))
+    //                 : {};
+    //             setPendingEmail(j.pendingEmail ?? null);
+    //             setPendingSince(j.since ?? null);
+    //         } catch {
+    //             // ignore
+    //         }
+    //     })();
+    // }, []);
 
     // Helper: fetch latest customer
     const fetchCustomer = async (customerId: string, token: string) => {

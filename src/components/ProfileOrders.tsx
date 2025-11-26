@@ -395,7 +395,16 @@ export default function OrdersCompact({
                                             >
                                                 <div className="min-w-0">
                                                     <div className="flex items-center justify-between gap-3">
-                                                        <div className="text-sm font-semibold">Order #{o.orderNumber}</div>
+                                                        <div className="text-sm font-semibold">
+                                                            {/* Order number clickable (navigates to details) */}
+                                                            <Link
+                                                                href={`/profile/order/${encodeURIComponent(String(id))}`}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="hover:underline"
+                                                            >
+                                                                Order #{o.orderNumber}
+                                                            </Link>
+                                                        </div>
                                                         <div className="text-xs text-slate-500">{formatShortDate(o.purchaseDate)}</div>
                                                     </div>
 
@@ -483,17 +492,27 @@ export default function OrdersCompact({
                                                         )}
                                                     </div>
 
-                                                    <div className="w-full">
+                                                    <div className="w-full grid grid-cols-2 gap-2">
+                                                        {/* View details link — stops propagation so expand doesn't toggle */}
+                                                        <Link
+                                                            href={`/profile/order/${encodeURIComponent(String(id))}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-full inline-flex items-center justify-center gap-2 p-2 rounded-md bg-[#065975] text-white hover:bg-[#05485c] transition font-medium text-sm"
+                                                            title={`View details for order #${o.orderNumber}`}
+                                                        >
+                                                            <FileText className="w-4 h-4" />
+                                                            <span>View details</span>
+                                                        </Link>
+
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 alert(`Invoice for #${o.orderNumber} (mock)`);
                                                             }}
-                                                            className="w-full flex items-center justify-center gap-2 p-2 rounded-md bg-[#065975] text-white hover:bg-[#05485c] transition font-medium"
+                                                            className="w-full flex items-center justify-center gap-2 p-2 rounded-md border bg-white text-sm"
                                                             title="Invoice"
                                                         >
-                                                            <FileText className="w-4 h-4" />
-                                                            <span>View Invoice</span>
+                                                            Invoice
                                                         </button>
                                                     </div>
                                                 </aside>
