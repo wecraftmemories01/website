@@ -305,6 +305,11 @@ export default function AddressModal({ show, onClose, onCreated }: Props) {
         }
     }
 
+    /**
+     * saveAddress
+     * - performs optimistic local add (calls onCreated with local entry)
+     * - attempts server save, and if successful, calls onCreated again with server-confirmed address (serverId + srv_<id>)
+     */
     async function saveAddress() {
         if (!form.recipientName?.trim() || !form.addressLine1?.trim() || !(String(form.cityId || form.cityName || "").trim()) || !form.pincode?.trim()) {
             return alert("Please fill at least recipient name, address line 1, city and pincode");
@@ -326,18 +331,48 @@ export default function AddressModal({ show, onClose, onCreated }: Props) {
         }
 
         // optimistic local add
-        const id = `local_${Date.now()}`;
-        const newAddr: Address = { ...form, id };
+        const optimisticId = `local_${Date.now()}`;
+        const optimisticAddr: Address = { ...form, id: optimisticId, serverId: null };
         try {
             // notify parent about optimistic local address
-            onCreated?.(newAddr);
+            onCreated?.(optimisticAddr);
             onClose();
 
             // attempt server save
             const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
             if (!cust) return;
-            await apiCreateAddress(cust, newAddr);
-            // we don't pull fresh addresses here; parent can fetch if desired
+            const json = await apiCreateAddress(cust, optimisticAddr);
+
+            // try to extract created record
+            const created = json?.address || json?.addressData || json?.data || json;
+            const serverId = created && (created._id ?? created.id) ? String(created._id ?? created.id) : null;
+            if (serverId) {
+                const mapped: Address = {
+                    ...optimisticAddr,
+                    id: `srv_${serverId}`,
+                    serverId: serverId,
+                    recipientName: created.recipientName ?? optimisticAddr.recipientName,
+                    recipientContact: created.recipientContact ?? optimisticAddr.recipientContact,
+                    addressLine1: created.addressLine1 ?? optimisticAddr.addressLine1,
+                    addressLine2: created.addressLine2 ?? optimisticAddr.addressLine2,
+                    addressLine3: created.addressLine3 ?? optimisticAddr.addressLine3,
+                    landmark: created.landmark ?? optimisticAddr.landmark,
+                    countryId: created.countryId ?? optimisticAddr.countryId,
+                    stateId: created.stateId ?? optimisticAddr.stateId,
+                    cityId: created.cityId ?? optimisticAddr.cityId,
+                    countryName: created.countryName ?? optimisticAddr.countryName,
+                    stateName: created.stateName ?? optimisticAddr.stateName,
+                    cityName: created.cityName ?? optimisticAddr.cityName,
+                    pincode: created.pincode ?? optimisticAddr.pincode,
+                    isDefault: typeof created.isDefault === "boolean" ? !!created.isDefault : !!optimisticAddr.isDefault,
+                };
+
+                // send server-confirmed record so parent can replace optimistic one
+                onCreated?.(mapped);
+            } else {
+                // server saved but didn't return created id — best-effort: still notify parent (no serverId)
+                console.warn("Server returned no _id after creating address", json);
+            }
         } catch (err: any) {
             console.warn("Failed to save address to server", err);
             alert(err?.message ?? "Failed to save address to server. Saved locally.");

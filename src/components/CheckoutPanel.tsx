@@ -56,6 +56,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         cityId: "",
         pincode: "",
         isDefault: false,
+        countryName: undefined,
+        stateName: undefined,
+        cityName: undefined,
     };
 
     const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -425,7 +428,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     if ((window as any).Razorpay) resolve();
                     else reject(new Error("Razorpay script load timeout"));
                 }, 10000);
-                // if we resolved earlier we should clear timeout - Promise consumers don't get a handle, but we kept it local to clear on resolution above
                 return;
             }
             const s = document.createElement("script");
@@ -710,19 +712,49 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         })();
     }
 
-    function handleAddressCreated(localAddr: Address) {
+    /**
+ * handleAddressCreated
+ * - merges incoming address into addresses state
+ * - supports optimistic ("local_...") and server-confirmed ("srv_<id>" + serverId) updates
+ */
+    function handleAddressCreated(incoming: Address) {
         setAddresses((prev) => {
-            const next = [localAddr, ...prev];
-            try {
-                if (typeof window !== "undefined") {
-                    localStorage.setItem("wcm_addresses", JSON.stringify(next));
+            // if incoming contains serverId, prefer to match/replace by serverId
+            if (incoming.serverId) {
+                const idxByServer = prev.findIndex((a) => a.serverId === incoming.serverId || a.id === `srv_${incoming.serverId}`);
+                if (idxByServer >= 0) {
+                    const next = [...prev];
+                    next[idxByServer] = { ...next[idxByServer], ...incoming };
+                    try {
+                        if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
+                    } catch { }
+                    return next;
                 }
-            } catch {
-                // ignore
             }
+
+            // match optimistic id (local_...)
+            // <-- SAFE: ensure incoming.id is a string before calling startsWith
+            const isLocalId = typeof incoming.id === "string" && incoming.id.startsWith("local_");
+            const idxByLocal = isLocalId ? prev.findIndex((a) => a.id === incoming.id) : -1;
+            if (idxByLocal >= 0) {
+                const next = [...prev];
+                next[idxByLocal] = { ...next[idxByLocal], ...incoming };
+                try {
+                    if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
+                } catch { }
+                return next;
+            }
+
+            // fallback: prepend
+            const next = [incoming, ...prev];
+            try {
+                if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
+            } catch { }
             return next;
         });
-        setSelectedAddressId(localAddr.id);
+
+        // ensure selectedAddressId points to the incoming entry's id
+        setSelectedAddressId(incoming.id);
     }
 
     useEffect(() => {
@@ -820,13 +852,85 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         })();
     }
 
+    /**
+     * ensureServerAddress
+     * If the address is local-only (no serverId), try to persist it and update addresses state.
+     * Returns the address (possibly updated with serverId and new id).
+     */
+    async function ensureServerAddress(addr: Address, customerId: string): Promise<Address> {
+        // already persisted
+        if (addr.serverId) return addr;
+
+        // try to persist
+        try {
+            const json = await apiCreateAddress(customerId, addr);
+            // server may return created address shape in various fields; try common patterns
+            const created = json?.address || json?.addressData || json?.data || json;
+            const serverId = created && (created._id ?? created.id) ? String(created._id ?? created.id) : null;
+            if (serverId) {
+                const mapped: Address = {
+                    ...addr,
+                    id: `srv_${serverId}`,
+                    serverId: serverId,
+                    recipientName: created.recipientName ?? addr.recipientName,
+                    recipientContact: created.recipientContact ?? addr.recipientContact,
+                    addressLine1: created.addressLine1 ?? addr.addressLine1,
+                    addressLine2: created.addressLine2 ?? addr.addressLine2,
+                    addressLine3: created.addressLine3 ?? addr.addressLine3,
+                    landmark: created.landmark ?? addr.landmark,
+                    countryId: created.countryId ?? addr.countryId,
+                    stateId: created.stateId ?? addr.stateId,
+                    cityId: created.cityId ?? addr.cityId,
+                    countryName: created.countryName ?? addr.countryName,
+                    stateName: created.stateName ?? addr.stateName,
+                    cityName: created.cityName ?? addr.cityName,
+                    pincode: created.pincode ?? addr.pincode,
+                    isDefault: typeof created.isDefault === "boolean" ? !!created.isDefault : !!addr.isDefault,
+                };
+
+                // update local list (replace optimistic entry if exists)
+                setAddresses((prev) => {
+                    const idx = prev.findIndex((a) => a.id === addr.id || a.serverId === serverId);
+                    if (idx >= 0) {
+                        const next = [...prev];
+                        next[idx] = mapped;
+                        try {
+                            if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
+                        } catch { }
+                        return next;
+                    }
+                    const next = [mapped, ...prev];
+                    try {
+                        if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
+                    } catch { }
+                    return next;
+                });
+
+                // if selectedAddressId pointed to the optimistic id, set to the new id
+                setSelectedAddressId((cur) => (cur === addr.id ? mapped.id : cur));
+
+                return mapped;
+            } else {
+                // server saved but did not return id — fallback: attempt refresh of server addresses (not implemented here)
+                console.warn("Address saved but server did not return id", json);
+                return addr;
+            }
+        } catch (err) {
+            console.warn("Failed to persist address before order:", err);
+            return addr;
+        }
+    }
+
     async function createOrderAndRedirect(customerId: string, addr: Address) {
         if (creating) return;
         setCreating(true);
 
         try {
-            const deliveryAddressId = addr.serverId ?? String(addr.id);
-            const billingAddressId = addr.serverId ?? String(addr.id);
+            // Ensure address persisted server-side if needed
+            const usedAddr = await ensureServerAddress(addr, customerId);
+
+            const deliveryAddressId = usedAddr.serverId ?? String(usedAddr.id);
+            const billingAddressId = usedAddr.serverId ?? String(usedAddr.id);
 
             const url = buildUrl("/sell_order/create");
             const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -857,20 +961,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId || json?.data)) {
                 // --- Extract numeric order number vs object id ---
-                // numericOrderNumber: prefer explicit json.orderId if numeric, otherwise json.data.orderNumber
                 const numericOrderNumber =
                     (typeof json.orderId === "number" ? json.orderId : (typeof json.orderId === "string" && /^\d+$/.test(json.orderId) ? Number(json.orderId) : null))
                     ?? (json?.data && (typeof json.data.orderNumber === "number" ? json.data.orderNumber : (typeof json.data.orderNumber === "string" && /^\d+$/.test(json.data.orderNumber) ? Number(json.data.orderNumber) : null)))
                     ?? null;
 
-                // objectId detection - check common fields for 24-hex _id
                 const maybeObjectId =
                     (json && json._id && typeof json._id === "string" && /^[0-9a-fA-F]{24}$/.test(json._id) ? String(json._id)
                         : (json?.data && json.data._id && typeof json.data._id === "string" && /^[0-9a-fA-F]{24}$/.test(json.data._id) ? String(json.data._id)
                             : null));
 
-                // The field 'orderId' in your earlier example was numeric (1047).
-                // serverObjectIdForCheckout: prefer explicit object id above, otherwise try json.data.orderId if object-like
                 const serverObjectIdForCheckout =
                     maybeObjectId
                     ?? (json?.data && json.data.orderId && typeof json.data.orderId === "string" && /^[0-9a-fA-F]{24}$/.test(json.data.orderId) ? String(json.data.orderId) : null)
@@ -881,7 +981,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                 if (razorpayOrder && rzpKey) {
                     try {
-                        // Pass the server's objectId (if available) to Razorpay checkout notes/handler so verify can match it.
                         await openRazorpayCheckout({ key: rzpKey, razorpayOrder, orderId: serverObjectIdForCheckout ?? null });
                         return;
                     } catch (err: any) {
@@ -895,7 +994,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 const deliveryChargeVal = Number(currentDeliveryCharge || 0);
                 const totalLocal = subtotalLocal + deliveryChargeVal;
 
-                // Build redirect qp with numeric order number + object id when available
                 const qp: string[] = [];
                 if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
                 if (serverObjectIdForCheckout) qp.push(`orderId=${encodeURIComponent(String(serverObjectIdForCheckout))}`);
