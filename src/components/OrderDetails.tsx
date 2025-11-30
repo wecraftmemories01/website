@@ -44,13 +44,6 @@ const IconBack = () => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
 );
-const IconInvoice = () => (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 8V7a2 2 0 0 0-2-2h-3"></path>
-        <path d="M3 8v8a2 2 0 0 0 2 2h14"></path>
-        <rect x="7" y="3" width="10" height="4" rx="1"></rect>
-    </svg>
-);
 
 /* --------------------- Types --------------------- */
 type ApiOrderProduct = {
@@ -171,12 +164,6 @@ export default function OrderDetails({
     const delivery = Number(order?.quotedDeliveryCharge ?? 0);
     const displayedTotal = itemsSubtotal + delivery;
     const serverItemTotal = typeof order?.orderTotal !== "undefined" ? Number(order!.orderTotal) : undefined;
-
-    const openInvoice = () => {
-        if (!order?._id) return;
-        // keep invoice for customers to download/print themselves if available
-        window.open(`/invoice?orderId=${encodeURIComponent(String(order._id))}`, "_blank");
-    };
 
     const renderAddress = (a?: AddressSnapshot | null) => {
         if (!a) return <div className="text-sm text-slate-500">—</div>;
@@ -302,14 +289,7 @@ export default function OrderDetails({
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={openInvoice}
-                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-slate-700 hover:shadow-sm transition"
-                            title="Download invoice"
-                        >
-                            <IconInvoice />
-                            <span className="hidden sm:inline text-sm">Invoice</span>
-                        </button>
+                        {/* Invoice button removed as requested */}
                     </div>
                 </div>
             </header>
