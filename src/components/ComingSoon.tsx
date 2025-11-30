@@ -25,7 +25,7 @@ export default function ComingSoonSimple(): React.ReactElement {
                                     WeCraftMemories
                                 </h1>
                                 <p className="text-sm text-slate-600">
-                                    Handmade kids' clothing — rent & buy
+                                    Handmade Crochet Products
                                 </p>
                             </div>
                         </div>
@@ -41,7 +41,7 @@ export default function ComingSoonSimple(): React.ReactElement {
 
                         <ul className="text-slate-700 space-y-1 text-sm">
                             <li>• Follow our Instagram for updates & new outfits</li>
-                            <li>• Browse the main clothing collection (rent & buy)</li>
+                            <li>• Browse the main clothing collection</li>
                             <li>• Contact us for custom requests</li>
                         </ul>
                     </section>
