@@ -492,7 +492,7 @@ export default function OrdersCompact({
                                                         )}
                                                     </div>
 
-                                                    <div className="w-full grid grid-cols-2 gap-2">
+                                                    <div className="w-full">
                                                         {/* View details link — stops propagation so expand doesn't toggle */}
                                                         <Link
                                                             href={`/profile/order/${encodeURIComponent(String(id))}`}
@@ -504,7 +504,7 @@ export default function OrdersCompact({
                                                             <span>View details</span>
                                                         </Link>
 
-                                                        <button
+                                                        {/* <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 alert(`Invoice for #${o.orderNumber} (mock)`);
@@ -513,7 +513,7 @@ export default function OrdersCompact({
                                                             title="Invoice"
                                                         >
                                                             Invoice
-                                                        </button>
+                                                        </button> */}
                                                     </div>
                                                 </aside>
                                             </article>
