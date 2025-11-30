@@ -35,7 +35,7 @@ export default function HeroClient() {
                         <motion.a
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.97 }}
-                            href="#products"
+                            href="products"
                             className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-300 to-yellow-500 text-teal-900 font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition"
                         >
                             ✨ Shop New Arrivals
@@ -44,7 +44,7 @@ export default function HeroClient() {
                         <motion.a
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.97 }}
-                            href="#collections"
+                            href="products"
                             className="inline-flex items-center gap-2 border border-white/40 px-6 py-3 rounded-xl hover:bg-white/10 transition"
                         >
                             Browse Collections →
