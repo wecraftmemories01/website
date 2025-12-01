@@ -40,6 +40,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
     const [showModal, setShowModal] = useState(false);
 
+    // NEW: billing state
+    const [billingSame, setBillingSame] = useState<boolean>(true);
+    const [billingAddressId, setBillingAddressId] = useState<string | number | null>(null);
+
     const [creating, setCreating] = useState(false);
 
     const blankAddress: Address = {
@@ -224,7 +228,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             const res = await fetch(url);
             if (!res.ok) return [];
             const json = await safeJson(res);
-            const arr = Array.isArray((json as any)?.cityData) ? (json as any).cityData : [];
+            const arr = Array.isArray((json as any).cityData) ? (json as any).cityData : [];
             return arr.map((c: any) => ({
                 _id: String(c._id),
                 cityName: c.cityName ?? c.name ?? "",
@@ -592,6 +596,26 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     // --- End Razorpay helpers ---
 
+    // openAdd (restored)
+    async function openAdd() {
+        setShowModal(true);
+
+        (async () => {
+            try {
+                if (!countries.length) {
+                    setGeoLoading((g) => ({ ...g, countries: true }));
+                    const list = await apiFetchCountries();
+                    if (!mountedRef.current) return;
+                    setCountries(list);
+                }
+            } catch {
+                // ignore
+            } finally {
+                if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
+            }
+        })();
+    }
+
     useEffect(() => {
         try {
             if (typeof window === "undefined") return;
@@ -685,38 +709,38 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Ensure billing state defaults when addresses load or change
     useEffect(() => {
-        (addresses || []).forEach((a) => {
-            if (a?.pincode && isValidIndianPincode(a.pincode)) {
-                checkAndCacheServiceability(a.pincode);
-                fetchAndCacheDeliveryCharge(a.pincode).catch(() => { });
-            }
-        });
+        if (!addresses || addresses.length === 0) {
+            setBillingSame(true);
+            setBillingAddressId(null);
+            return;
+        }
+
+        if (addresses.length === 1) {
+            const single = addresses[0];
+            setBillingSame(true);
+            setBillingAddressId(single.id);
+            if (!selectedAddressId) setSelectedAddressId(single.id);
+            return;
+        }
+
+        if (billingSame) {
+            setBillingAddressId(selectedAddressId);
+        } else {
+            const found = addresses.find((a) => a.id === billingAddressId);
+            if (!found) setBillingAddressId(selectedAddressId ?? (addresses.length ? addresses[0].id : null));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addresses]);
 
-    async function openAdd() {
-        setShowModal(true);
+    // Keep billingAddressId in sync with selectedAddressId while billingSame === true
+    useEffect(() => {
+        if (billingSame) {
+            setBillingAddressId(selectedAddressId);
+        }
+    }, [selectedAddressId, billingSame]);
 
-        (async () => {
-            try {
-                if (!countries.length) {
-                    setGeoLoading((g) => ({ ...g, countries: true }));
-                    const list = await apiFetchCountries();
-                    if (mountedRef.current) setCountries(list);
-                }
-            } catch {
-                // ignore
-            } finally {
-                if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
-            }
-        })();
-    }
-
-    /**
- * handleAddressCreated
- * - merges incoming address into addresses state
- * - supports optimistic ("local_...") and server-confirmed ("srv_<id>" + serverId) updates
- */
     function handleAddressCreated(incoming: Address) {
         setAddresses((prev) => {
             // if incoming contains serverId, prefer to match/replace by serverId
@@ -733,7 +757,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             }
 
             // match optimistic id (local_...)
-            // <-- SAFE: ensure incoming.id is a string before calling startsWith
             const isLocalId = typeof incoming.id === "string" && incoming.id.startsWith("local_");
             const idxByLocal = isLocalId ? prev.findIndex((a) => a.id === incoming.id) : -1;
             if (idxByLocal >= 0) {
@@ -745,7 +768,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 return next;
             }
 
-            // fallback: prepend
             const next = [incoming, ...prev];
             try {
                 if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
@@ -753,7 +775,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return next;
         });
 
-        // ensure selectedAddressId points to the incoming entry's id
         setSelectedAddressId(incoming.id);
     }
 
@@ -852,19 +873,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         })();
     }
 
-    /**
-     * ensureServerAddress
-     * If the address is local-only (no serverId), try to persist it and update addresses state.
-     * Returns the address (possibly updated with serverId and new id).
-     */
     async function ensureServerAddress(addr: Address, customerId: string): Promise<Address> {
-        // already persisted
         if (addr.serverId) return addr;
 
-        // try to persist
         try {
             const json = await apiCreateAddress(customerId, addr);
-            // server may return created address shape in various fields; try common patterns
             const created = json?.address || json?.addressData || json?.data || json;
             const serverId = created && (created._id ?? created.id) ? String(created._id ?? created.id) : null;
             if (serverId) {
@@ -888,7 +901,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     isDefault: typeof created.isDefault === "boolean" ? !!created.isDefault : !!addr.isDefault,
                 };
 
-                // update local list (replace optimistic entry if exists)
                 setAddresses((prev) => {
                     const idx = prev.findIndex((a) => a.id === addr.id || a.serverId === serverId);
                     if (idx >= 0) {
@@ -906,12 +918,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     return next;
                 });
 
-                // if selectedAddressId pointed to the optimistic id, set to the new id
                 setSelectedAddressId((cur) => (cur === addr.id ? mapped.id : cur));
 
                 return mapped;
             } else {
-                // server saved but did not return id — fallback: attempt refresh of server addresses (not implemented here)
                 console.warn("Address saved but server did not return id", json);
                 return addr;
             }
@@ -926,11 +936,18 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         setCreating(true);
 
         try {
-            // Ensure address persisted server-side if needed
             const usedAddr = await ensureServerAddress(addr, customerId);
 
             const deliveryAddressId = usedAddr.serverId ?? String(usedAddr.id);
-            const billingAddressId = usedAddr.serverId ?? String(usedAddr.id);
+
+            let billingAddressIdToSend: string | null = null;
+            if (billingSame || !billingAddressId) {
+                billingAddressIdToSend = usedAddr.serverId ?? String(usedAddr.id);
+            } else {
+                const localBilling = addresses.find((a) => a.id === billingAddressId || a.serverId === billingAddressId);
+                const usedBillingAddr = localBilling ? await ensureServerAddress(localBilling, customerId) : null;
+                billingAddressIdToSend = usedBillingAddr ? (usedBillingAddr.serverId ?? String(usedBillingAddr.id)) : String(billingAddressId);
+            }
 
             const url = buildUrl("/sell_order/create");
             const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -940,7 +957,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             const body = {
                 customerId: String(customerId),
                 deliveryAddressId: String(deliveryAddressId),
-                billingAddressId: String(billingAddressId),
+                billingAddressId: String(billingAddressIdToSend ?? deliveryAddressId),
                 cart: cart.map((it) => ({ productId: it.id, qty: it.qty, price: it.price })),
             };
 
@@ -960,7 +977,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             console.debug("[createOrder] response", res.status, json);
 
             if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId || json?.data)) {
-                // --- Extract numeric order number vs object id ---
                 const numericOrderNumber =
                     (typeof json.orderId === "number" ? json.orderId : (typeof json.orderId === "string" && /^\d+$/.test(json.orderId) ? Number(json.orderId) : null))
                     ?? (json?.data && (typeof json.data.orderNumber === "number" ? json.data.orderNumber : (typeof json.data.orderNumber === "string" && /^\d+$/.test(json.data.orderNumber) ? Number(json.data.orderNumber) : null)))
@@ -1119,7 +1135,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 </header>
 
                 <main className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
-                    {/* Left panel */}
+                    {/* Left panel: addresses + billing checkbox (cart removed from here) */}
                     <section className="bg-white rounded-2xl shadow p-4 md:p-6">
                         <div className="flex items-center justify-between mb-4">
                             <div>
@@ -1226,42 +1242,80 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             })}
                         </div>
 
-                        <hr className="my-6 border-slate-100" />
+                        {/* --- BILLING SAME CHECKBOX + optional billing address selector --- */}
+                        <div className="mt-6">
+                            <label className="flex items-center gap-3 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={billingSame}
+                                    onChange={(e) => {
+                                        if (addresses.length <= 1) {
+                                            setBillingSame(true);
+                                            return;
+                                        }
+                                        setBillingSame(Boolean(e.target.checked));
+                                        if (e.target.checked) {
+                                            setBillingAddressId(selectedAddressId);
+                                        } else {
+                                            setBillingAddressId(selectedAddressId ?? (addresses.length ? addresses[0].id : null));
+                                        }
+                                    }}
+                                    disabled={addresses.length <= 1 || creating}
+                                    className="w-4 h-4"
+                                    title={addresses.length <= 1 ? "Only one saved address — billing will be same as delivery" : undefined}
+                                />
+                                <div>
+                                    <div className="text-sm font-medium">Billing address same as delivery</div>
+                                    <div className="text-xs text-slate-500">{addresses.length <= 1 ? "Only one saved address" : "Uncheck to choose a different billing address"}</div>
+                                </div>
+                            </label>
 
-                        {/* --- CART SECTION --- */}
-                        <div>
-                            <h3 className="text-lg font-semibold">Your cart</h3>
-                            <p className="text-sm text-slate-500">Items you are about to purchase</p>
-
-                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                {cart.map((it) => (
-                                    <div key={it.id} className="flex flex-col p-2 rounded-xl border bg-white hover:shadow-md transition-all h-full">
-                                        <div className="relative w-full h-28 rounded-lg overflow-hidden mb-3 bg-gradient-to-br from-[#fff7f9] to-[#f3fcfb]">
-                                            <Image src={safeImg(it.img)} alt={it.title} fill className="object-cover" />
-                                        </div>
-
-                                        <div className="flex-1 flex flex-col justify-between">
-                                            <div>
-                                                <div className="font-semibold text-slate-800 line-clamp-2 leading-tight">{it.title}</div>
-                                                <div className="text-sm text-slate-400 mt-1">{formatINR(it.price)} each</div>
-                                            </div>
-
-                                            <div className="flex items-center justify-between mt-3">
-                                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-[#f6fbfb] text-sm font-medium">
-                                                    <div className="text-slate-600">Qty</div>
-                                                    <div className="px-2 py-0.5 rounded-full bg-white border text-sm font-semibold">{it.qty}</div>
+                            {!billingSame && addresses.length > 1 && (
+                                <div className="mt-3 grid grid-cols-1 gap-2">
+                                    {addresses.map((b) => {
+                                        return (
+                                            <label
+                                                key={`billing-${String(b.id)}`}
+                                                htmlFor={`billing-${String(b.id)}`}
+                                                className={`flex items-start gap-3 p-3 rounded-lg border ${billingAddressId === b.id ? "border-[#065975] bg-[#f6fbfb]" : "border-slate-100"} cursor-pointer`}
+                                            >
+                                                <div className="flex-1">
+                                                    <div className="font-medium">{b.recipientName} <span className="text-xs text-slate-500">({b.recipientContact})</span></div>
+                                                    <div className="text-sm text-slate-600 leading-snug mt-1">
+                                                        {b.addressLine1}
+                                                        {b.addressLine2 ? `, ${b.addressLine2}` : ""}
+                                                        {b.addressLine3 ? `, ${b.addressLine3}` : ""}
+                                                        {b.landmark ? `, ${b.landmark}` : ""}
+                                                        {b.cityName ? `, ${b.cityName}` : ""}
+                                                        {b.stateName ? `, ${b.stateName}` : ""}
+                                                        {b.countryName ? `, ${b.countryName}` : ""} — {b.pincode}
+                                                    </div>
                                                 </div>
 
-                                                <div className="text-base font-bold text-[#065975]">{formatINR(it.price * it.qty)}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {cart.length === 0 && <div className="col-span-full text-center text-slate-500 py-6 border rounded-lg">Your cart is empty</div>}
-                            </div>
+                                                <div className="flex items-center mt-1">
+                                                    <input
+                                                        id={`billing-${String(b.id)}`}
+                                                        type="radio"
+                                                        name="billingAddr"
+                                                        checked={billingAddressId === b.id}
+                                                        onChange={() => {
+                                                            setBillingAddressId(b.id);
+                                                        }}
+                                                        disabled={creating}
+                                                        className="w-4 h-4"
+                                                        aria-label={`Select billing address for ${b.recipientName}`}
+                                                    />
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
-                        {/* --- end cart --- */}
+
+                        <hr className="my-6 border-slate-100" />
+
+                        {/* removed cart from left panel per your request */}
                     </section>
 
                     {/* Right panel / summary */}
@@ -1290,22 +1344,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             </div>
                         </div>
 
-                        <div className="mt-5">
-                            <h3 className="text-md font-medium">Payment</h3>
-                            <div className="mt-3 grid grid-cols-2 gap-2">
-                                <label className="flex items-center gap-2 p-3 rounded-lg border hover:shadow-sm cursor-pointer">
-                                    <input type="radio" name="pay" defaultChecked aria-label="Pay by card" className="w-4 h-4 text-[#065975]" />
-                                    <CreditCard className="w-4 h-4 text-slate-400" />
-                                    <div className="text-sm">Card</div>
-                                </label>
-                                <label className="flex items-center gap-2 p-3 rounded-lg border hover:shadow-sm cursor-pointer">
-                                    <input type="radio" name="pay" aria-label="Pay by UPI or wallet" className="w-4 h-4 text-[#065975]" />
-                                    <Wallet className="w-4 h-4 text-slate-400" />
-                                    <div className="text-sm">UPI / Wallet</div>
-                                </label>
-                            </div>
-                        </div>
+                        {/* Payment radio block REMOVED per your request */}
 
+                        {/* Desktop place order button */}
                         <div className="mt-6 hidden md:flex gap-3">
                             <button
                                 onClick={placeOrder}
@@ -1320,6 +1361,40 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <p className="text-xs text-slate-400 mt-3">
                             By placing order you agree to our <span className="text-[#065975]">Terms &amp; Conditions</span>.
                         </p>
+
+                        {/* --- Your cart section --- */}
+                        <div className="mt-6">
+                            <h3 className="text-md font-medium mb-3">Your cart</h3>
+
+                            {/* grid with 2 items per row */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {cart.map((it) => (
+                                    <div key={it.id} className="flex flex-col p-2 rounded-xl border bg-white hover:shadow-md transition-all h-full">
+                                        <div className="relative w-full h-24 rounded-lg overflow-hidden mb-3 bg-gradient-to-br from-[#fff7f9] to-[#f3fcfb]">
+                                            <Image src={safeImg(it.img)} alt={it.title} fill className="object-cover" />
+                                        </div>
+
+                                        <div className="flex-1 flex flex-col justify-between">
+                                            <div>
+                                                <div className="font-semibold text-slate-800 line-clamp-2 leading-tight">{it.title}</div>
+                                                <div className="text-sm text-slate-400 mt-1">{formatINR(it.price)} each</div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between mt-3">
+                                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-[#f6fbfb] text-sm font-medium">
+                                                    <div className="text-slate-600">Qty</div>
+                                                    <div className="px-2 py-0.5 rounded-full bg-white border text-sm font-semibold">{it.qty}</div>
+                                                </div>
+
+                                                <div className="text-base font-bold text-[#065975]">{formatINR(it.price * it.qty)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {cart.length === 0 && <div className="col-span-full text-center text-slate-500 py-6 border rounded-lg">Your cart is empty</div>}
+                            </div>
+                        </div>
                     </aside>
                 </main>
 
