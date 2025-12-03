@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { addToCart } from "../lib/cart"; // adjust path if needed
+import { addToCart } from "../lib/cart";
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
@@ -454,18 +454,31 @@ export default function ProductClient({ product }: { product: Product }) {
         salePrice,
     } = product;
 
+    // Put primary (product.productImage) first so display image is shown immediately
+    const primaryImage = product.productImage ?? null;
+    const otherImages = (productImages?.map((p) => (p.imagePath ?? p.imageId)).filter(Boolean) as string[]) ?? [];
     const images = [
-        ...(productImages?.map((p) => (p.imagePath ?? p.imageId)).filter(Boolean) as string[]),
-        product.productImage,
+        ...(primaryImage ? [primaryImage] : []),
+        ...otherImages.filter((src) => src !== primaryImage),
     ].filter(Boolean) as string[];
 
+    // selectedImage starts with the primary image (if any), otherwise first available
     const [selectedImage, setSelectedImage] = useState<string | null>(() => images[0] ?? null);
+
     const [quantity, setQuantity] = useState<number>(1);
     const [wish, setWish] = useState(false);
     const [added, setAdded] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const [lightbox, setLightbox] = useState(false);
     const [adding, setAdding] = useState(false); // indicates API call in progress
+
+    // NEW: show thumbnails only after main image is loaded or after a small timeout
+    const [thumbsVisible, setThumbsVisible] = useState(false);
+    useEffect(() => {
+        // fallback: reveal thumbs after a short timeout if onLoadingComplete doesn't fire
+        const t = window.setTimeout(() => setThumbsVisible(true), 450);
+        return () => clearTimeout(t);
+    }, []);
 
     const stockNumber = parseStockValue(sellStockQuantity);
     const priceDisplay = salePrice?.discountedPrice ?? salePrice?.actualPrice ?? null;
@@ -687,34 +700,34 @@ export default function ProductClient({ product }: { product: Product }) {
 
         const pageTitle = escape(String(productName ?? "Share"));
         popup.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width,initial-scale=1" />
-          <title>Share</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 18px; color: #062024; }
-            h2 { margin: 0 0 12px 0; font-size: 18px; color: #004F64; }
-            .opt { display:block; margin:10px 0; padding:12px 14px; border-radius:8px; text-decoration:none; color:#fff; font-weight:600; }
-            .wa { background:#25D366; }
-            .fb { background:#1877F2; }
-            .tw { background:#1DA1F2; }
-            .pt { background:#E60023; }
-            .desc { margin-top:14px; font-size:13px; color:#375a5a; }
-            small { display:block; margin-top:8px; color:#7a8a8a; }
-          </style>
-        </head>
-        <body>
-          <h2>Share "${pageTitle}"</h2>
-          <a class="opt wa" href="${shareOptions[0].link}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-          <a class="opt fb" href="${shareOptions[1].link}" target="_blank" rel="noopener noreferrer">Facebook</a>
-          <a class="opt tw" href="${shareOptions[2].link}" target="_blank" rel="noopener noreferrer">Twitter</a>
-          <a class="opt pt" href="${shareOptions[3].link}" target="_blank" rel="noopener noreferrer">Pinterest</a>
-          <div class="desc">Opens in a new tab. Close this window when done.</div>
-          <small>${escape(String(shortDescription ?? ""))}</small>
-        </body>
-      </html>
+        <!doctype html>
+        <html>
+            <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <title>Share</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 18px; color: #062024; }
+                h2 { margin: 0 0 12px 0; font-size: 18px; color: #004F64; }
+                .opt { display:block; margin:10px 0; padding:12px 14px; border-radius:8px; text-decoration:none; color:#fff; font-weight:600; }
+                .wa { background:#25D366; }
+                .fb { background:#1877F2; }
+                .tw { background:#1DA1F2; }
+                .pt { background:#E60023; }
+                .desc { margin-top:14px; font-size:13px; color:#375a5a; }
+                small { display:block; margin-top:8px; color:#7a8a8a; }
+            </style>
+            </head>
+            <body>
+            <h2>Share "${pageTitle}"</h2>
+            <a class="opt wa" href="${shareOptions[0].link}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <a class="opt fb" href="${shareOptions[1].link}" target="_blank" rel="noopener noreferrer">Facebook</a>
+            <a class="opt tw" href="${shareOptions[2].link}" target="_blank" rel="noopener noreferrer">Twitter</a>
+            <a class="opt pt" href="${shareOptions[3].link}" target="_blank" rel="noopener noreferrer">Pinterest</a>
+            <div class="desc">Opens in a new tab. Close this window when done.</div>
+            <small>${escape(String(shortDescription ?? ""))}</small>
+            </body>
+        </html>
     `);
         popup.document.close();
     }
@@ -733,11 +746,6 @@ export default function ProductClient({ product }: { product: Product }) {
                                     <div className="text-lg md:text-2xl font-extrabold text-[#004F64] leading-tight">{productName ?? "Product"}</div>
                                 </div>
                             </div>
-
-                            {/* <div className="hidden md:flex items-center gap-3">
-                                <div className="text-sm text-gray-600">Stock:</div>
-                                <div className={`text-sm font-semibold ${isOutOfStock ? 'text-red-600' : 'text-green-700'}`}>{isOutOfStock ? 'Out of stock' : `${stockNumber} available`}</div>
-                            </div> */}
                         </div>
                     </div>
                 </div>
@@ -749,9 +757,24 @@ export default function ProductClient({ product }: { product: Product }) {
                         <div className="bg-white rounded-2xl shadow-lg p-4">
                             <div className="relative w-full h-[360px] md:h-[460px] lg:h-[520px] max-h-[60vh] bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
                                 {selectedImage ? (
-                                    <button onClick={() => setLightbox(true)} aria-label="Open image" className="absolute inset-0 focus:outline-none">
+                                    <button
+                                        onClick={() => setLightbox(true)}
+                                        aria-label="Open image"
+                                        className="absolute inset-0 focus:outline-none"
+                                    >
                                         <div className="relative w-full h-full">
-                                            <Image src={selectedImage} alt={productName ?? "Product image"} fill style={{ objectFit: "contain" }} sizes="(max-width: 1024px) 100vw, 60vw" priority />
+                                            <Image
+                                                src={selectedImage}
+                                                alt={productName ?? "Product image"}
+                                                fill
+                                                style={{ objectFit: "contain" }}
+                                                sizes="(max-width: 1024px) 100vw, 60vw"
+                                                priority // main image priority remains
+                                                onLoadingComplete={() => {
+                                                    // when main image finishes loading, reveal thumbnails
+                                                    setThumbsVisible(true);
+                                                }}
+                                            />
                                         </div>
                                     </button>
                                 ) : (
@@ -761,12 +784,36 @@ export default function ProductClient({ product }: { product: Product }) {
 
                             <div className="mt-4 flex gap-3 overflow-x-auto">
                                 {images.length === 0 && <div className="text-sm text-gray-500">No thumbnails</div>}
-                                {images.map((src, idx) => {
+
+                                {/* if thumbsVisible is false, render skeleton placeholders to keep layout stable */}
+                                {!thumbsVisible && images.length > 0 && (
+                                    <>
+                                        {images.map((_, idx) => (
+                                            <div key={idx} className="w-20 h-20 rounded-lg overflow-hidden border-gray-200 border bg-gray-100 animate-pulse" />
+                                        ))}
+                                    </>
+                                )}
+
+                                {/* once thumbsVisible is true, render the actual thumbnails (they will lazy-load by default) */}
+                                {thumbsVisible && images.map((src, idx) => {
                                     const isSelected = selectedImage === src;
                                     return (
-                                        <button key={idx} onClick={() => setSelectedImage(src)} className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition ${isSelected ? 'border-[#E94E4E] scale-105' : 'border-gray-200 hover:scale-105'}`} aria-pressed={isSelected} aria-label={`Select image ${idx + 1}`}>
+                                        <button
+                                            key={idx}
+                                            onClick={() => setSelectedImage(src)}
+                                            className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition ${isSelected ? 'border-[#E94E4E] scale-105' : 'border-gray-200 hover:scale-105'}`}
+                                            aria-pressed={isSelected}
+                                            aria-label={`Select image ${idx + 1}`}
+                                        >
                                             <div className="relative w-full h-full">
-                                                <Image src={src} alt={`${productName ?? 'Product'} ${idx + 1}`} fill style={{ objectFit: "cover" }} sizes="80px" />
+                                                <Image
+                                                    src={src}
+                                                    alt={`${productName ?? 'Product'} ${idx + 1}`}
+                                                    fill
+                                                    style={{ objectFit: "cover" }}
+                                                    sizes="80px"
+                                                // leave default lazy loading for thumbnails (do not set priority)
+                                                />
                                             </div>
                                         </button>
                                     );
@@ -776,23 +823,6 @@ export default function ProductClient({ product }: { product: Product }) {
 
                         {/* Reviews Module inserted here */}
                         {/* <ReviewModule productName={productName} /> */}
-
-                        {/* <div>
-                            <h4 className="text-sm font-semibold text-gray-700 mb-3">You may also like</h4>
-                            <div className="flex gap-4 overflow-x-auto pb-2">
-                                {[
-                                    { id: "r1", name: "Sunshine Bloom - Small", price: "₹299" },
-                                    { id: "r2", name: "Cutesy Daisy Keychain", price: "₹199" },
-                                    { id: "r3", name: "Woolen Cozy Pot", price: "₹499" },
-                                ].map(r => (
-                                    <div key={r.id} className="min-w-[180px] bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition">
-                                        <div className="w-full h-28 bg-gray-100 rounded-md mb-3 flex items-center justify-center text-gray-400">img</div>
-                                        <div className="text-sm font-medium text-gray-800">{r.name}</div>
-                                        <div className="text-sm text-gray-600 mt-1">{r.price}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div> */}
                     </div>
 
                     <aside className="space-y-6">
