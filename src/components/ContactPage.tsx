@@ -146,7 +146,7 @@ export default function ContactPage(): React.ReactElement {
             setReachLoading(true);
             setReachError(null);
             try {
-                const url = `${API_BASE}/reach_us/reach_us_type`;
+                const url = `${API_BASE}/reach_us/types`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`Failed to load (${res.status})`);
                 const json = await res.json();
