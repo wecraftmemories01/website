@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Mail, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 
 export default function ForgotPasswordPage() {
+    const IS_PROD = process.env.NODE_ENV === "production";
     const router = useRouter();
 
     // mount guard — prevents SSR vs client mismatch
@@ -33,6 +34,25 @@ export default function ForgotPasswordPage() {
         return () => clearTimeout(t);
     }, [countdown, router]);
 
+    useEffect(() => {
+        if (!IS_PROD) return;
+
+        const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+        if (!siteKey) return;
+
+        if ((window as any).grecaptcha) return;
+
+        const scriptId = "recaptcha-v3";
+        if (document.getElementById(scriptId)) return;
+
+        const script = document.createElement("script");
+        script.id = scriptId;
+        script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }, []);
+
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setErrorMsg("");
@@ -49,14 +69,41 @@ export default function ForgotPasswordPage() {
         }
 
         setLoading(true);
+
         try {
             // read API base at submit time (client-only) — avoids SSR/client differences
             const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
 
+            let recaptchaToken: string | null = null;
+
+            if (IS_PROD) {
+                const grecaptcha = (window as any).grecaptcha;
+
+                if (!grecaptcha || !grecaptcha.execute) {
+                    throw new Error("reCAPTCHA not ready");
+                }
+
+                await new Promise<void>((resolve) => {
+                    grecaptcha.ready(() => resolve());
+                });
+
+                recaptchaToken = await grecaptcha.execute(
+                    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                    { action: "forgot_password" }
+                );
+
+                if (!recaptchaToken) {
+                    throw new Error("Failed to generate reCAPTCHA token");
+                }
+            }
+
             const res = await fetch(`${API_BASE}/customer/forgot_password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: trimmed }),
+                body: JSON.stringify({
+                    email: trimmed,
+                    ...(IS_PROD && { recaptchaToken }) // only in prod
+                }),
             });
 
             let data: any = null;

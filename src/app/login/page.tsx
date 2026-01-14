@@ -27,6 +27,9 @@ const FULL_AUTH_KEY = "customerId";
 /** Legacy key some parts of app accidentally used */
 const LEGACY_ID_KEY = "customerId";
 
+/** Env */
+const IS_PROD = process.env.NODE_ENV === "production";
+
 /** Return parsed auth object saved under 'customerId' (preferred) or fallback to legacy data. */
 export function getAuth(): AuthShape | null {
     try {
@@ -34,20 +37,16 @@ export function getAuth(): AuthShape | null {
         if (rawFull) {
             try {
                 return JSON.parse(rawFull) as AuthShape;
-            } catch {
-                // if value is not JSON (unlikely), continue to fallback
-            }
+            } catch { }
         }
-        // fallback: maybe old code wrote the id string under LEGACY_ID_KEY
+
         const rawLegacy = localStorage.getItem(LEGACY_ID_KEY);
         if (!rawLegacy) return null;
 
-        // If legacy key contains JSON stringified object, parse it.
         try {
             const parsed = JSON.parse(rawLegacy);
             if (parsed && typeof parsed === "object") return parsed as AuthShape;
         } catch {
-            // not JSON — treat as plain customerId string
             return { customerId: rawLegacy } as AuthShape;
         }
 
@@ -82,7 +81,7 @@ export function isTokenValid(): boolean {
         if (t.tokenExpiresAt) {
             const exp = Date.parse(t.tokenExpiresAt);
             if (Number.isNaN(exp)) return false;
-            return Date.now() < exp - 2000; // 2s margin
+            return Date.now() < exp - 2000;
         }
 
         if (typeof t.expiresIn === "number" && t.tokenObtainedAt) {
@@ -92,9 +91,7 @@ export function isTokenValid(): boolean {
             return Date.now() < exp - 2000;
         }
 
-        // last fallback: treat presence of accessToken as valid
         if (t.accessToken) return true;
-
         return false;
     } catch {
         return false;
@@ -104,25 +101,15 @@ export function isTokenValid(): boolean {
 /** Clear stored auth data and notify listeners */
 export function logout(redirectTo: string | null = "/login") {
     try {
-        // remove canonical and legacy keys
         localStorage.removeItem(FULL_AUTH_KEY);
         localStorage.removeItem(LEGACY_ID_KEY);
-
-        // remove tokens/backwards keys
         localStorage.removeItem("customerId");
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("tokenType");
-
-        // remove remembered user if any
         localStorage.removeItem("rememberedUser");
-
-        // notify app components
         window.dispatchEvent(new Event("authChanged"));
-    } catch {
-        /* swallow */
-    }
-    // caller should navigate (router.push) if needed
+    } catch { }
 }
 
 /* ---------------- Component ---------------- */
@@ -153,24 +140,19 @@ export default function LoginPage() {
         try {
             const r = localStorage.getItem("rememberedUser");
             if (r) setUsername(r);
-        } catch {
-            /* ignore */
-        }
+        } catch { }
     }, []);
 
     const validate = () => {
         if (!username.trim()) {
             setErrorMsg("Please enter your email or username.");
-            setErrorCode(null);
             return false;
         }
         if (!password) {
             setErrorMsg("Please enter your password.");
-            setErrorCode(null);
             return false;
         }
         setErrorMsg("");
-        setErrorCode(null);
         return true;
     };
 
@@ -181,14 +163,15 @@ export default function LoginPage() {
     const persistAuth = (data: AuthShape | null) => {
         if (!data) return;
         try {
-            // Normalize token if present
             if (data.token && typeof data.token === "object") {
-                const t = { ...data.token } as NonNullable<AuthShape["token"]>;
+                const t = { ...data.token };
 
                 if (!t.tokenExpiresAt && typeof t.expiresIn === "number") {
                     const obtained = new Date();
                     t.tokenObtainedAt = obtained.toISOString();
-                    t.tokenExpiresAt = new Date(Date.now() + t.expiresIn * 1000).toISOString();
+                    t.tokenExpiresAt = new Date(
+                        Date.now() + t.expiresIn * 1000
+                    ).toISOString();
                 } else if (t.tokenExpiresAt && !t.tokenObtainedAt) {
                     t.tokenObtainedAt = new Date().toISOString();
                 }
@@ -197,27 +180,15 @@ export default function LoginPage() {
                 if (t.accessToken) localStorage.setItem("accessToken", t.accessToken);
                 if (t.refreshToken) localStorage.setItem("refreshToken", t.refreshToken);
                 if (t.tokenType) localStorage.setItem("tokenType", t.tokenType);
-            } else {
-                // fallback: check top-level fields (old shape)
-                if ((data as any).accessToken) localStorage.setItem("accessToken", (data as any).accessToken);
-                if ((data as any).refreshToken) localStorage.setItem("refreshToken", (data as any).refreshToken);
-                if ((data as any).tokenType) localStorage.setItem("tokenType", (data as any).tokenType);
             }
 
-            // Save the entire object under canonical key
             localStorage.setItem(FULL_AUTH_KEY, JSON.stringify(data));
-
-            // Also write the simple customerId string under legacy key for any code expecting it
             if (data.customerId) {
                 localStorage.setItem(LEGACY_ID_KEY, data.customerId);
             } else {
-                // if no customerId in object, remove legacy key
                 localStorage.removeItem(LEGACY_ID_KEY);
             }
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn("persistAuth failed", e);
-        }
+        } catch { }
     };
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -230,66 +201,90 @@ export default function LoginPage() {
         setSuccess("");
 
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_BASE
+            let recaptchaToken: string | null = null;
+
+            if (IS_PROD) {
+                const grecaptcha = (window as any).grecaptcha;
+
+                if (!grecaptcha || !grecaptcha.execute) {
+                    throw new Error("reCAPTCHA not ready");
+                }
+
+                await new Promise<void>((resolve) => {
+                    grecaptcha.ready(() => resolve());
+                });
+
+                recaptchaToken = await grecaptcha.execute(
+                    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                    { action: "login" }
+                );
+
+                if (!recaptchaToken) {
+                    throw new Error("Failed to generate reCAPTCHA token");
+                }
+            }
+
+            const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
             const res = await fetch(`${API_BASE}/customer/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: username.trim(), password }),
                 credentials: "include",
+                body: JSON.stringify({
+                    username: username.trim(),
+                    password,
+                    ...(IS_PROD && { recaptchaToken }), // only in prod
+                }),
             });
 
             let data: any = null;
             try {
                 data = await res.json();
-            } catch {
-                data = null;
-            }
+            } catch { }
 
             if (!res.ok) {
-                if (data && data.error && typeof data.error === "object") {
-                    const be: BackendError = data.error;
-                    setErrorMsg(be.message || "Login failed");
-                    setErrorCode(be.code ?? null);
-                } else if (data && data.error && typeof data.error === "string") {
-                    setErrorMsg(data.error);
-                } else if (data && data.message) {
-                    setErrorMsg(data.message);
-                } else {
-                    setErrorMsg("Login failed. Please try again.");
-                }
+                const be: BackendError | undefined = data?.error;
+                setErrorMsg(be?.message || data?.message || "Login failed");
                 setLoading(false);
                 return;
             }
 
-            // SUCCESS: normalize & persist
-            if (data) {
-                persistAuth(data as AuthShape);
-                if (remember) {
-                    localStorage.setItem("rememberedUser", username.trim());
-                } else {
-                    localStorage.removeItem("rememberedUser");
-                }
+            persistAuth(data);
 
-                try {
-                    window.dispatchEvent(new Event("authChanged"));
-                } catch {
-                    // noop
-                }
+            if (remember) {
+                localStorage.setItem("rememberedUser", username.trim());
+            } else {
+                localStorage.removeItem("rememberedUser");
             }
 
-            setSuccess((data && data.message) || "Login successful");
-            setErrorMsg("");
-            setErrorCode(null);
-
-            // navigate to home/dashboard
+            window.dispatchEvent(new Event("authChanged"));
+            setSuccess(data?.message || "Login successful");
             router.push("/");
-        } catch (err) {
+        } catch {
             setErrorMsg("Unable to reach server. Please check if your API is running.");
-            setErrorCode(null);
         } finally {
             setLoading(false);
         }
     };
+
+    /* reCAPTCHA v3 script loader */
+    useEffect(() => {
+        if (!IS_PROD) return;
+
+        const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+        if (!siteKey) return;
+
+        if ((window as any).grecaptcha) return;
+
+        const scriptId = "recaptcha-v3";
+        if (document.getElementById(scriptId)) return;
+
+        const script = document.createElement("script");
+        script.id = scriptId;
+        script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }, []);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-sky-50 to-indigo-50 flex items-center justify-center p-8">

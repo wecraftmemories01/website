@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react';
 import React, { ChangeEvent, FormEvent, useState } from 'react'
 import { Eye, EyeOff, Mail, User, Smartphone, Lock } from 'lucide-react'
 
@@ -12,6 +13,8 @@ type FormState = {
 }
 
 export default function RegisterPage() {
+    const IS_PROD = process.env.NODE_ENV === "production";
+
     const [form, setForm] = useState<FormState>({
         name: '',
         email: '',
@@ -25,6 +28,25 @@ export default function RegisterPage() {
     const [success, setSuccess] = useState('')
     const [serverError, setServerError] = useState('') // general top-level message
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({}) // per-field messages
+
+    useEffect(() => {
+        if (!IS_PROD) return;
+
+        const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+        if (!siteKey) return;
+
+        if ((window as any).grecaptcha) return;
+
+        const scriptId = "recaptcha-v3";
+        if (document.getElementById(scriptId)) return;
+
+        const script = document.createElement("script");
+        script.id = scriptId;
+        script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }, []);
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target
@@ -56,6 +78,30 @@ export default function RegisterPage() {
         e.preventDefault()
         setServerError('')
         setFieldErrors({})
+
+        let recaptchaToken: string | null = null;
+
+        if (IS_PROD) {
+            const grecaptcha = (window as any).grecaptcha;
+
+            if (!grecaptcha || !grecaptcha.execute) {
+                throw new Error("reCAPTCHA not ready");
+            }
+
+            await new Promise<void>((resolve) => {
+                grecaptcha.ready(() => resolve());
+            });
+
+            recaptchaToken = await grecaptcha.execute(
+                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                { action: "register" }
+            );
+
+            if (!recaptchaToken) {
+                throw new Error("Failed to generate reCAPTCHA token");
+            }
+        }
+
         // minimal client-side guard: confirm password must match (UX convenience).
         if (form.password !== form.confirmPassword) {
             setFieldErrors({ confirmPassword: "Passwords don't match" })
@@ -73,6 +119,7 @@ export default function RegisterPage() {
                     email: form.email,
                     mobile: form.mobile,
                     password: form.password,
+                    ...(IS_PROD && { recaptchaToken }), // only in prod
                 }),
             })
 
