@@ -27,9 +27,6 @@ const FULL_AUTH_KEY = "customerId";
 /** Legacy key some parts of app accidentally used */
 const LEGACY_ID_KEY = "customerId";
 
-/** Env */
-const IS_PROD = process.env.NODE_ENV === "production";
-
 /** Return parsed auth object saved under 'customerId' (preferred) or fallback to legacy data. */
 export function getAuth(): AuthShape | null {
     try {
@@ -201,30 +198,28 @@ export default function LoginPage() {
         setSuccess("");
 
         try {
-            let recaptchaToken: string | null = null;
+            /** Recaptcha */
+            const grecaptcha = (window as any).grecaptcha;
 
-            if (IS_PROD) {
-                const grecaptcha = (window as any).grecaptcha;
+            if (!grecaptcha || !grecaptcha.execute) {
+                throw new Error("reCAPTCHA not ready");
+            }
 
-                if (!grecaptcha || !grecaptcha.execute) {
-                    throw new Error("reCAPTCHA not ready");
-                }
+            await new Promise<void>((resolve) => {
+                grecaptcha.ready(() => resolve());
+            });
 
-                await new Promise<void>((resolve) => {
-                    grecaptcha.ready(() => resolve());
-                });
+            const recaptchaToken = await grecaptcha.execute(
+                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                { action: "login" }
+            );
 
-                recaptchaToken = await grecaptcha.execute(
-                    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                    { action: "login" }
-                );
-
-                if (!recaptchaToken) {
-                    throw new Error("Failed to generate reCAPTCHA token");
-                }
+            if (!recaptchaToken) {
+                throw new Error("Failed to generate reCAPTCHA token");
             }
 
             const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+
             const res = await fetch(`${API_BASE}/customer/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -232,7 +227,7 @@ export default function LoginPage() {
                 body: JSON.stringify({
                     username: username.trim(),
                     password,
-                    ...(IS_PROD && { recaptchaToken }), // only in prod
+                    recaptchaToken
                 }),
             });
 
@@ -268,8 +263,6 @@ export default function LoginPage() {
 
     /* reCAPTCHA v3 script loader */
     useEffect(() => {
-        if (!IS_PROD) return;
-
         const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
         if (!siteKey) return;
 

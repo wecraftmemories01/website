@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Mail, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 
 export default function ForgotPasswordPage() {
-    const IS_PROD = process.env.NODE_ENV === "production";
     const router = useRouter();
 
     // mount guard — prevents SSR vs client mismatch
@@ -35,9 +34,8 @@ export default function ForgotPasswordPage() {
     }, [countdown, router]);
 
     useEffect(() => {
-        if (!IS_PROD) return;
-
         const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+
         if (!siteKey) return;
 
         if ((window as any).grecaptcha) return;
@@ -74,27 +72,23 @@ export default function ForgotPasswordPage() {
             // read API base at submit time (client-only) — avoids SSR/client differences
             const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
 
-            let recaptchaToken: string | null = null;
+            const grecaptcha = (window as any).grecaptcha;
 
-            if (IS_PROD) {
-                const grecaptcha = (window as any).grecaptcha;
+            if (!grecaptcha || !grecaptcha.execute) {
+                throw new Error("reCAPTCHA not ready");
+            }
 
-                if (!grecaptcha || !grecaptcha.execute) {
-                    throw new Error("reCAPTCHA not ready");
-                }
+            await new Promise<void>((resolve) => {
+                grecaptcha.ready(() => resolve());
+            });
 
-                await new Promise<void>((resolve) => {
-                    grecaptcha.ready(() => resolve());
-                });
+            const recaptchaToken = await grecaptcha.execute(
+                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                { action: "forgot_password" }
+            );
 
-                recaptchaToken = await grecaptcha.execute(
-                    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                    { action: "forgot_password" }
-                );
-
-                if (!recaptchaToken) {
-                    throw new Error("Failed to generate reCAPTCHA token");
-                }
+            if (!recaptchaToken) {
+                throw new Error("Failed to generate reCAPTCHA token");
             }
 
             const res = await fetch(`${API_BASE}/customer/forgot_password`, {
@@ -102,7 +96,7 @@ export default function ForgotPasswordPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email: trimmed,
-                    ...(IS_PROD && { recaptchaToken }) // only in prod
+                    recaptchaToken
                 }),
             });
 

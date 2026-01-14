@@ -13,8 +13,6 @@ type FormState = {
 }
 
 export default function RegisterPage() {
-    const IS_PROD = process.env.NODE_ENV === "production";
-
     const [form, setForm] = useState<FormState>({
         name: '',
         email: '',
@@ -30,8 +28,6 @@ export default function RegisterPage() {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({}) // per-field messages
 
     useEffect(() => {
-        if (!IS_PROD) return;
-
         const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
         if (!siteKey) return;
 
@@ -79,27 +75,23 @@ export default function RegisterPage() {
         setServerError('')
         setFieldErrors({})
 
-        let recaptchaToken: string | null = null;
+        const grecaptcha = (window as any).grecaptcha;
 
-        if (IS_PROD) {
-            const grecaptcha = (window as any).grecaptcha;
+        if (!grecaptcha || !grecaptcha.execute) {
+            throw new Error("reCAPTCHA not ready");
+        }
 
-            if (!grecaptcha || !grecaptcha.execute) {
-                throw new Error("reCAPTCHA not ready");
-            }
+        await new Promise<void>((resolve) => {
+            grecaptcha.ready(() => resolve());
+        });
 
-            await new Promise<void>((resolve) => {
-                grecaptcha.ready(() => resolve());
-            });
+        const recaptchaToken = await grecaptcha.execute(
+            process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+            { action: "register" }
+        );
 
-            recaptchaToken = await grecaptcha.execute(
-                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                { action: "register" }
-            );
-
-            if (!recaptchaToken) {
-                throw new Error("Failed to generate reCAPTCHA token");
-            }
+        if (!recaptchaToken) {
+            throw new Error("Failed to generate reCAPTCHA token");
         }
 
         // minimal client-side guard: confirm password must match (UX convenience).
@@ -119,7 +111,7 @@ export default function RegisterPage() {
                     email: form.email,
                     mobile: form.mobile,
                     password: form.password,
-                    ...(IS_PROD && { recaptchaToken }), // only in prod
+                    recaptchaToken,
                 }),
             })
 

@@ -28,8 +28,8 @@ function pwStrength(pw: string) {
 }
 
 export default function ResetPasswordClient({ code }: Props) {
-    const IS_PROD = process.env.NODE_ENV === "production";
     const router = useRouter();
+
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
     const [password, setPassword] = useState("");
@@ -44,8 +44,6 @@ export default function ResetPasswordClient({ code }: Props) {
     const strength = useMemo(() => pwStrength(password), [password]);
 
     useEffect(() => {
-        if (!IS_PROD) return;
-
         const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
         if (!siteKey) return;
 
@@ -103,27 +101,23 @@ export default function ResetPasswordClient({ code }: Props) {
         try {
             const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
 
-            let recaptchaToken: string | null = null;
+            const grecaptcha = (window as any).grecaptcha;
 
-            if (IS_PROD) {
-                const grecaptcha = (window as any).grecaptcha;
+            if (!grecaptcha || !grecaptcha.execute) {
+                throw new Error("reCAPTCHA not ready");
+            }
 
-                if (!grecaptcha || !grecaptcha.execute) {
-                    throw new Error("reCAPTCHA not ready");
-                }
+            await new Promise<void>((resolve) => {
+                grecaptcha.ready(() => resolve());
+            });
 
-                await new Promise<void>((resolve) => {
-                    grecaptcha.ready(() => resolve());
-                });
+            const recaptchaToken = await grecaptcha.execute(
+                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                { action: "reset_password" }
+            );
 
-                recaptchaToken = await grecaptcha.execute(
-                    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                    { action: "reset_password" }
-                );
-
-                if (!recaptchaToken) {
-                    throw new Error("Failed to generate reCAPTCHA token");
-                }
+            if (!recaptchaToken) {
+                throw new Error("Failed to generate reCAPTCHA token");
             }
 
             const res = await fetch(`${API_BASE}/customer/reset_password/${encodeURIComponent(code)}`, {
@@ -132,7 +126,7 @@ export default function ResetPasswordClient({ code }: Props) {
                 body: JSON.stringify({
                     newPassword: password,
                     confirmPassword: confirm,
-                    ...(IS_PROD && { recaptchaToken }) // prod-only
+                    recaptchaToken
                 }),
             });
 

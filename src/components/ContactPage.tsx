@@ -28,7 +28,6 @@ type ReachUsOption = {
 /* ---------------- Component ---------------- */
 export default function ContactPage(): React.ReactElement {
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
-    const IS_PROD = process.env.NODE_ENV === "production";
 
     const [form, setForm] = useState<FormState>({
         name: "",
@@ -134,8 +133,6 @@ export default function ContactPage(): React.ReactElement {
     }
 
     useEffect(() => {
-        if (!IS_PROD) return;
-
         const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
         if (!siteKey) return;
 
@@ -221,22 +218,22 @@ export default function ContactPage(): React.ReactElement {
         setIsSubmitting(true);
         setStatus({ type: null });
 
-        let recaptchaToken: string | undefined;
+        const grecaptcha = (window as any).grecaptcha;
+        if (!grecaptcha || !grecaptcha.execute) {
+            throw new Error("reCAPTCHA not ready");
+        }
 
-        if (IS_PROD) {
-            const grecaptcha = (window as any).grecaptcha;
-            if (!grecaptcha || !grecaptcha.execute) {
-                throw new Error("reCAPTCHA not ready");
-            }
+        await new Promise<void>((resolve) => {
+            grecaptcha.ready(() => resolve());
+        });
 
-            await new Promise<void>((resolve) => {
-                grecaptcha.ready(() => resolve());
-            });
+        const recaptchaToken = await grecaptcha.execute(
+            process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+            { action: "reach_us" }
+        );
 
-            recaptchaToken = await grecaptcha.execute(
-                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                { action: "reach_us" }
-            );
+        if (!recaptchaToken) {
+            throw new Error("Failed to generate reCAPTCHA token");
         }
 
         try {
@@ -258,7 +255,7 @@ export default function ContactPage(): React.ReactElement {
 
             if (reachUsTypeId) payload.reachUsTypeId = reachUsTypeId;
             if (form.orderNumber && form.orderNumber.trim()) payload.orderNumber = form.orderNumber.trim();
-            if (IS_PROD && recaptchaToken) payload.recaptchaToken = recaptchaToken;
+            payload.recaptchaToken = recaptchaToken;
 
             const res = await fetch(`${base}/reach_us`, {
                 method: "POST",
