@@ -28,6 +28,7 @@ type ReachUsOption = {
 /* ---------------- Component ---------------- */
 export default function ContactPage(): React.ReactElement {
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+    const IS_PROD = process.env.NODE_ENV === "production";
 
     const [form, setForm] = useState<FormState>({
         name: "",
@@ -132,6 +133,25 @@ export default function ContactPage(): React.ReactElement {
         return Object.keys(e).length === 0;
     }
 
+    useEffect(() => {
+        if (!IS_PROD) return;
+
+        const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+        if (!siteKey) return;
+
+        if ((window as any).grecaptcha) return;
+
+        const scriptId = "recaptcha-v3";
+        if (document.getElementById(scriptId)) return;
+
+        const script = document.createElement("script");
+        script.id = scriptId;
+        script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }, []);
+
     // auto-clear status after 5s
     useEffect(() => {
         if (!status.type) return;
@@ -201,6 +221,24 @@ export default function ContactPage(): React.ReactElement {
         setIsSubmitting(true);
         setStatus({ type: null });
 
+        let recaptchaToken: string | undefined;
+
+        if (IS_PROD) {
+            const grecaptcha = (window as any).grecaptcha;
+            if (!grecaptcha || !grecaptcha.execute) {
+                throw new Error("reCAPTCHA not ready");
+            }
+
+            await new Promise<void>((resolve) => {
+                grecaptcha.ready(() => resolve());
+            });
+
+            recaptchaToken = await grecaptcha.execute(
+                process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
+                { action: "reach_us" }
+            );
+        }
+
         try {
             // fallback to localhost if NEXT_PUBLIC_API_BASE is not set (useful for local dev)
             const base = API_BASE?.trim() ? API_BASE.replace(/\/+$/, "") : "http://localhost:3000";
@@ -220,6 +258,7 @@ export default function ContactPage(): React.ReactElement {
 
             if (reachUsTypeId) payload.reachUsTypeId = reachUsTypeId;
             if (form.orderNumber && form.orderNumber.trim()) payload.orderNumber = form.orderNumber.trim();
+            if (IS_PROD && recaptchaToken) payload.recaptchaToken = recaptchaToken;
 
             const res = await fetch(`${base}/reach_us`, {
                 method: "POST",
@@ -446,20 +485,6 @@ export default function ContactPage(): React.ReactElement {
                     </section>
                 </div>
             </div>
-
-            {/* floating whatsapp */}
-            <a
-                href="https://wa.me/919876543210"
-                className="fixed right-6 bottom-6 z-50 bg-gradient-to-br from-green-500 to-green-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:scale-105 transform transition"
-                aria-label="Chat on WhatsApp"
-                target="_blank"
-                rel="noreferrer"
-            >
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path d="M21 12.09A9 9 0 1 0 12.09 21L3 22l1-8.09A9 9 0 0 0 21 12.09z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M17 14c-.2.6-1.2 1.7-2.2 1.9-.9.2-1.1.1-2 .5s-1.4.5-2-.1C9 16 7.7 14.6 7 13.6 6.3 12.6 6.8 11.9 7.2 11.4c.3-.4.7-.6.9-.9.2-.2.2-.4 0-.6-.2-.2-1-1-1-1s-.4-.3-.8-.1c-.4.1-1.2.6-1.6 1.1-.4.5-1 1.1-1 2.1 0 1 .7 2.6 2 4 1.2 1.4 2.8 2 4.5 2.2 1.6.2 2.7-.1 3.9-.6 1.2-.5 2.2-1.8 2.4-3.2.2-1.4-.1-2.3-.1-2.3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-            </a>
         </main>
     );
 }
