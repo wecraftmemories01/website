@@ -16,7 +16,8 @@ export type Address = SharedAddress;
 type Props = {
     show: boolean;
     onClose: () => void;
-    onCreated?: (localAddress: Address) => void; // called after optimistic local save (and/or after server refresh)
+    onCreated?: (localAddress: Address) => void;
+    onSuccess?: () => void;
 };
 
 const CUSTOMER_KEY = "customerId";
@@ -27,11 +28,13 @@ function getApiBase(): string {
     if (typeof window === "undefined") return "";
     return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
 }
+
 function buildUrl(path: string) {
     const base = getApiBase().replace(/\/$/, "");
     if (!base) return path.startsWith("/") ? path : `/${path}`;
     return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
 function getAuthToken(): string | null {
     try {
         if (typeof window === "undefined") return null;
@@ -40,6 +43,7 @@ function getAuthToken(): string | null {
         return null;
     }
 }
+
 async function safeJson(res: Response) {
     const ct = res.headers.get("content-type") || "";
     const isJson = ct.includes("application/json");
@@ -70,6 +74,7 @@ async function apiFetchCountries(): Promise<Array<{ _id: string; countryName: st
         return [];
     }
 }
+
 async function apiFetchStates(countryId?: string) {
     try {
         const url = countryId ? buildUrl(`/master/states?countryId=${encodeURIComponent(countryId)}`) : buildUrl(`/master/states`);
@@ -86,6 +91,7 @@ async function apiFetchStates(countryId?: string) {
         return [];
     }
 }
+
 async function apiFetchCities(stateId?: string) {
     try {
         const url = stateId ? buildUrl(`/master/cities?stateId=${encodeURIComponent(stateId)}`) : buildUrl(`/master/cities`);
@@ -132,9 +138,9 @@ async function apiCreateAddress(customerId: string, addr: Address): Promise<any>
         recipientName: addr.recipientName,
         recipientContact: addr.recipientContact,
         addressLine1: addr.addressLine1,
-        addressLine2: addr.addressLine2 ?? "",
-        addressLine3: addr.addressLine3 ?? "",
-        landmark: addr.landmark ?? "",
+        addressLine2: addr.addressLine2 || null,
+        addressLine3: addr.addressLine3 || null,
+        landmark: addr.landmark || null,
         countryId: addr.countryId ?? null,
         stateId: addr.stateId ?? null,
         cityId: addr.cityId ?? null,
@@ -149,7 +155,16 @@ async function apiCreateAddress(customerId: string, addr: Address): Promise<any>
     }
     const json = await safeJson(res);
     if (!res.ok) {
-        throw new Error(json?.error || json?.message || `Failed to create address (${res.status})`);
+        if (!res.ok) {
+            const msg =
+                typeof json?.error === "string"
+                    ? json.error
+                    : json?.error?.message
+                    || json?.message
+                    || `Failed to create address (${res.status})`;
+
+            throw new Error(msg);
+        }
     }
     return json;
 }
@@ -199,14 +214,17 @@ const blankAddress: Address = {
     isDefault: false,
 };
 
-export default function AddressModal({ show, onClose, onCreated }: Props) {
+export default function AddressModal({ show, onClose, onCreated, onSuccess }: Props) {
     const mountedRef = useRef(true);
+    const submittingRef = useRef(false);
+
     useEffect(() => {
         mountedRef.current = true;
         return () => {
             mountedRef.current = false;
         };
     }, []);
+
 
     const [form, setForm] = useState<Address>({ ...blankAddress });
 
@@ -311,73 +329,83 @@ export default function AddressModal({ show, onClose, onCreated }: Props) {
      * - attempts server save, and if successful, calls onCreated again with server-confirmed address (serverId + srv_<id>)
      */
     async function saveAddress() {
-        if (!form.recipientName?.trim() || !form.addressLine1?.trim() || !(String(form.cityId || form.cityName || "").trim()) || !form.pincode?.trim()) {
-            return alert("Please fill at least recipient name, address line 1, city and pincode");
-        }
-        if (!isValidIndianPincode(form.pincode)) {
-            return alert("Enter a valid 6-digit PIN code");
-        }
+        if (submittingRef.current) return;
+        submittingRef.current = true;
 
-        // check serviceability
-        setFormSvc({ checking: true, prepaid: null });
-        const svc = await fetchPincodeServiceability(form.pincode);
-        if (!svc.ok) {
-            setFormSvc({ checking: false, prepaid: null, error: svc.message || "Service check failed" });
-            return alert("Unable to verify pincode serviceability right now. Please try again.");
-        }
-        if (!svc.prepaid) {
-            setFormSvc({ checking: false, prepaid: false });
-            return alert("This pincode is not serviceable for prepaid (online) orders. Please use a different address or contact support.");
-        }
-
-        // optimistic local add
-        const optimisticId = `local_${Date.now()}`;
-        const optimisticAddr: Address = { ...form, id: optimisticId, serverId: null };
         try {
-            // notify parent about optimistic local address
-            onCreated?.(optimisticAddr);
-            onClose();
-
-            // attempt server save
-            const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
-            if (!cust) return;
-            const json = await apiCreateAddress(cust, optimisticAddr);
-
-            // try to extract created record
-            const created = json?.address || json?.addressData || json?.data || json;
-            const serverId = created && (created._id ?? created.id) ? String(created._id ?? created.id) : null;
-            if (serverId) {
-                const mapped: Address = {
-                    ...optimisticAddr,
-                    id: `srv_${serverId}`,
-                    serverId: serverId,
-                    recipientName: created.recipientName ?? optimisticAddr.recipientName,
-                    recipientContact: created.recipientContact ?? optimisticAddr.recipientContact,
-                    addressLine1: created.addressLine1 ?? optimisticAddr.addressLine1,
-                    addressLine2: created.addressLine2 ?? optimisticAddr.addressLine2,
-                    addressLine3: created.addressLine3 ?? optimisticAddr.addressLine3,
-                    landmark: created.landmark ?? optimisticAddr.landmark,
-                    countryId: created.countryId ?? optimisticAddr.countryId,
-                    stateId: created.stateId ?? optimisticAddr.stateId,
-                    cityId: created.cityId ?? optimisticAddr.cityId,
-                    countryName: created.countryName ?? optimisticAddr.countryName,
-                    stateName: created.stateName ?? optimisticAddr.stateName,
-                    cityName: created.cityName ?? optimisticAddr.cityName,
-                    pincode: created.pincode ?? optimisticAddr.pincode,
-                    isDefault: typeof created.isDefault === "boolean" ? !!created.isDefault : !!optimisticAddr.isDefault,
-                };
-
-                // send server-confirmed record so parent can replace optimistic one
-                onCreated?.(mapped);
-            } else {
-                // server saved but didn't return created id — best-effort: still notify parent (no serverId)
-                console.warn("Server returned no _id after creating address", json);
+            // ---------- VALIDATION ----------
+            if (
+                !form.recipientName?.trim() ||
+                !form.addressLine1?.trim() ||
+                !(String(form.cityId || form.cityName || "").trim()) ||
+                !form.pincode?.trim()
+            ) {
+                alert("Please fill at least recipient name, address line 1, city and pincode");
+                return;
             }
+
+            if (!isValidIndianPincode(form.pincode)) {
+                alert("Enter a valid 6-digit PIN code");
+                return;
+            }
+
+            // ---------- SERVICEABILITY ----------
+            setFormSvc({ checking: true, prepaid: null });
+            const svc = await fetchPincodeServiceability(form.pincode);
+
+            if (!svc.ok) {
+                setFormSvc({ checking: false, prepaid: null, error: svc.message });
+                alert("Unable to verify pincode serviceability right now.");
+                return;
+            }
+
+            if (!svc.prepaid) {
+                setFormSvc({ checking: false, prepaid: false });
+                alert("This pincode is not serviceable for prepaid orders.");
+                return;
+            }
+
+            // ---------- SERVER SAVE ----------
+            const cust = localStorage.getItem(CUSTOMER_KEY);
+            if (!cust) return;
+
+            const json = await apiCreateAddress(cust, form);
+
+            const created = json?.address || json?.addressData || json?.data;
+
+            if (!created?._id) {
+                throw new Error("Address not saved on server");
+            }
+
+            // optimistic update
+            onCreated?.({
+                ...form,
+                id: `srv_${created._id}`,
+                serverId: String(created._id),
+            });
+
+            // WAIT for server sync
+            if (onSuccess) {
+                await onSuccess();
+            }
+
+            // NOW close modal
+            onClose();
         } catch (err: any) {
-            console.warn("Failed to save address to server", err);
-            alert(err?.message ?? "Failed to save address to server. Saved locally.");
+            console.warn("Failed to save address", err);
+            const msg =
+                typeof err?.message === "string"
+                    ? err.message
+                    : typeof err === "string"
+                        ? err
+                        : "Failed to save address";
+
+            alert(msg);
         } finally {
-            if (mountedRef.current) setFormSvc({ checking: false, prepaid: true });
+            submittingRef.current = false; // 🔑 ALWAYS RELEASE LOCK
+            if (mountedRef.current) {
+                setFormSvc({ checking: false, prepaid: true });
+            }
         }
     }
 
@@ -387,7 +415,11 @@ export default function AddressModal({ show, onClose, onCreated }: Props) {
         <div
             ref={backdropRef}
             className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4 py-6"
-            onClick={() => onClose()} // clicking backdrop -> close
+            onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                    onClose();
+                }
+            }}
             aria-hidden={false}
         >
             <div
@@ -561,7 +593,12 @@ export default function AddressModal({ show, onClose, onCreated }: Props) {
                     <button onClick={onClose} className="px-4 py-2 rounded-md border text-slate-600 hover:bg-slate-50">
                         Cancel
                     </button>
-                    <button onClick={saveAddress} className="px-4 py-2 rounded-md bg-[#065975] text-white hover:brightness-95">
+                    <button
+                        onClick={saveAddress}
+                        disabled={submittingRef.current}
+                        className={`px-4 py-2 rounded-md bg-[#065975] text-white ${submittingRef.current ? "opacity-60 cursor-not-allowed" : "hover:brightness-95"
+                            }`}
+                    >
                         Save address
                     </button>
                 </div>

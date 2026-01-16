@@ -32,6 +32,7 @@ function isValidIndianPincode(pin: string) {
 
 export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
     const router = useRouter();
+    const isRefreshingRef = useRef(false);
     const [checkingAuth, setCheckingAuth] = useState(true);
 
     const [addresses, setAddresses] = useState<Address[]>([]);
@@ -93,10 +94,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     useEffect(() => {
         try {
             if (typeof window === "undefined") return;
-            localStorage.setItem("wcm_addresses", JSON.stringify(addresses));
-        } catch {
-            // ignore
-        }
+            const serverOnly = addresses.filter(a => a.serverId);
+            localStorage.setItem("wcm_addresses", JSON.stringify(serverOnly));
+        } catch { }
     }, [addresses]);
 
     // --- API helpers ---
@@ -283,6 +283,32 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return addressData;
     }
 
+    async function refreshAddresses() {
+        try {
+            const cust = localStorage.getItem(CUSTOMER_KEY);
+            if (!cust) return;
+
+            setLoadingAddresses(true);
+            const server = await apiFetchAddresses(cust);
+            if (!mountedRef.current) return;
+
+            const mapped = server.map(mapServerAddressToLocal);
+
+            setAddresses(mapped);
+
+            // ✅ persist once, after server truth
+            localStorage.setItem("wcm_addresses", JSON.stringify(mapped));
+
+            // select latest/default
+            const def = mapped.find(a => a.isDefault) || mapped[0];
+            if (def) setSelectedAddressId(def.id);
+        } catch (err) {
+            console.warn("Failed to refresh addresses", err);
+        } finally {
+            if (mountedRef.current) setLoadingAddresses(false);
+        }
+    }
+
     async function apiCreateAddress(customerId: string, addr: Address): Promise<any> {
         const url = buildUrl(`/customer/${encodeURIComponent(customerId)}/address`);
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -310,7 +336,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
         const json = await safeJson(res);
         if (!res.ok) {
-            throw new Error(json?.error || json?.message || `Failed to create address (${res.status})`);
+            if (!res.ok) {
+                const msg =
+                    typeof json?.error === "string"
+                        ? json.error
+                        : json?.error?.message
+                        || json?.message
+                        || `Failed to create address (${res.status})`;
+
+                throw new Error(msg);
+            }
         }
         return json;
     }
@@ -840,6 +875,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             router.replace("/login");
             return;
         }
+
         if (!selectedAddressId) {
             return alert("Please select or add a delivery address");
         }
@@ -873,62 +909,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         })();
     }
 
-    async function ensureServerAddress(addr: Address, customerId: string): Promise<Address> {
-        if (addr.serverId) return addr;
-
-        try {
-            const json = await apiCreateAddress(customerId, addr);
-            const created = json?.address || json?.addressData || json?.data || json;
-            const serverId = created && (created._id ?? created.id) ? String(created._id ?? created.id) : null;
-            if (serverId) {
-                const mapped: Address = {
-                    ...addr,
-                    id: `srv_${serverId}`,
-                    serverId: serverId,
-                    recipientName: created.recipientName ?? addr.recipientName,
-                    recipientContact: created.recipientContact ?? addr.recipientContact,
-                    addressLine1: created.addressLine1 ?? addr.addressLine1,
-                    addressLine2: created.addressLine2 ?? addr.addressLine2,
-                    addressLine3: created.addressLine3 ?? addr.addressLine3,
-                    landmark: created.landmark ?? addr.landmark,
-                    countryId: created.countryId ?? addr.countryId,
-                    stateId: created.stateId ?? addr.stateId,
-                    cityId: created.cityId ?? addr.cityId,
-                    countryName: created.countryName ?? addr.countryName,
-                    stateName: created.stateName ?? addr.stateName,
-                    cityName: created.cityName ?? addr.cityName,
-                    pincode: created.pincode ?? addr.pincode,
-                    isDefault: typeof created.isDefault === "boolean" ? !!created.isDefault : !!addr.isDefault,
-                };
-
-                setAddresses((prev) => {
-                    const idx = prev.findIndex((a) => a.id === addr.id || a.serverId === serverId);
-                    if (idx >= 0) {
-                        const next = [...prev];
-                        next[idx] = mapped;
-                        try {
-                            if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
-                        } catch { }
-                        return next;
-                    }
-                    const next = [mapped, ...prev];
-                    try {
-                        if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
-                    } catch { }
-                    return next;
-                });
-
-                setSelectedAddressId((cur) => (cur === addr.id ? mapped.id : cur));
-
-                return mapped;
-            } else {
-                console.warn("Address saved but server did not return id", json);
-                return addr;
-            }
-        } catch (err) {
-            console.warn("Failed to persist address before order:", err);
-            return addr;
+    function ensureServerAddress(addr: Address): Address {
+        if (!addr.serverId) {
+            throw new Error("Address is not saved on server");
         }
+        return addr;
     }
 
     async function createOrderAndRedirect(customerId: string, addr: Address) {
@@ -936,17 +921,44 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         setCreating(true);
 
         try {
-            const usedAddr = await ensureServerAddress(addr, customerId);
+            let usedAddr: Address;
 
-            const deliveryAddressId = usedAddr.serverId ?? String(usedAddr.id);
+            try {
+                usedAddr = ensureServerAddress(addr);
+            } catch {
+                alert("Please save the address before placing order.");
+                setCreating(false);
+                return;
+            }
+
+            if (!usedAddr.serverId || !looksLikeObjectId(usedAddr.serverId)) {
+                alert("Failed to save address. Please try again.");
+                setCreating(false);
+                return;
+            }
+
+            const deliveryAddressId = usedAddr.serverId;
 
             let billingAddressIdToSend: string | null = null;
+
             if (billingSame || !billingAddressId) {
-                billingAddressIdToSend = usedAddr.serverId ?? String(usedAddr.id);
+                billingAddressIdToSend = usedAddr.serverId;
             } else {
-                const localBilling = addresses.find((a) => a.id === billingAddressId || a.serverId === billingAddressId);
-                const usedBillingAddr = localBilling ? await ensureServerAddress(localBilling, customerId) : null;
-                billingAddressIdToSend = usedBillingAddr ? (usedBillingAddr.serverId ?? String(usedBillingAddr.id)) : String(billingAddressId);
+                const localBilling = addresses.find(
+                    (a) => a.id === billingAddressId || a.serverId === billingAddressId
+                );
+
+                const usedBillingAddr = localBilling
+                    ? ensureServerAddress(localBilling)
+                    : null;
+
+                if (!usedBillingAddr?.serverId || !looksLikeObjectId(usedBillingAddr.serverId)) {
+                    alert("Failed to save billing address. Please try again.");
+                    setCreating(false);
+                    return;
+                }
+
+                billingAddressIdToSend = usedBillingAddr.serverId;
             }
 
             const url = buildUrl("/sell_order/create");
@@ -956,9 +968,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             const body = {
                 customerId: String(customerId),
-                deliveryAddressId: String(deliveryAddressId),
-                billingAddressId: String(billingAddressIdToSend ?? deliveryAddressId),
-                cart: cart.map((it) => ({ productId: it.id, qty: it.qty, price: it.price })),
+                deliveryAddressId,
+                billingAddressId: billingAddressIdToSend,
+                cart: cart.map(it => ({
+                    productId: it.id,
+                    qty: it.qty,
+                    price: it.price,
+                })),
             };
 
             console.debug("[createOrder] POST", url, body);
@@ -1416,7 +1432,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     </div>
                 </div>
 
-                <AddressModal show={showModal} onClose={() => setShowModal(false)} onCreated={handleAddressCreated} />
+                <AddressModal
+                    show={showModal}
+                    onClose={() => setShowModal(false)}
+                    onCreated={handleAddressCreated}
+                    onSuccess={refreshAddresses}
+                />
             </div>
         </div>
     );
