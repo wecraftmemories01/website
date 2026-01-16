@@ -292,7 +292,7 @@ export default function SidebarFilters({
                                 )}
                             </div>
 
-                            <div className="mt-3 flex flex-wrap gap-2">
+                            <div className="mt-3 flex flex-col gap-2">
                                 {(search ? options : short).map((o) => (
                                     <OptionChip key={o.id} option={o} checked={selectedIds.includes(o.id)} onToggle={onToggle} />
                                 ))}
@@ -409,7 +409,7 @@ export default function SidebarFilters({
             </div>
 
             {/* sections (only render when available) */}
-            {masters.length > 0 && (
+            {/* {masters.length > 0 && (
                 <Section
                     title="Master Category"
                     options={masters}
@@ -420,9 +420,9 @@ export default function SidebarFilters({
                     clearSelected={clearMasters}
                     name="master"
                 />
-            )}
+            )} */}
 
-            {supers.length > 0 && (
+            {/* {supers.length > 0 && (
                 <Section
                     title="Super Category"
                     options={supers}
@@ -433,9 +433,9 @@ export default function SidebarFilters({
                     clearSelected={clearSupers}
                     name="super"
                 />
-            )}
+            )} */}
 
-            {cats.length > 0 && (
+            {/* {cats.length > 0 && (
                 <Section
                     title="Category"
                     options={cats}
@@ -446,9 +446,9 @@ export default function SidebarFilters({
                     clearSelected={clearCategories}
                     name="category"
                 />
-            )}
+            )} */}
 
-            {subs.length > 0 && (
+            {/* {subs.length > 0 && (
                 <Section
                     title="Sub Category"
                     options={subs}
@@ -459,9 +459,9 @@ export default function SidebarFilters({
                     clearSelected={clearSubs}
                     name="sub"
                 />
-            )}
+            )} */}
 
-            {ages.length > 0 && (
+            {/* {ages.length > 0 && (
                 <Section
                     title="Age Group"
                     options={ages}
@@ -473,7 +473,7 @@ export default function SidebarFilters({
                     name="age"
                     limit={8}
                 />
-            )}
+            )} */}
 
             {themes.length > 0 && (
                 <Section
