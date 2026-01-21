@@ -240,16 +240,16 @@ export default function FooterWithInstagram({
                             </div>
 
                             <p className="mt-4 text-sm text-slate-600 max-w-sm">
-                                Thoughtfully crafted pieces — made by artisans. Every order supports small makers.
+                                Thoughtfully designed and crafted by WeCraft Memories. Made to be cherished.
                             </p>
 
                             <div className="mt-5 flex items-start gap-4">
                                 <div className="flex-1 text-sm space-y-2">
                                     <div className="flex items-center gap-2 text-slate-600">
-                                        <Phone size={14} /> <span>+91 98765 43210</span>
+                                        <Phone size={14} /> <span>+91 8097987769</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-slate-600">
-                                        <MapPin size={14} /> <span>Handmade Studio, Mumbai</span>
+                                        <MapPin size={14} /> <span>Mumbai</span>
                                     </div>
                                 </div>
 
