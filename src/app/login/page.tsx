@@ -23,31 +23,16 @@ export type AuthShape = {
 };
 
 /** Canonical storage key for full auth object */
-const FULL_AUTH_KEY = "customerId";
+const FULL_AUTH_KEY = "auth";
 /** Legacy key some parts of app accidentally used */
 const LEGACY_ID_KEY = "customerId";
 
 /** Return parsed auth object saved under 'customerId' (preferred) or fallback to legacy data. */
 export function getAuth(): AuthShape | null {
     try {
-        const rawFull = localStorage.getItem(FULL_AUTH_KEY);
-        if (rawFull) {
-            try {
-                return JSON.parse(rawFull) as AuthShape;
-            } catch { }
-        }
-
-        const rawLegacy = localStorage.getItem(LEGACY_ID_KEY);
-        if (!rawLegacy) return null;
-
-        try {
-            const parsed = JSON.parse(rawLegacy);
-            if (parsed && typeof parsed === "object") return parsed as AuthShape;
-        } catch {
-            return { customerId: rawLegacy } as AuthShape;
-        }
-
-        return null;
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+        return JSON.parse(raw) as AuthShape;
     } catch {
         return null;
     }
@@ -56,10 +41,8 @@ export function getAuth(): AuthShape | null {
 /** Return access token (top-level accessToken or customerId.token.accessToken) */
 export function getAccessToken(): string | null {
     try {
-        const direct = localStorage.getItem("accessToken");
-        if (direct) return direct;
         const auth = getAuth();
-        return (auth && auth.token && auth.token.accessToken) || null;
+        return auth?.token?.accessToken ?? null;
     } catch {
         return null;
     }
@@ -98,12 +81,8 @@ export function isTokenValid(): boolean {
 /** Clear stored auth data and notify listeners */
 export function logout(redirectTo: string | null = "/login") {
     try {
-        localStorage.removeItem(FULL_AUTH_KEY);
-        localStorage.removeItem(LEGACY_ID_KEY);
+        localStorage.removeItem("auth");
         localStorage.removeItem("customerId");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("tokenType");
         localStorage.removeItem("rememberedUser");
         window.dispatchEvent(new Event("authChanged"));
     } catch { }
@@ -174,16 +153,12 @@ export default function LoginPage() {
                 }
 
                 data = { ...data, token: t };
-                if (t.accessToken) localStorage.setItem("accessToken", t.accessToken);
-                if (t.refreshToken) localStorage.setItem("refreshToken", t.refreshToken);
-                if (t.tokenType) localStorage.setItem("tokenType", t.tokenType);
             }
 
-            localStorage.setItem(FULL_AUTH_KEY, JSON.stringify(data));
+            localStorage.setItem("auth", JSON.stringify(data));
+
             if (data.customerId) {
-                localStorage.setItem(LEGACY_ID_KEY, data.customerId);
-            } else {
-                localStorage.removeItem(LEGACY_ID_KEY);
+                localStorage.setItem("customerId", data.customerId);
             }
         } catch { }
     };

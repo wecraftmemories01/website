@@ -6,6 +6,12 @@ import Link from "next/link";
 import { Trash, Minus, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import {
+    getAuth,
+    getAccessToken,
+    isTokenValid,
+    logout,
+} from "@/lib/auth";
 
 // adjust these imports if your project paths differ
 import { addToCart, updateCartItem, removeFromCart } from "@/lib/cart";
@@ -58,123 +64,29 @@ type SavedItem = {
 
 /* ---------------- Config / Auth helpers ---------------- */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
-const TOKEN_KEY = "accessToken";
-const REFRESH_KEY = "refreshToken";
-const CUSTOMER_KEY = "customerId";
-
-function getStoredAccessToken(): string | null {
-    if (typeof window === "undefined") return null;
-    try {
-        return localStorage.getItem(TOKEN_KEY);
-    } catch {
-        return null;
-    }
-}
-function getStoredRefreshToken(): string | null {
-    if (typeof window === "undefined") return null;
-    try {
-        return localStorage.getItem(REFRESH_KEY);
-    } catch {
-        return null;
-    }
-}
-function getStoredCustomerId(): string | null {
-    if (typeof window === "undefined") return null;
-    try {
-        return localStorage.getItem(CUSTOMER_KEY);
-    } catch {
-        return null;
-    }
-}
-function clearAuthStorage(): void {
-    if (typeof window === "undefined") return;
-    try {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(REFRESH_KEY);
-    } catch { }
-}
-function storeAuthTokens(payload: { accessToken: string; refreshToken?: string }) {
-    if (typeof window === "undefined") return;
-    try {
-        localStorage.setItem(TOKEN_KEY, payload.accessToken);
-        if (payload.refreshToken) localStorage.setItem(REFRESH_KEY, payload.refreshToken);
-    } catch { }
-}
-
-async function refreshAccessToken(): Promise<boolean> {
-    const refreshToken = getStoredRefreshToken();
-    if (!refreshToken) {
-        console.debug("[auth] no refresh token available");
-        return false;
-    }
-    try {
-        const res = await fetch(`${API_BASE}/auth/refresh`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken }),
-        });
-        if (!res.ok) {
-            console.warn("[auth] refresh endpoint returned non-ok:", res.status);
-            return false;
-        }
-        const data = await res.json().catch(() => null);
-        if (!data || !data.accessToken) {
-            console.warn("[auth] refresh response missing accessToken:", data);
-            return false;
-        }
-        storeAuthTokens({
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken ?? refreshToken,
-        });
-        return true;
-    } catch (err) {
-        console.error("[auth] refreshAccessToken error:", err);
-        return false;
-    }
-}
 
 async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-    let token = getStoredAccessToken();
-    const headers = new Headers(init?.headers ?? {});
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.get("Content-Type")) headers.set("Content-Type", "application/json");
+    const token = getAccessToken();
 
-    let res = await fetch(input, { ...init, headers });
-
-    if (res.status === 401) {
-        const refreshed = await refreshAccessToken();
-        if (refreshed) {
-            const retryToken = getStoredAccessToken();
-            const retryHeaders = new Headers(init?.headers ?? {});
-            if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`);
-            if (!retryHeaders.get("Content-Type")) retryHeaders.set("Content-Type", "application/json");
-            return fetch(input, { ...init, headers: retryHeaders });
-        } else {
-            clearAuthStorage();
-            throw new Error("Auth required");
-        }
+    if (!token) {
+        throw new Error("Auth required");
     }
 
-    if (res.status >= 400 && res.status < 500) {
-        try {
-            const maybeJson = await res.clone().json().catch(() => null);
-            const msg = ((maybeJson?.message || maybeJson?.error || "") + "").toString().toLowerCase();
-            if (msg.includes("invalid token") || msg.includes("token expired") || msg.includes("unauthorized")) {
-                const refreshed = await refreshAccessToken();
-                if (refreshed) {
-                    const retryToken = getStoredAccessToken();
-                    const retryHeaders = new Headers(init?.headers ?? {});
-                    if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`);
-                    if (!retryHeaders.get("Content-Type")) retryHeaders.set("Content-Type", "application/json");
-                    return fetch(input, { ...init, headers: retryHeaders });
-                } else {
-                    clearAuthStorage();
-                    throw new Error("Auth required");
-                }
-            }
-        } catch {
-            // ignore
-        }
+    const headers = new Headers(init?.headers ?? {});
+    headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.get("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+
+    const res = await fetch(input, {
+        ...init,
+        headers,
+        credentials: "include",
+    });
+
+    if (res.status === 401) {
+        logout("/login");
+        throw new Error("Auth required");
     }
 
     return res;
@@ -273,6 +185,10 @@ function extractErrorMessage(json: any, fallback = "Unknown error"): string {
     } catch {
         return fallback;
     }
+}
+
+function getStoredCustomerId(): string | null {
+    return getAuth()?.customerId ?? null;
 }
 
 /* ---------------- Saved API helpers (updated to throw ApiError) ---------------- */
@@ -452,12 +368,7 @@ export default function ClientCart() {
     const hasItems = totalItemsCount > 0;
 
     function redirectToLogin(): void {
-        clearAuthStorage();
-        try {
-            router.push("/login");
-        } catch {
-            window.location.href = "/login";
-        }
+        logout("/login");
     }
 
     function clampCartQuantities(inCart: Cart | null): Cart | null {
@@ -476,10 +387,26 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
+        if (!isTokenValid()) {
+            redirectToLogin();
+            return;
+        }
+
         fetchCart();
         fetchSavedItems();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
+        const onAuthChange = () => {
+            if (!isTokenValid()) {
+                redirectToLogin();
+                return;
+            }
+
+            fetchCart();
+            fetchSavedItems();
+        };
+
+        window.addEventListener("authChanged", onAuthChange);
+        return () => window.removeEventListener("authChanged", onAuthChange);
     }, []);
 
     async function fetchCart(): Promise<void> {
@@ -560,7 +487,7 @@ export default function ClientCart() {
     }
 
     async function saveItem(cartObject: Cart | null, item: CartItem): Promise<void> {
-        const cartId = cartObject?._id ?? cartObject?.cartId ?? getStoredCustomerId() ?? undefined;
+        const cartId = cartObject?._id ?? cartObject?.cartId;
         if (!cartId) {
             setError("Cart identifier is missing.");
             console.warn("saveItem aborted - no cart id", { cartObject, item });
@@ -597,7 +524,11 @@ export default function ClientCart() {
     }
 
     async function performDelete() {
-        const cartId = cart?._id ?? cart?.cartId ?? getStoredCustomerId();
+        const cartId = cart?._id ?? cart?.cartId;
+        if (!cartId) {
+            setError("Cart not initialized yet.");
+            return;
+        }
         if (!cartId) {
             setError("Cart identifier is missing.");
             console.warn("performDelete aborted - no cart id", { cart });
@@ -663,7 +594,11 @@ export default function ClientCart() {
 
         updateLocalItemById(itemId, { quantity: qty });
 
-        const cartId = cart?._id ?? cart?.cartId ?? getStoredCustomerId();
+        const cartId = cart?._id ?? cart?.cartId;
+        if (!cartId) {
+            setError("Cart not initialized yet.");
+            return;
+        }
         if (!cartId) {
             setError("Cart identifier missing - cannot update quantity.");
             return;
@@ -693,7 +628,11 @@ export default function ClientCart() {
         const item = localCart.sellItems![idx];
 
         const customerId = getStoredCustomerId();
-        const cartId = cart?._id ?? cart?.cartId ?? getStoredCustomerId();
+        const cartId = cart?._id ?? cart?.cartId;
+        if (!cartId) {
+            setError("Cart not initialized yet.");
+            return;
+        }
 
         if (!customerId) {
             redirectToLogin();
@@ -770,8 +709,18 @@ export default function ClientCart() {
 
     async function moveSavedToCart(saved: SavedItem) {
         const customerId = getStoredCustomerId();
-        const token = getStoredAccessToken();
-        const cartId = cart?._id ?? cart?.cartId ?? getStoredCustomerId();
+        const token = getAccessToken();
+
+        if (!token) {
+            redirectToLogin();
+            return;
+        }
+
+        const cartId = cart?._id ?? cart?.cartId;
+        if (!cartId) {
+            setError("Cart not initialized yet.");
+            return;
+        }
 
         if (!customerId) {
             redirectToLogin();
@@ -925,6 +874,10 @@ export default function ClientCart() {
                 ))}
             </div>
         );
+    }
+
+    if (!isTokenValid()) {
+        return null;
     }
 
     if (loading)
