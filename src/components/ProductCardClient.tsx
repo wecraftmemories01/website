@@ -6,7 +6,8 @@ import Link from 'next/link'
 import type { Product as ProdType } from '../types/product'
 import { ShoppingCart, Check, Heart, Tag } from 'lucide-react'
 import { addToCart } from '../lib/cart'
-import favouritesClient from '../lib/favouritesClient' // adjust path if needed
+import favouritesClient from '../lib/favouritesClient'
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 type Product = ProdType
 type Props = { product: Product; initialAdded?: boolean }
@@ -40,38 +41,44 @@ function formatPrice(n?: number | string | null) {
 /* -------------------- Component -------------------- */
 
 export default function ProductCardClient({ product, initialAdded = false }: Props) {
-    const [added, setAdded] = useState<boolean>(initialAdded)
-    const [wish, setWish] = useState(false)
-    const [mounted, setMounted] = useState(false)
-    const [imgError, setImgError] = useState(false)
-    const [loadingAdd, setLoadingAdd] = useState(false)
-    const [loadingWish, setLoadingWish] = useState(false)
-    const [syncingFromServer, setSyncingFromServer] = useState(false)
+    const [added, setAdded] = useState<boolean>(initialAdded);
+    const [wish, setWish] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const [imgError, setImgError] = useState(false);
+    const [loadingAdd, setLoadingAdd] = useState(false);
+    const [loadingWish, setLoadingWish] = useState(false);
+    const [syncingFromServer, setSyncingFromServer] = useState(false);
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    const [showRemoveFavModal, setShowRemoveFavModal] = useState(false);
+    const [errorModal, setErrorModal] = useState<{
+        open: boolean;
+        message: string;
+    }>({ open: false, message: '' });
 
     useEffect(() => {
-        setMounted(true)
+        setMounted(true);
         // initialize client once
-        favouritesClient.init()
+        favouritesClient.init();
 
         // when component mounts, ensure we load server favourites if authorized
         setSyncingFromServer(true)
-        favouritesClient.refreshFromServerIfAuthorized().finally(() => setSyncingFromServer(false))
+        favouritesClient.refreshFromServerIfAuthorized().finally(() => setSyncingFromServer(false));
 
         // subscribe to changes
         const onChange = () => {
             try {
-                setWish(favouritesClient.isFavourite(String(product._id)))
+                setWish(favouritesClient.isFavourite(String(product._id)));
             } catch {
                 // ignore
             }
         }
-        favouritesClient.subscribe(onChange)
+        favouritesClient.subscribe(onChange);
 
         // set initial
-        setWish(favouritesClient.isFavourite(String(product._id)))
+        setWish(favouritesClient.isFavourite(String(product._id)));
 
         return () => {
-            favouritesClient.unsubscribe(onChange)
+            favouritesClient.unsubscribe(onChange);
         }
     }, [product._id])
 
@@ -81,38 +88,38 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
             try {
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 // @ts-ignore
-                const m = typeof window !== 'undefined' ? window.__cartAddedMap : null
+                const m = typeof window !== 'undefined' ? window.__cartAddedMap : null;
                 if (m && String(product._id) in m) {
-                    setAdded(true)
+                    setAdded(true);
                 } else {
-                    setAdded(false)
+                    setAdded(false);
                 }
             } catch {
                 // ignore
             }
         }
-        window.addEventListener('cartFetched', onCartFetched as EventListener)
+        window.addEventListener('cartFetched', onCartFetched as EventListener);
         // immediate check
-        onCartFetched()
+        onCartFetched();
         return () => {
-            window.removeEventListener('cartFetched', onCartFetched as EventListener)
+            window.removeEventListener('cartFetched', onCartFetched as EventListener);
         }
     }, [product._id])
 
     const imageUrl = useMemo(() => {
         const img = String(product.productImage ?? '')
-        if (img === '' || imgError) return PLACEHOLDER
-        if (img.startsWith('http')) return img
-        return img.startsWith('/') ? img : `/${img}`
-    }, [product.productImage, imgError])
+        if (img === '' || imgError) return PLACEHOLDER;
+        if (img.startsWith('http')) return img;
+        return img.startsWith('/') ? img : `/${img}`;
+    }, [product.productImage, imgError]);
 
-    const actualPrice = product.latestSalePrice?.actualPrice
-    const discountedPrice = product.latestSalePrice?.discountedPrice
-    const stock = useMemo(() => formatStock(product.sellStockQuantity as unknown), [product.sellStockQuantity])
+    const actualPrice = product.latestSalePrice?.actualPrice;
+    const discountedPrice = product.latestSalePrice?.discountedPrice;
+    const stock = useMemo(() => formatStock(product.sellStockQuantity as unknown), [product.sellStockQuantity]);
 
-    const isOnSale = discountedPrice && actualPrice && Number(discountedPrice) < Number(actualPrice)
-    const isLowStock = !stock.isInStock ? false : /^(0|1|2|3)$/.test(stock.label.replace(/\D/g, ''))
-    const limitedBadge = String(stock.label).endsWith('+') || isLowStock
+    const isOnSale = discountedPrice && actualPrice && Number(discountedPrice) < Number(actualPrice);
+    const isLowStock = !stock.isInStock ? false : /^(0|1|2|3)$/.test(stock.label.replace(/\D/g, ''));
+    const limitedBadge = String(stock.label).endsWith('+') || isLowStock;
 
     const inferredType: 'SELL' | 'RENT' = useMemo(() => {
         const raw = String(product.sellStockQuantity ?? '')
@@ -124,167 +131,232 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
     const handleToggleWish = useCallback(
         async (e: React.MouseEvent) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (loadingWish) return
-            setLoadingWish(true)
+            e.preventDefault();
+            e.stopPropagation();
+            if (loadingWish) return;
 
+            const token = typeof window !== 'undefined'
+                ? localStorage.getItem('accessToken')
+                : null;
+
+            if (!token) {
+                setShowLoginModal(true);
+                return;
+            }
+
+            // If already wishlisted → ask confirmation
+            if (wish) {
+                setShowRemoveFavModal(true);
+                return;
+            }
+
+            // Add to favourites
             try {
-                const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-                if (!token) {
-                    // not authenticated - prompt login (replace with your login modal/navigation)
-                    alert('Please log in to manage favourites.')
-                    return
-                }
+                setLoadingWish(true);
+                setWish(true); // optimistic
 
-                // optimistic UI: flip immediately (optional)
-                const wasWish = wish
-                setWish(!wasWish)
+                const res = await favouritesClient.toggle(String(product._id));
 
-                const res = await favouritesClient.toggle(String(product._id))
                 if (!res.success) {
-                    // rollback
-                    setWish(wasWish)
+                    setWish(false); // rollback
+
                     if (res.message === 'not_authenticated' || String(res.message).includes('401')) {
-                        // session expired: clear and ask to login
-                        alert('Session expired. Please login again.')
-                    } else if (res.message === 'favourite_id_not_found') {
-                        // attempt safe refresh
-                        await favouritesClient.refreshFromServerIfAuthorized()
-                        alert('Could not remove favourite; please try again.')
+                        setShowLoginModal(true);
                     } else {
-                        alert(res.message || 'Could not update favourite.')
+                        setErrorModal({
+                            open: true,
+                            message: res.message || 'Could not update favourite.',
+                        });
                     }
                 }
             } catch (err) {
-                console.error('Favourite toggle error', err)
-                alert('Something went wrong while updating favourites.')
+                console.error('Favourite toggle error', err);
+                setWish(false);
+                setErrorModal({
+                    open: true,
+                    message: 'Something went wrong while updating favourites.',
+                });
             } finally {
-                setLoadingWish(false)
+                setLoadingWish(false);
             }
         },
-        [product._id, loadingWish, wish]
-    )
+        [product._id, wish, loadingWish]
+    );
 
     return (
-        <Link href={`/products/${product._id}`} className="block">
-            <article className="group bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 h-full flex flex-col">
-                <div className="relative w-full h-44 bg-gray-50">
-                    <Image
-                        src={imageUrl}
-                        alt={product.productName || 'Product'}
-                        fill
-                        sizes="(max-width: 640px) 100vw, 33vw"
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        onError={() => setImgError(true)}
-                        priority={false}
-                    />
+        <>
+            <Link href={`/products/${product._id}`} className="block">
+                <article className="group bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 h-full flex flex-col">
+                    <div className="relative w-full h-44 bg-gray-50">
+                        <Image
+                            src={imageUrl}
+                            alt={product.productName || 'Product'}
+                            fill
+                            sizes="(max-width: 640px) 100vw, 33vw"
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            onError={() => setImgError(true)}
+                            priority={false}
+                        />
 
-                    <div className="absolute top-2 left-2 flex gap-1 items-center">
-                        {isOnSale && (
-                            <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-600 text-[10px] font-medium px-2 py-0.5 rounded-md shadow-sm">
-                                <Tag size={12} /> Sale
-                            </span>
-                        )}
-                        {limitedBadge && (
-                            <span className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 text-[10px] font-medium px-2 py-0.5 rounded-md shadow-sm">
-                                Limited
-                            </span>
-                        )}
+                        <div className="absolute top-2 left-2 flex gap-1 items-center">
+                            {isOnSale && (
+                                <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-600 text-[10px] font-medium px-2 py-0.5 rounded-md shadow-sm">
+                                    <Tag size={12} /> Sale
+                                </span>
+                            )}
+                            {limitedBadge && (
+                                <span className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 text-[10px] font-medium px-2 py-0.5 rounded-md shadow-sm">
+                                    Limited
+                                </span>
+                            )}
+                        </div>
+
+                        <button
+                            aria-pressed={wish}
+                            onClick={handleToggleWish}
+                            disabled={loadingWish || syncingFromServer}
+                            className={`absolute top-2 right-2 p-2 rounded-md shadow-md transition-transform duration-150 focus:outline-none
+              ${wish ? 'bg-rose-500 hover:bg-rose-600 active:scale-95' : 'bg-white hover:bg-gray-100 active:scale-95'}`}
+                            title={loadingWish ? 'Working…' : wish ? 'Remove from favourites' : 'Add to favourites'}
+                        >
+                            <Heart
+                                size={16}
+                                className={`transition-colors duration-150 ${wish ? 'text-white' : 'text-slate-600'}`}
+                                fill={wish ? 'currentColor' : 'none'}
+                            />
+                        </button>
                     </div>
 
-                    <button
-                        aria-pressed={wish}
-                        onClick={handleToggleWish}
-                        disabled={loadingWish || syncingFromServer}
-                        className={`absolute top-2 right-2 p-2 rounded-md shadow-md transition-transform duration-150 focus:outline-none
-              ${wish ? 'bg-rose-500 hover:bg-rose-600 active:scale-95' : 'bg-white hover:bg-gray-100 active:scale-95'}`}
-                        title={loadingWish ? 'Working…' : wish ? 'Remove from favourites' : 'Add to favourites'}
-                    >
-                        <Heart
-                            size={16}
-                            className={`transition-colors duration-150 ${wish ? 'text-white' : 'text-slate-600'}`}
-                            fill={wish ? 'currentColor' : 'none'}
-                        />
-                    </button>
-                </div>
+                    <div className="p-2 flex-1 flex flex-col justify-between">
+                        <div>
+                            <h3 className="text-sm font-semibold text-slate-800 truncate" title={String(product.productName)}>
+                                {product.productName}
+                            </h3>
 
-                <div className="p-2 flex-1 flex flex-col justify-between">
-                    <div>
-                        <h3 className="text-sm font-semibold text-slate-800 truncate" title={String(product.productName)}>
-                            {product.productName}
-                        </h3>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                                <div>
+                                    {discountedPrice ? (
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-sm font-bold text-teal-600">₹{formatPrice(discountedPrice)}</span>
+                                            {actualPrice && <span className="text-xs text-slate-400 line-through">₹{formatPrice(actualPrice)}</span>}
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-slate-500">Price not available</span>
+                                    )}
+                                </div>
 
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                            <div>
-                                {discountedPrice ? (
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-sm font-bold text-teal-600">₹{formatPrice(discountedPrice)}</span>
-                                        {actualPrice && <span className="text-xs text-slate-400 line-through">₹{formatPrice(actualPrice)}</span>}
-                                    </div>
-                                ) : (
-                                    <span className="text-xs text-slate-500">Price not available</span>
-                                )}
-                            </div>
-
-                            {stock.isInStock && !added ? (
-                                <button
-                                    onClick={async (ev) => {
-                                        ev.preventDefault()
-                                        ev.stopPropagation()
-                                        if (added || loadingAdd) return
-                                        setLoadingAdd(true)
-                                        try {
-                                            const result = await addToCart(String(product._id), 1, inferredType)
-                                            if (result?.success) {
-                                                setAdded(true)
-                                                window.dispatchEvent(new Event('cartUpdated'))
-                                            } else {
-                                                alert(typeof result?.message === 'string' ? `Could not add to cart: ${result.message}` : 'Could not add to cart')
-                                            }
-                                        } catch (err) {
-                                            console.error('Add to cart unexpected error', err)
-                                            alert('Add to cart failed.')
-                                        } finally {
-                                            setLoadingAdd(false)
-                                        }
-                                    }}
-                                    aria-pressed={added}
-                                    disabled={loadingAdd}
-                                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium shadow-sm transition ${added ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
-                                >
-                                    {mounted ? (added ? <Check size={14} /> : <ShoppingCart size={14} />) : <span className="w-3 h-3" />}
-                                    {added ? 'Added' : loadingAdd ? 'Adding…' : 'Add'}
-                                </button>
-                            ) : (
-                                added ? (
+                                {stock.isInStock && !added ? (
                                     <button
-                                        aria-pressed
-                                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium shadow-sm transition bg-teal-600 text-white"
-                                        onClick={(ev) => {
+                                        onClick={async (ev) => {
                                             ev.preventDefault()
                                             ev.stopPropagation()
-                                            // optional: navigate to cart or show toast
+                                            if (added || loadingAdd) return
+                                            setLoadingAdd(true)
+                                            try {
+                                                const result = await addToCart(String(product._id), 1, inferredType)
+                                                if (result?.success) {
+                                                    setAdded(true)
+                                                    window.dispatchEvent(new Event('cartUpdated'))
+                                                } else {
+                                                    setErrorModal({
+                                                        open: true,
+                                                        message:
+                                                            typeof result?.message === 'string'
+                                                                ? `Could not add to cart: ${result.message}`
+                                                                : 'Could not add to cart',
+                                                    });
+                                                }
+                                            } catch (err) {
+                                                console.error('Add to cart unexpected error', err)
+                                                setErrorModal({
+                                                    open: true,
+                                                    message: 'Add to cart failed.',
+                                                });
+                                            } finally {
+                                                setLoadingAdd(false)
+                                            }
                                         }}
+                                        aria-pressed={added}
+                                        disabled={loadingAdd}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium shadow-sm transition ${added ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
                                     >
-                                        <Check size={14} /> Added
+                                        {mounted ? (added ? <Check size={14} /> : <ShoppingCart size={14} />) : <span className="w-3 h-3" />}
+                                        {added ? 'Added' : loadingAdd ? 'Adding…' : 'Add'}
                                     </button>
                                 ) : (
-                                    <div aria-hidden className="w-[68px] h-8" />
-                                )
+                                    added ? (
+                                        <button
+                                            aria-pressed
+                                            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium shadow-sm transition bg-teal-600 text-white"
+                                            onClick={(ev) => {
+                                                ev.preventDefault()
+                                                ev.stopPropagation()
+                                                // optional: navigate to cart or show toast
+                                            }}
+                                        >
+                                            <Check size={14} /> Added
+                                        </button>
+                                    ) : (
+                                        <div aria-hidden className="w-[68px] h-8" />
+                                    )
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-2 text-xs">
+                            {stock.isInStock ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 font-medium">● {stock.label} units left</span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-600 font-medium">● {stock.label === '0' ? 'Out of stock' : stock.label}</span>
                             )}
                         </div>
                     </div>
+                </article>
+            </Link>
 
-                    <div className="mt-2 text-xs">
-                        {stock.isInStock ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 font-medium">● {stock.label} units left</span>
-                        ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-600 font-medium">● {stock.label === '0' ? 'Out of stock' : stock.label}</span>
-                        )}
-                    </div>
-                </div>
-            </article>
-        </Link>
+
+            <ConfirmModal
+                open={showLoginModal}
+                title="Login required"
+                description="Please log in to manage your favourites."
+                confirmLabel="Go to Login"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                    setShowLoginModal(false);
+                    window.location.href = '/login';
+                }}
+                onCancel={() => setShowLoginModal(false)}
+            />
+
+            <ConfirmModal
+                open={showRemoveFavModal}
+                title="Remove from favourites?"
+                description="This product will be removed from your favourites."
+                confirmLabel="Remove"
+                cancelLabel="Keep"
+                loading={loadingWish}
+                onCancel={() => setShowRemoveFavModal(false)}
+                onConfirm={async () => {
+                    try {
+                        setLoadingWish(true);
+                        await favouritesClient.toggle(String(product._id));
+                        setWish(false);
+                    } finally {
+                        setLoadingWish(false);
+                        setShowRemoveFavModal(false);
+                    }
+                }}
+            />
+
+            <ConfirmModal
+                open={errorModal.open}
+                title="Something went wrong"
+                description={errorModal.message}
+                confirmLabel="Okay"
+                cancelLabel="Cancel"
+                onConfirm={() => setErrorModal({ open: false, message: '' })}
+                onCancel={() => setErrorModal({ open: false, message: '' })}
+            />
+        </>
     )
 }
