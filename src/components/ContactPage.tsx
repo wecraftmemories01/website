@@ -311,24 +311,24 @@ export default function ContactPage(): React.ReactElement {
                             </div>
 
                             <div className="mt-6 grid grid-cols-1 gap-3">
-                                <a href="mailto:hello@example.com" className="inline-flex items-center gap-3 bg-white/20 hover:bg-white/30 transition-colors px-4 py-3 rounded-lg">
+                                <a href="mailto:support@wecraftmemories.com" className="inline-flex items-center gap-3 bg-white/20 hover:bg-white/30 transition-colors px-4 py-3 rounded-lg">
                                     <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
                                         <path strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.5 5L18 8" />
                                         <path strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M21 8v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" />
                                     </svg>
-                                    <span className="text-sm font-medium">hello@example.com</span>
+                                    <span className="text-sm font-medium">support@wecraftmemories.com</span>
                                 </a>
 
                                 <a href="tel:+919876543210" className="inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors px-4 py-3 rounded-lg">
                                     <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
                                         <path strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 0 1 2-2h2.1a1 1 0 0 1 .9.56l1.2 2.4a1 1 0 0 1-.2 1.06L8.2 8.9a11 11 0 0 0 5.9 5.9l1.88-1.78a1 1 0 0 1 1.06-.2l2.4 1.2a1 1 0 0 1 .56.9V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z" />
                                     </svg>
-                                    <span className="text-sm font-medium">+91 98765 43210</span>
+                                    <span className="text-sm font-medium">+91 8097987769</span>
                                 </a>
                             </div>
 
                             <div className="mt-6 text-sm text-white/80">
-                                <strong>Support hours:</strong> Mon–Fri, 9:00 — 18:00 IST
+                                <strong>Support hours:</strong> Mon–Fri, 10:00 AM — 06:00 PM IST
                             </div>
                         </div>
 
@@ -339,9 +339,9 @@ export default function ContactPage(): React.ReactElement {
                                 <li>• Clear timelines & transparent pricing</li>
                                 <li>• Privacy-first — we don’t share your info</li>
                             </ul>
-                            <div className="mt-4">
+                            {/* <div className="mt-4">
                                 <a href="/faq" className="inline-flex items-center gap-2 text-indigo-600 font-medium hover:underline">Browse FAQs</a>
-                            </div>
+                            </div> */}
                         </div>
                     </aside>
 
