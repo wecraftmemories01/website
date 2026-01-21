@@ -263,43 +263,49 @@ export default function FooterWithInstagram({
                                 </div>
                             </div>
 
-                            <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
+                            {/* <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
                                 <span className="px-2 py-1 rounded bg-slate-100">Quality checked</span>
                                 <span className="px-2 py-1 rounded bg-slate-100">Secure checkout</span>
-                            </div>
+                            </div> */}
                         </div>
                     </div>
 
                     {/* center tiles */}
-                    <div className="lg:col-span-5 grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div className="bg-white rounded-lg p-3 flex flex-col items-start gap-2 ring-1 ring-slate-200">
-                            <div className="w-full h-28 rounded-md overflow-hidden bg-gray-100" />
-                            <Link href="/collections/diwali" className="text-sm font-semibold text-slate-800 hover:text-teal-600">Diwali Picks</Link>
-                            <p className="text-xs text-slate-500">Seasonal home decor & gift sets</p>
-                        </div>
+                    <div className="lg:col-span-5 flex items-center">
+                        <div className="relative w-full rounded-2xl overflow-hidden">
 
-                        <div className="bg-white rounded-lg p-3 flex flex-col items-start gap-2 ring-1 ring-slate-200">
-                            <div className="w-full h-28 rounded-md overflow-hidden bg-gray-100" />
-                            <Link href="/gifts/for-her" className="text-sm font-semibold text-slate-800 hover:text-teal-600">For Her</Link>
-                            <p className="text-xs text-slate-500">Handmade gift ideas</p>
-                        </div>
+                            {/* soft gradient background */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 via-transparent to-emerald-500/20" />
 
-                        <div className="hidden md:flex flex-col items-start gap-2 bg-white rounded-lg p-3 ring-1 ring-slate-200">
-                            <div className="w-full h-28 rounded-md overflow-hidden bg-gray-100" />
-                            <Link href="/gifts/for-kids" className="text-sm font-semibold text-slate-800 hover:text-teal-600">For Kids</Link>
-                            <p className="text-xs text-slate-500">Soft toys & decor</p>
-                        </div>
+                            {/* glass surface */}
+                            <div className="relative backdrop-blur-md bg-white/70 ring-1 ring-slate-200 rounded-2xl p-8">
 
-                        <div className="bg-white rounded-lg p-3 flex flex-col items-start gap-2 ring-1 ring-slate-200">
-                            <div className="w-full h-28 rounded-md overflow-hidden bg-gray-100" />
-                            <Link href="/products/planters" className="text-sm font-semibold text-slate-800 hover:text-teal-600">Planters</Link>
-                            <p className="text-xs text-slate-500">Woolen planters & pots</p>
-                        </div>
+                                <h3 className="text-xl font-semibold tracking-tight text-slate-900">
+                                    WeCraftMemories
+                                </h3>
 
-                        <div className="hidden md:flex flex-col items-start gap-2 bg-white rounded-lg p-3 ring-1 ring-slate-200">
-                            <div className="w-full h-28 rounded-md overflow-hidden bg-gray-100" />
-                            <Link href="/collections/bestsellers" className="text-sm font-semibold text-slate-800 hover:text-teal-600">Best Sellers</Link>
-                            <p className="text-xs text-slate-500">Customer favourites</p>
+                                <p className="mt-3 text-sm text-slate-600 leading-relaxed max-w-lg">
+                                    A design-led handmade brand creating thoughtful,
+                                    minimal pieces meant to be cherished.
+                                </p>
+
+                                {/* subtle value strip */}
+                                <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-600">
+                                    <span className="px-3 py-1 rounded-full bg-slate-100">
+                                        Handmade
+                                    </span>
+                                    <span className="px-3 py-1 rounded-full bg-slate-100">
+                                        Designed in-house
+                                    </span>
+                                    <span className="px-3 py-1 rounded-full bg-slate-100">
+                                        Quality checked
+                                    </span>
+                                    <span className="px-3 py-1 rounded-full bg-slate-100">
+                                        Secure checkout
+                                    </span>
+                                </div>
+
+                            </div>
                         </div>
                     </div>
 
@@ -330,14 +336,14 @@ export default function FooterWithInstagram({
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-teal-600 to-teal-500 rounded-lg p-4 text-white">
+                        {/* <div className="bg-gradient-to-br from-teal-600 to-teal-500 rounded-lg p-4 text-white">
                             <h4 className="text-base font-semibold">Need a custom gift?</h4>
                             <p className="text-sm text-white/90 mt-2">We make personalized orders. Message us and we'll craft something special.</p>
                             <div className="mt-3 flex gap-2">
                                 <Link href="/contact" className="px-3 py-2 bg-white text-teal-700 rounded-md text-sm font-medium">Contact</Link>
-                                {/* <button onClick={() => setModalOpen(true)} className="px-3 py-2 bg-white/20 rounded-md text-sm">Get 10% off</button> */}
+                                <button onClick={() => setModalOpen(true)} className="px-3 py-2 bg-white/20 rounded-md text-sm">Get 10% off</button>
                             </div>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
 
