@@ -38,7 +38,7 @@ export default function ProfileOrderPage({ params }: Props) {
 
     return (
         <div className="min-h-screen p-6 md:p-8 bg-gradient-to-b from-[#fbfdff] to-white">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-6xl mx-auto">
                 <OrderDetails customerId={customerId} orderId={orderId} />
             </div>
         </div>

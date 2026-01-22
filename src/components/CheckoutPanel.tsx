@@ -33,6 +33,7 @@ function isValidIndianPincode(pin: string) {
 export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
     const router = useRouter();
     const isRefreshingRef = useRef(false);
+    const placeOrderLockRef = useRef(false);
     const [checkingAuth, setCheckingAuth] = useState(true);
 
     const [addresses, setAddresses] = useState<Address[]>([]);
@@ -870,42 +871,48 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }, [cartLoaded, checkingAuth, creating, cart.length]);
 
     function placeOrder() {
-        const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
+        // 🔒 HARD LOCK (instant)
+        if (placeOrderLockRef.current) return;
+        placeOrderLockRef.current = true;
+
+        const cust = typeof window !== "undefined"
+            ? localStorage.getItem(CUSTOMER_KEY)
+            : null;
+
         if (!cust) {
+            placeOrderLockRef.current = false;
             router.replace("/login");
             return;
         }
 
         if (!selectedAddressId) {
+            placeOrderLockRef.current = false;
             return alert("Please select or add a delivery address");
         }
 
         const addr = addresses.find((a) => a.id === selectedAddressId);
-        if (!addr) return alert("Selected address not found");
+        if (!addr) {
+            placeOrderLockRef.current = false;
+            return alert("Selected address not found");
+        }
 
         const svc = serviceMap[addr.pincode];
-        if (svc?.checking) return alert("Checking pincode serviceability — please wait a moment");
-        if (svc && svc.prepaid === false) return alert("Selected address is not serviceable for prepaid orders. Choose another address.");
+        if (svc?.checking) {
+            placeOrderLockRef.current = false;
+            return alert("Checking pincode serviceability — please wait");
+        }
 
-        if (!svc || svc.prepaid === null) {
-            (async () => {
-                try {
-                    const res = await fetchPincodeServiceability(addr.pincode);
-                    if (!res.ok || !res.prepaid) {
-                        setServiceMap((m) => ({ ...m, [addr.pincode]: { checking: false, prepaid: !!res.prepaid } }));
-                        return alert("Selected address is not serviceable for prepaid orders.");
-                    }
-                    setServiceMap((m) => ({ ...m, [addr.pincode]: { checking: false, prepaid: true } }));
-                    await createOrderAndRedirect(cust, addr);
-                } catch (err) {
-                    alert("Unable to verify pincode serviceability. Please try again.");
-                }
-            })();
-            return;
+        if (svc && svc.prepaid === false) {
+            placeOrderLockRef.current = false;
+            return alert("Selected address is not serviceable for prepaid orders.");
         }
 
         (async () => {
-            await createOrderAndRedirect(cust, addr);
+            try {
+                await createOrderAndRedirect(cust, addr);
+            } catch {
+                placeOrderLockRef.current = false;
+            }
         })();
     }
 
@@ -1048,7 +1055,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             console.error("[createOrder] network error", err);
             router.replace(`/order-failed?reason=${encodeURIComponent(String(err?.message ?? err ?? "Network error"))}`);
         } finally {
-            if (mountedRef.current) setCreating(false);
+            if (!mountedRef.current) return;
+
+            // Stop loading spinner
+            setCreating(false);
         }
     }
 

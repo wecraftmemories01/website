@@ -444,10 +444,14 @@ export default function OrderDetails({
                                     <div className="text-lg font-semibold">{currency(totalPaid)}</div>
                                 </div>
 
-                                <div className="p-3 rounded-lg bg-slate-50 border">
-                                    <div className="text-xs text-slate-500">Balance</div>
-                                    <div className={`text-lg font-semibold ${balance > 0 ? "text-rose-600" : "text-emerald-700"}`}>{currency(balance)}</div>
-                                </div>
+                                {balance > 0 && (
+                                    <div className="p-3 rounded-lg bg-slate-50 border">
+                                        <div className="text-xs text-slate-500">Balance</div>
+                                        <div className="text-lg font-semibold text-rose-600">
+                                            {currency(balance)}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="p-3 rounded-lg bg-slate-50 border">
                                     <div className="text-xs text-slate-500">Payment Method</div>
