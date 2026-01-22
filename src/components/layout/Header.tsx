@@ -15,6 +15,9 @@ import {
     ChevronDown,
     Tag,
     Sparkles,
+    House,
+    Store,
+    Headset,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
@@ -445,12 +448,13 @@ export default function Header({
 
                     {/* center nav */}
                     <nav className="hidden md:flex items-center gap-6">
-                        <Link href="/products" className="text-sm font-medium text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>
-                            Shop
+                        <Link href="/" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700 transition"><House size={14} /> Home</Link>
+                        <Link href="/products" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700 transition" style={{ ["--accent" as any]: ACCENT }}>
+                            <Store size={14} /> Shop
                         </Link>
 
                         {/* Collections trigger */}
-                        <div className="relative">
+                        {/* <div className="relative">
                             {/* <button
                                 ref={triggerRef}
                                 onClick={() => setCollectionsOpen((s) => !s)}
@@ -469,7 +473,7 @@ export default function Header({
                                 aria-expanded={collectionsOpen}
                             >
                                 Collections <ChevronDown size={14} />
-                            </button> */}
+                            </button> 
 
                             <AnimatePresence>
                                 {collectionsOpen && mounted && ( // only mount the heavy panel on client to avoid SSR mismatch
@@ -493,7 +497,7 @@ export default function Header({
                                             className="w-[94vw] max-w-[1100px] bg-white rounded-2xl border shadow-xl"
                                             style={{ maxHeight: "calc(100vh - 8rem)", overflow: "hidden" }}
                                         >
-                                            {/* panel header */}
+                                            {/* panel header 
                                             <div className="px-5 py-4 flex items-center justify-between border-b">
                                                 <div>
                                                     <div className="text-lg font-semibold" style={{ color: ACCENT }}>Collections</div>
@@ -507,9 +511,9 @@ export default function Header({
                                                 </div>
                                             </div>
 
-                                            {/* body... (kept same as your original) */}
+                                            {/* body... (kept same as your original)
                                             <div className="flex gap-4 p-4" style={{ minHeight: 220 }}>
-                                                {/* left column */}
+                                                {/* left column 
                                                 <div className="w-64 border-r pr-4">
                                                     <div className="flex items-center justify-between mb-3">
                                                         <div className="text-sm font-medium">Categories</div>
@@ -546,7 +550,7 @@ export default function Header({
                                                     </div>
                                                 </div>
 
-                                                {/* right content */}
+                                                {/* right content
                                                 <div className="flex-1 grid grid-cols-3 gap-4 items-start">
                                                     <div className="col-span-1 rounded-md overflow-hidden border" style={{ minHeight: 120 }}>
                                                         <div className="p-4">
@@ -596,7 +600,7 @@ export default function Header({
                                                 </div>
                                             </div>
 
-                                            {/* footer */}
+                                            {/* footer
                                             <div className="px-5 py-3 border-t flex items-center justify-between">
                                                 <div className="text-sm text-slate-500">Navigate categories — quick preview mode.</div>
                                                 <div className="flex items-center gap-2">
@@ -612,12 +616,9 @@ export default function Header({
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-                        </div>
+                        </div>*/}
 
-                        <Link href="/coming_soon" className="flex items-center gap-1 text-sm font-medium text-rose-600 hover:text-rose-700 transition"><Tag size={14} /> Sale</Link>
-                        <Link href="/coming_soon" className="flex items-center gap-1 text-sm font-medium text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>
-                            <Sparkles size={14} /> Inspiration
-                        </Link>
+                        <Link href="/contact" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700 transition"><Headset size={14} /> Contact</Link>
                     </nav>
 
                     {/* right controls */}
