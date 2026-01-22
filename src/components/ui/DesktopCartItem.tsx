@@ -21,7 +21,7 @@ export default function DesktopCartItem({
     formatCurrency,
 }: Props) {
     return (
-        <div className="grid grid-cols-[80px_1fr_120px_160px_120px_60px] items-center px-4 py-4 border-t">
+        <div className="grid grid-cols-[80px_1fr_120px_160px_120px_60px] items-center px-4 py-4 border-t border-gray-200">
             {/* Image */}
             <Image
                 src={item.imagePath ?? "/placeholder-80x80.png"}
