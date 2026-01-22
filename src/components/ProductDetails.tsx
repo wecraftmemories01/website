@@ -953,12 +953,12 @@ export default function ProductClient({ product }: { product: Product }) {
                                 onClick={toggleFavourite}
                                 disabled={favLoading}
                                 className={`mt-4 w-full py-2 rounded-lg border transition
-        ${isFavourite
+                                    ${isFavourite
                                         ? "bg-[#E94E4E]/10 text-[#E94E4E] border-[#E94E4E]"
                                         : "text-gray-700 hover:bg-gray-50"
                                     }
-        ${favLoading ? "opacity-60 cursor-not-allowed" : ""}
-    `}
+                                        ${favLoading ? "opacity-60 cursor-not-allowed" : ""}
+                                `}
                             >
                                 {favLoading
                                     ? "Please wait..."
@@ -1000,7 +1000,7 @@ export default function ProductClient({ product }: { product: Product }) {
 
                         <div className="bg-white rounded-xl p-4 shadow-sm">
                             <div className="text-sm font-semibold text-gray-700 mb-2">Need help?</div>
-                            <div className="text-sm text-gray-600">Chat with us or call <span className="font-medium">+91-XXXXXXXXXX</span></div>
+                            <div className="text-sm text-gray-600">Chat with us or call <span className="font-medium">+91-8097987769</span></div>
                         </div>
                     </aside>
                 </div>
