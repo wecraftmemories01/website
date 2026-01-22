@@ -8,9 +8,9 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     getAuth,
-    getAccessToken,
     isTokenValid,
     logout,
+    authFetch,
 } from "@/lib/auth";
 
 // adjust these imports if your project paths differ
@@ -64,33 +64,6 @@ type SavedItem = {
 
 /* ---------------- Config / Auth helpers ---------------- */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
-
-async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-    const token = getAccessToken();
-
-    if (!token) {
-        throw new Error("Auth required");
-    }
-
-    const headers = new Headers(init?.headers ?? {});
-    headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.get("Content-Type")) {
-        headers.set("Content-Type", "application/json");
-    }
-
-    const res = await fetch(input, {
-        ...init,
-        headers,
-        credentials: "include",
-    });
-
-    if (res.status === 401) {
-        logout("/login");
-        throw new Error("Auth required");
-    }
-
-    return res;
-}
 
 /* ---------------- Helpers ---------------- */
 function safeNumber(v: any): number | null {
@@ -709,12 +682,6 @@ export default function ClientCart() {
 
     async function moveSavedToCart(saved: SavedItem) {
         const customerId = getStoredCustomerId();
-        const token = getAccessToken();
-
-        if (!token) {
-            redirectToLogin();
-            return;
-        }
 
         const cartId = cart?._id ?? cart?.cartId;
         if (!cartId) {
@@ -741,14 +708,13 @@ export default function ClientCart() {
                 quantity: 1,
             };
 
-            const res = await fetch(`${API_BASE}/cart/${cartId}/move_to_cart`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
-            });
+            const res = await authFetch(
+                `${API_BASE}/cart/${cartId}/move_to_cart`,
+                {
+                    method: "PUT",
+                    body: JSON.stringify(body),
+                }
+            );
 
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || data?.message || "Failed to move item to cart");

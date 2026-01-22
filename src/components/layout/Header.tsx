@@ -434,7 +434,7 @@ export default function Header({
 
                         {/* Collections trigger */}
                         <div className="relative">
-                            <button
+                            {/* <button
                                 ref={triggerRef}
                                 onClick={() => setCollectionsOpen((s) => !s)}
                                 onMouseEnter={() => {
@@ -452,7 +452,7 @@ export default function Header({
                                 aria-expanded={collectionsOpen}
                             >
                                 Collections <ChevronDown size={14} />
-                            </button>
+                            </button> */}
 
                             <AnimatePresence>
                                 {collectionsOpen && mounted && ( // only mount the heavy panel on client to avoid SSR mismatch

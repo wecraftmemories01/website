@@ -79,12 +79,14 @@ export function isTokenValid(): boolean {
 }
 
 /** Clear stored auth data and notify listeners */
-export function logout(redirectTo: string | null = "/login") {
+export function logout(redirectTo = "/login") {
     try {
         localStorage.removeItem("auth");
-        localStorage.removeItem("customerId");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
         localStorage.removeItem("rememberedUser");
         window.dispatchEvent(new Event("authChanged"));
+        window.location.href = redirectTo;
     } catch { }
 }
 
@@ -137,30 +139,43 @@ export default function LoginPage() {
      * Ensures token expiry normalization.
      */
     const persistAuth = (data: AuthShape | null) => {
-        if (!data) return;
+        if (!data || !data.token?.accessToken) return;
+
         try {
-            if (data.token && typeof data.token === "object") {
-                const t = { ...data.token };
+            const now = Date.now();
+            const expiresIn = data.token.expiresIn ?? 0;
 
-                if (!t.tokenExpiresAt && typeof t.expiresIn === "number") {
-                    const obtained = new Date();
-                    t.tokenObtainedAt = obtained.toISOString();
-                    t.tokenExpiresAt = new Date(
-                        Date.now() + t.expiresIn * 1000
-                    ).toISOString();
-                } else if (t.tokenExpiresAt && !t.tokenObtainedAt) {
-                    t.tokenObtainedAt = new Date().toISOString();
-                }
+            const tokenObtainedAt = new Date(now).toISOString();
+            const tokenExpiresAt = expiresIn
+                ? new Date(now + expiresIn * 1000).toISOString()
+                : undefined;
 
-                data = { ...data, token: t };
+            // 1️⃣ store identity / metadata only
+            localStorage.setItem(
+                "auth",
+                JSON.stringify({
+                    customerId: data.customerId,
+                    ack: data.ack,
+                    message: data.message,
+                    token: {
+                        tokenType: data.token.tokenType ?? "Bearer",
+                        expiresIn,
+                        tokenObtainedAt,
+                        tokenExpiresAt,
+                    },
+                })
+            );
+
+            // 2️⃣ store tokens separately
+            localStorage.setItem("accessToken", data.token.accessToken);
+
+            if (data.token.refreshToken) {
+                localStorage.setItem("refreshToken", data.token.refreshToken);
             }
 
-            localStorage.setItem("auth", JSON.stringify(data));
-
-            if (data.customerId) {
-                localStorage.setItem("customerId", data.customerId);
-            }
-        } catch { }
+        } catch (err) {
+            console.error("persistAuth failed:", err);
+        }
     };
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
