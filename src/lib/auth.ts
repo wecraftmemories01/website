@@ -1,11 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
 
 const TOKEN_KEY = "accessToken";
 const REFRESH_KEY = "refreshToken";
 const AUTH_KEY = "auth";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
 
-/* ---------- legacy auth object helpers ---------- */
+/* ---------- types ---------- */
 export type AuthShape = {
     customerId?: string;
     token?: {
@@ -17,6 +17,7 @@ export type AuthShape = {
     };
 };
 
+/* ---------- storage helpers ---------- */
 export function getAuth(): AuthShape | null {
     if (typeof window === "undefined") return null;
     try {
@@ -27,54 +28,17 @@ export function getAuth(): AuthShape | null {
     }
 }
 
-export function isTokenValid(): boolean {
-    if (typeof window === "undefined") return false;
-
-    // 1️⃣ Access token existence
-    const accessToken = localStorage.getItem("accessToken");
-    if (!accessToken) return false;
-
-    // 2️⃣ Expiry still comes from auth metadata
-    const auth = getAuth();
-    const t = auth?.token;
-    if (!t) return true; // no expiry info → assume valid
-
-    if (t.tokenExpiresAt) {
-        const exp = Date.parse(t.tokenExpiresAt);
-        return !Number.isNaN(exp) && Date.now() < exp - 2000;
-    }
-
-    if (typeof t.expiresIn === "number" && t.tokenObtainedAt) {
-        const obt = Date.parse(t.tokenObtainedAt);
-        return !Number.isNaN(obt) &&
-            Date.now() < obt + t.expiresIn * 1000 - 2000;
-    }
-
-    return true;
-}
-
-export function logout(redirectTo = "/login") {
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    window.dispatchEvent(new Event("authChanged"));
-    window.location.href = redirectTo;
-}
-
-/* ---------- token helpers ---------- */
 export function getStoredAccessToken(): string | null {
     if (typeof window === "undefined") return null;
 
-    // 1️⃣ Preferred (new)
-    const direct = localStorage.getItem("accessToken");
+    // preferred
+    const direct = localStorage.getItem(TOKEN_KEY);
     if (direct) return direct;
 
-    // 2️⃣ Backward compatibility (current login flow)
+    // fallback
     try {
-        const raw = localStorage.getItem("auth");
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        return parsed?.token?.accessToken ?? null;
+        const auth = getAuth();
+        return auth?.token?.accessToken ?? null;
     } catch {
         return null;
     }
@@ -88,6 +52,16 @@ export function getStoredRefreshToken(): string | null {
 function storeTokens(accessToken: string, refreshToken?: string) {
     localStorage.setItem(TOKEN_KEY, accessToken);
     if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+}
+
+/* ---------- logout ---------- */
+export function logout(redirectTo = "/login") {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(AUTH_KEY);
+
+    window.dispatchEvent(new Event("authChanged"));
+    window.location.href = redirectTo;
 }
 
 /* ---------- refresh ---------- */
@@ -114,12 +88,13 @@ async function refreshAccessToken(): Promise<boolean> {
     }
 }
 
-/* ---------- authFetch ---------- */
+/* ---------- authFetch (ONLY ONE IN APP) ---------- */
 export async function authFetch(
     input: RequestInfo,
     init: RequestInit = {}
 ): Promise<Response> {
     let token = getStoredAccessToken();
+
     const headers = new Headers(init.headers ?? {});
     if (token) headers.set("Authorization", `Bearer ${token}`);
     if (!headers.get("Content-Type"))
@@ -140,7 +115,7 @@ export async function authFetch(
         if (!retryHeaders.get("Content-Type"))
             retryHeaders.set("Content-Type", "application/json");
 
-        return fetch(input, { ...init, headers: retryHeaders });
+        res = await fetch(input, { ...init, headers: retryHeaders });
     }
 
     return res;

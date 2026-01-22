@@ -4,6 +4,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { addToCart } from "../lib/cart";
+import {
+    addFavouriteAPI,
+    fetchFavouritesAPI,
+    removeFavouriteAPI,
+} from "../lib/favourites";
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
@@ -466,11 +471,13 @@ export default function ProductClient({ product }: { product: Product }) {
     const [selectedImage, setSelectedImage] = useState<string | null>(() => images[0] ?? null);
 
     const [quantity, setQuantity] = useState<number>(1);
-    const [wish, setWish] = useState(false);
     const [added, setAdded] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const [lightbox, setLightbox] = useState(false);
     const [adding, setAdding] = useState(false); // indicates API call in progress
+    const [isFavourite, setIsFavourite] = useState(false);
+    const [favouriteId, setFavouriteId] = useState<string | null>(null);
+    const [favLoading, setFavLoading] = useState(false);
 
     // NEW: show thumbnails only after main image is loaded or after a small timeout
     const [thumbsVisible, setThumbsVisible] = useState(false);
@@ -521,6 +528,88 @@ export default function ProductClient({ product }: { product: Product }) {
             localStorage.setItem(key, String(Math.max(0, cur + by)));
         } catch (e) {
             console.warn('incrementLocalCartCount failed', e);
+        }
+    }
+
+    useEffect(() => {
+        let active = true;
+
+        async function checkFavourite() {
+            try {
+                const customerId = getStoredCustomerId();
+                const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+                if (!customerId) {
+                    setIsFavourite(false);
+                    setFavouriteId(null);
+                    return;
+                }
+
+                const res = await fetchFavouritesAPI(customerId, undefined, token);
+                if (!active || !res.success) return;
+
+                const found = res.data.find(
+                    (f: any) => String(f.productId) === String(_id)
+                );
+
+                if (found) {
+                    setIsFavourite(true);
+                    setFavouriteId(found.favouriteId);
+                } else {
+                    setIsFavourite(false);
+                    setFavouriteId(null);
+                }
+            } catch (err) {
+                console.warn("Favourite check failed", err);
+            }
+        }
+
+        checkFavourite();
+
+        return () => {
+            active = false;
+        };
+    }, [_id]);
+
+    async function toggleFavourite() {
+        if (favLoading) return;
+
+        const customerId = getStoredCustomerId();
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+        if (!customerId || !token) {
+            setToast("Please login to add favourites");
+            router.push("/login");
+            return;
+        }
+
+        setFavLoading(true);
+
+        try {
+            if (!isFavourite) {
+                const res = await addFavouriteAPI(customerId, _id, token);
+                if (!res.success) {
+                    setToast(res.message ?? "Failed to add favourite");
+                    return;
+                }
+
+                setIsFavourite(true);
+                setToast("Added to favourites");
+            } else if (favouriteId) {
+                const res = await removeFavouriteAPI(favouriteId, token);
+                if (!res.success) {
+                    setToast(res.message ?? "Failed to remove favourite");
+                    return;
+                }
+
+                setIsFavourite(false);
+                setFavouriteId(null);
+                setToast("Removed from favourites");
+            }
+        } catch (err) {
+            setToast("Something went wrong");
+        } finally {
+            setFavLoading(false);
         }
     }
 
@@ -860,8 +949,23 @@ export default function ProductClient({ product }: { product: Product }) {
                                 </button>
                             </div>
 
-                            <button onClick={() => { setWish(w => !w); setToast(wish ? "Removed from wishlist" : "Added to wishlist"); }} className={`mt-4 w-full py-2 rounded-lg border ${wish ? 'bg-[#F58634]/10 text-[#F58634]' : 'text-gray-700'}`}>
-                                {wish ? '♥ Wishlisted' : '♡ Add to Wishlist'}
+                            <button
+                                onClick={toggleFavourite}
+                                disabled={favLoading}
+                                className={`mt-4 w-full py-2 rounded-lg border transition
+        ${isFavourite
+                                        ? "bg-[#E94E4E]/10 text-[#E94E4E] border-[#E94E4E]"
+                                        : "text-gray-700 hover:bg-gray-50"
+                                    }
+        ${favLoading ? "opacity-60 cursor-not-allowed" : ""}
+    `}
+                            >
+                                {favLoading
+                                    ? "Please wait..."
+                                    : isFavourite
+                                        ? "♥ Added to Favourites"
+                                        : "♡ Add to Favourites"
+                                }
                             </button>
 
                             <div className="mt-4 flex items-center justify-between text-sm text-gray-600">

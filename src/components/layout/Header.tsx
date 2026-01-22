@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
@@ -80,6 +81,7 @@ export default function Header({
 }: HeaderProps): React.ReactElement {
     // split states: mobile menu vs account dropdown
     const [mobileOpen, setMobileOpen] = useState(false); // mobile menu
+    const [mobileCollectionsOpen, setMobileCollectionsOpen] = useState(false);
     const [accountOpen, setAccountOpen] = useState(false); // account dropdown
     const [collectionsOpen, setCollectionsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -87,6 +89,7 @@ export default function Header({
     const [mounted, setMounted] = useState(false);
     const [cartCount, setCartCount] = useState<number>(0);
     const [cartLoading, setCartLoading] = useState<boolean>(false);
+    const [portalReady, setPortalReady] = useState(false);
 
     const router = useRouter();
 
@@ -104,6 +107,10 @@ export default function Header({
     const hoverInsideRef = useRef(false);
     const closeTimerRef = useRef<number | null>(null);
     const CLOSE_DELAY = 200; // ms
+
+    useEffect(() => {
+        setPortalReady(true);
+    }, []);
 
     function scheduleCloseCollections() {
         if (closeTimerRef.current && typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
@@ -409,6 +416,16 @@ export default function Header({
         }
     };
 
+    useEffect(() => {
+        if (mobileOpen) {
+            document.body.style.overflow = "hidden";
+            document.body.style.touchAction = "none";
+        } else {
+            document.body.style.overflow = "";
+            document.body.style.touchAction = "";
+        }
+    }, [mobileOpen]);
+
     return (
         <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100">
             <div className={containerClass}>
@@ -706,58 +723,155 @@ export default function Header({
                 </div>
             </div>
 
-            {/* mobile menu */}
-            <AnimatePresence>
-                {mobileOpen && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="md:hidden px-4 pb-4 bg-white border-t">
-                        <div className="flex flex-col gap-3 text-slate-800">
-                            <Link href="/products" className="py-2">Shop</Link>
-                            <button onClick={() => setCollectionsOpen(s => !s)} className="py-2 text-left">Collections</button>
-                            <Link href="/gifts" className="py-2">Gifts</Link>
+            {/* ================= MOBILE DRAWER (PORTAL) ================= */}
+            {portalReady &&
+                createPortal(
+                    <AnimatePresence>
+                        {mobileOpen && (
+                            <>
+                                {/* BACKDROP */}
+                                <motion.div
+                                    className="fixed inset-0 bg-black/50 z-[1000]"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setMobileOpen(false)}
+                                />
 
-                            {/* Match mobile hrefs with desktop to avoid hydration mismatches */}
-                            <Link href="/coming_soon" className="py-2 text-rose-600 font-semibold">Sale</Link>
-                            <Link href="/coming_soon" className="py-2">Inspiration</Link>
+                                {/* DRAWER */}
+                                <motion.aside
+                                    initial={{ x: "-100%" }}
+                                    animate={{ x: 0 }}
+                                    exit={{ x: "-100%" }}
+                                    transition={{ type: "spring", stiffness: 260, damping: 28 }}
+                                    className="fixed top-0 left-0 h-full w-[85%] max-w-sm bg-white z-[1001] flex flex-col"
+                                >
+                                    {/* HEADER */}
+                                    <div className="h-14 px-4 flex items-center justify-between border-b">
+                                        <span className="text-lg font-semibold">Menu</span>
+                                        <button onClick={() => setMobileOpen(false)}>
+                                            <X size={20} />
+                                        </button>
+                                    </div>
 
-                            <hr className="my-2 border-slate-200" />
+                                    {/* SEARCH */}
+                                    <div className="px-4 py-3">
+                                        <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2">
+                                            <Search size={16} />
+                                            <input
+                                                value={query}
+                                                onChange={(e) => setQuery(e.target.value)}
+                                                onKeyDown={(e) => e.key === "Enter" && doHeaderSearch(query)}
+                                                placeholder="Search products"
+                                                className="bg-transparent outline-none w-full text-sm"
+                                            />
+                                        </div>
+                                    </div>
 
-                            <Link href="/cart" className="py-2 flex items-center gap-2">
-                                <ShoppingCart size={16} />
-                                <span>View Cart</span>
-                                <span className="ml-1 inline-block w-6 text-center text-sm font-semibold">{mounted ? String(cartCount) : ""}</span>
-                            </Link>
+                                    {/* NAV */}
+                                    <nav className="px-4 space-y-1">
+                                        <Link
+                                            href="/products"
+                                            onClick={() => setMobileOpen(false)}
+                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
+                                        >
+                                            Shop
+                                        </Link>
 
-                            <div className="py-2">
-                                <div className="text-sm font-medium pb-1">Delivery Pincode</div>
-                                {/* DeliveryPincodeInput (client-only) - placeholder for SSR */}
-                                {!mounted ? (
-                                    <div aria-hidden className="w-full h-10 rounded-md bg-transparent" />
-                                ) : (
-                                    <DeliveryPincodeInput />
-                                )}
-                            </div>
+                                        {/* COLLECTIONS */}
+                                        <button
+                                            onClick={() => setMobileCollectionsOpen((v) => !v)}
+                                            className="w-full flex items-center justify-between px-3 py-3 rounded-xl hover:bg-slate-100"
+                                        >
+                                            Collections
+                                            <ChevronDown
+                                                size={16}
+                                                className={mobileCollectionsOpen ? "rotate-180" : ""}
+                                            />
+                                        </button>
 
-                            <div className="flex gap-2">
-                                {!mounted ? (
-                                    <div className="py-2 px-3 rounded-md w-full text-center bg-slate-100">Checking…</div>
-                                ) : !authReady ? (
-                                    <div className="py-2 px-3 rounded-md w-full text-center bg-slate-100">Checking…</div>
-                                ) : !isAuthed ? (
-                                    <>
-                                        <Link href="/login" className="py-2 px-3 rounded-md w-full text-center bg-slate-100">Login</Link>
-                                        <Link href="/register" className="py-2 px-3 rounded-md w-full text-center" style={{ background: ACCENT, color: "#fff" }}>Register</Link>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Link href="/dashboard" className="py-2 px-3 rounded-md w-full text-center bg-slate-100">Dashboard</Link>
-                                        <button onClick={handleLogout} className="py-2 px-3 rounded-md w-full text-center bg-rose-600 text-white font-semibold">Logout</button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </motion.div>
+                                        <AnimatePresence>
+                                            {mobileCollectionsOpen && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: "auto", opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="pl-4"
+                                                >
+                                                    {loadingCats ? (
+                                                        <div className="py-2 text-sm text-slate-500">Loading…</div>
+                                                    ) : (
+                                                        categories.map((cat) => (
+                                                            <Link
+                                                                key={cat._id}
+                                                                href={`/products?category=${cat._id}`}
+                                                                onClick={() => setMobileOpen(false)}
+                                                                className="block px-3 py-2 text-sm rounded-lg hover:bg-slate-100"
+                                                            >
+                                                                {cat.publicName}
+                                                            </Link>
+                                                        ))
+                                                    )}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+
+                                        <Link
+                                            href="/coming_soon"
+                                            onClick={() => setMobileOpen(false)}
+                                            className="block px-3 py-3 rounded-xl text-rose-600 hover:bg-slate-100"
+                                        >
+                                            Sale
+                                        </Link>
+
+                                        <Link
+                                            href="/coming_soon"
+                                            onClick={() => setMobileOpen(false)}
+                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
+                                        >
+                                            Inspiration
+                                        </Link>
+                                    </nav>
+
+                                    {/* PINCODE */}
+                                    <div className="px-4 py-4 border-t">
+                                        <div className="text-sm font-medium mb-2">Delivery Pincode</div>
+                                        {mounted ? <DeliveryPincodeInput /> : <div className="h-10 bg-slate-100 rounded" />}
+                                    </div>
+
+                                    {/* FOOTER */}
+                                    <div className="mt-auto px-4 py-4 border-t">
+                                        {!authReady ? (
+                                            <div className="text-center py-3 bg-slate-100 rounded-xl">
+                                                Checking…
+                                            </div>
+                                        ) : !isAuthed ? (
+                                            <Link
+                                                href="/login"
+                                                onClick={() => setMobileOpen(false)}
+                                                className="block text-center py-3 rounded-xl text-white font-semibold"
+                                                style={{ background: ACCENT }}
+                                            >
+                                                Login / Register
+                                            </Link>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    localStorage.clear();
+                                                    window.location.href = "/";
+                                                }}
+                                                className="w-full py-3 rounded-xl bg-rose-600 text-white font-semibold"
+                                            >
+                                                Logout
+                                            </button>
+                                        )}
+                                    </div>
+                                </motion.aside>
+                            </>
+                        )}
+                    </AnimatePresence>,
+                    document.body
                 )}
-            </AnimatePresence>
         </header>
     );
 }

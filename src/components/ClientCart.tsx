@@ -6,15 +6,12 @@ import Link from "next/link";
 import { Trash, Minus, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-    getAuth,
-    isTokenValid,
-    logout,
-    authFetch,
-} from "@/lib/auth";
+import { getAuth, logout, authFetch, getStoredAccessToken } from "@/lib/auth";
+import MobileCartItem from "@/components/ui/MobileCartItem";
+import DesktopCartItem from "@/components/ui/DesktopCartItem";
 
 // adjust these imports if your project paths differ
-import { addToCart, updateCartItem, removeFromCart } from "@/lib/cart";
+import { updateCartItem, removeFromCart } from "@/lib/cart";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 
 /* ---------------- Types ---------------- */
@@ -360,20 +357,10 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
-        if (!isTokenValid()) {
-            redirectToLogin();
-            return;
-        }
-
         fetchCart();
         fetchSavedItems();
 
         const onAuthChange = () => {
-            if (!isTokenValid()) {
-                redirectToLogin();
-                return;
-            }
-
             fetchCart();
             fetchSavedItems();
         };
@@ -389,7 +376,6 @@ export default function ClientCart() {
             const customerId = getStoredCustomerId();
             if (!customerId) {
                 setError("No customer information available. Please login.");
-                redirectToLogin();
                 return;
             }
 
@@ -500,14 +486,10 @@ export default function ClientCart() {
         const cartId = cart?._id ?? cart?.cartId;
         if (!cartId) {
             setError("Cart not initialized yet.");
-            return;
-        }
-        if (!cartId) {
-            setError("Cart identifier is missing.");
-            console.warn("performDelete aborted - no cart id", { cart });
             closeConfirmDialog();
             return;
         }
+
         if (!toDeleteItemId) {
             setError("No item selected for deletion.");
             closeConfirmDialog();
@@ -842,10 +824,6 @@ export default function ClientCart() {
         );
     }
 
-    if (!isTokenValid()) {
-        return null;
-    }
-
     if (loading)
         return (
             <div className="min-h-[60vh] flex items-center justify-center p-6">
@@ -880,7 +858,7 @@ export default function ClientCart() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start">
                 <section className="md:col-span-2 space-y-6">
                     <div className="bg-white rounded-xl shadow-lg p-5">
                         <div className="flex items-center justify-between mb-4">
@@ -890,122 +868,59 @@ export default function ClientCart() {
                         {(localCart?.sellItems ?? []).filter((it) => it.inUse !== false).length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <p>No sell items in your cart.</p>
-                                <a href="/products" className="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">
+                                <a
+                                    href="/products"
+                                    className="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                                >
                                     Shop Now
                                 </a>
                             </div>
                         ) : (
-                            <ul className="space-y-4">
-                                {localCart
-                                    ?.sellItems?.filter((it) => it.inUse !== false)
-                                    .map((item, idx) => {
-                                        const stock = safeNumber(item.sellStockQuantity);
-                                        const qty = Number(item.quantity ?? 1);
-                                        const atStockLimit = stock !== null ? qty >= Math.max(0, Math.floor(stock)) : false;
-                                        const increaseDisabled = Boolean(savingItemId && savingItemId !== item._id) || atStockLimit || item.isAvailableForSale === false;
-                                        const decreaseDisabled = Boolean(savingItemId && savingItemId !== item._id) || item.isAvailableForSale === false;
-                                        const thisItemSaving = savingItemId === item._id;
+                            <>
+                                {/* MOBILE VIEW */}
+                                <div className="space-y-4 md:hidden">
+                                    {localCart!.sellItems!
+                                        .filter((it) => it.inUse !== false)
+                                        .map((item) => (
+                                            <MobileCartItem
+                                                key={item._id}
+                                                item={item}
+                                                onIncrease={() =>
+                                                    handleQuantityChangeById(item._id, (item.quantity ?? 1) + 1)
+                                                }
+                                                onDecrease={() =>
+                                                    handleQuantityChangeById(item._id, (item.quantity ?? 1) - 1)
+                                                }
+                                                onRemove={() => openConfirmDialog(item._id)}
+                                                onSave={() => saveForLater(item._id)}
+                                                lineTotal={lineTotal(item)}
+                                                formatCurrency={formatCurrency}
+                                            />
+                                        ))}
+                                </div>
 
-                                        return (
-                                            <motion.li
-                                                key={item._id ?? idx}
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.04 }}
-                                                className={`flex items-start gap-4 bg-gray-50 rounded-lg p-3 hover:shadow transition-shadow ${item.isAvailableForSale === false ? "opacity-60" : ""}`}
-                                            >
-                                                <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-white border">
-                                                    <Link href={item.productId ? `/products/${item.productId}` : "/products"} className="block w-full h-full">
-                                                        <Image
-                                                            alt={item.productPublicName ?? "product image"}
-                                                            src={item.imagePath ?? item.thumbnail ?? "/placeholder-80x80.png"}
-                                                            width={96}
-                                                            height={96}
-                                                            className="object-cover"
-                                                        />
-                                                    </Link>
-                                                </div>
-
-                                                <div className="flex-1">
-                                                    <div className="flex items-start justify-between gap-4">
-                                                        <div className="min-w-0">
-                                                            <div className="font-medium text-md truncate">{item.productPublicName ?? item.productId}</div>
-                                                            <div className="text-xs text-gray-500 mt-1">SKU: {item.productNumber ?? "—"}</div>
-
-                                                            <div className="mt-3 flex items-center gap-3 flex-wrap">
-                                                                {item.price ? (
-                                                                    <>
-                                                                        {typeof item.price.discountedPrice === "number" && typeof item.price.actualPrice === "number" ? (
-                                                                            <div className="text-sm">
-                                                                                <span className="text-xs text-gray-400 line-through mr-2">{formatCurrency(item.price.actualPrice)}</span>
-                                                                                <span className="font-semibold">{formatCurrency(item.price.discountedPrice)}</span>
-                                                                            </div>
-                                                                        ) : typeof item.price.actualPrice === "number" ? (
-                                                                            <div className="font-semibold">{formatCurrency(item.price.actualPrice)}</div>
-                                                                        ) : (
-                                                                            <div className="text-sm text-gray-500">Price unavailable</div>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    <div className="text-sm text-gray-500">Price unavailable</div>
-                                                                )}
-
-                                                                {item.isAvailableForSale === false ? <span className="ml-2 text-red-500 text-xs bg-red-50 px-2 py-0.5 rounded">Not for sale</span> : null}
-                                                                {item.sellStockQuantity != null ? <span className="ml-2 text-xs text-gray-500">Stock: {String(item.sellStockQuantity)}</span> : null}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="text-right flex-shrink-0">
-                                                            <button onClick={() => openConfirmDialog(item._id)} className="text-red-600 hover:text-red-800 p-2 rounded" title="Remove" disabled={saving || thisItemSaving} aria-disabled={saving || thisItemSaving}>
-                                                                <Trash size={18} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-4 flex items-center gap-3">
-                                                        <div className="inline-flex items-center border rounded-md overflow-hidden bg-white">
-                                                            <button
-                                                                onClick={() => handleQuantityChangeById(item._id, Math.max(1, (item.quantity ?? 1) - 1))}
-                                                                className="px-3 py-1"
-                                                                aria-label="Decrease quantity"
-                                                                disabled={decreaseDisabled}
-                                                            >
-                                                                <Minus size={14} />
-                                                            </button>
-                                                            <div className="px-5 py-1 font-medium">{thisItemSaving ? "…" : item.quantity}</div>
-                                                            <button
-                                                                onClick={() => handleQuantityChangeById(item._id, (item.quantity ?? 1) + 1)}
-                                                                className="px-3 py-1"
-                                                                aria-label="Increase quantity"
-                                                                disabled={increaseDisabled}
-                                                                title={increaseDisabled && stock !== null ? `Max available: ${stock}` : undefined}
-                                                            >
-                                                                <Plus size={14} />
-                                                            </button>
-                                                        </div>
-
-                                                        <div className="ml-4 flex items-center gap-3">
-                                                            <button
-                                                                onClick={() => saveForLater(item._id)}
-                                                                className="text-sm text-slate-600 hover:text-slate-800 border px-3 py-1 rounded"
-                                                                disabled={saving}
-                                                            >
-                                                                Save for later
-                                                            </button>
-                                                        </div>
-
-                                                        <div className="ml-auto flex items-center gap-4">
-                                                            <div className="text-sm text-gray-600">
-                                                                <div className="text-xs">Total</div>
-                                                                <div className="font-semibold">{formatCurrency(lineTotal(item))}</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </motion.li>
-                                        );
-                                    })}
-                            </ul>
+                                {/* DESKTOP VIEW */}
+                                <div className="hidden md:block bg-white rounded-xl shadow-lg overflow-hidden">
+                                    {localCart!.sellItems!
+                                        .filter((it) => it.inUse !== false)
+                                        .map((item) => (
+                                            <DesktopCartItem
+                                                key={item._id}
+                                                item={item}
+                                                onIncrease={() =>
+                                                    handleQuantityChangeById(item._id, (item.quantity ?? 1) + 1)
+                                                }
+                                                onDecrease={() =>
+                                                    handleQuantityChangeById(item._id, (item.quantity ?? 1) - 1)
+                                                }
+                                                onRemove={() => openConfirmDialog(item._id)}
+                                                onSave={() => saveForLater(item._id)}
+                                                lineTotal={lineTotal(item)}
+                                                formatCurrency={formatCurrency}
+                                            />
+                                        ))}
+                                </div>
+                            </>
                         )}
                     </div>
 
@@ -1023,7 +938,7 @@ export default function ClientCart() {
                         ) : (
                             <ul className="space-y-3">
                                 {savedItems.map((s) => (
-                                    <li key={s._savedId ?? s.id} className="flex items-center gap-4 p-3 rounded-lg border bg-gray-50">
+                                    <li key={s._savedId ?? s.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-3">
                                         <div className="w-20 h-20 rounded-lg overflow-hidden bg-white border">
                                             <Link href={s.productId ? `/products/${s.productId}` : "/products"} className="block w-full h-full">
                                                 <Image src={s.img ?? "/placeholder-80x80.png"} alt={s.title} width={80} height={80} className="object-cover" />
@@ -1058,7 +973,7 @@ export default function ClientCart() {
                     </div>
                 </section>
 
-                <aside className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 sticky top-6">
+                <aside className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
                     <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-lg">Summary</h4>
                         <div className="text-sm text-gray-500">Ready when you are</div>

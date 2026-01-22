@@ -169,6 +169,10 @@ export default function LoginPage() {
             // 2️⃣ store tokens separately
             localStorage.setItem("accessToken", data.token.accessToken);
 
+            if (data.customerId) {
+                localStorage.setItem("customerId", data.customerId);
+            }
+
             if (data.token.refreshToken) {
                 localStorage.setItem("refreshToken", data.token.refreshToken);
             }
