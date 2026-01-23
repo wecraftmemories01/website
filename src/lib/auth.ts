@@ -87,9 +87,10 @@ function storeTokens(accessToken: string, refreshToken?: string) {
 
 /* ---------- logout ---------- */
 export function logout(redirectTo = "/login") {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem("auth");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("rememberedUser");
 
     window.dispatchEvent(new Event("authChanged"));
     window.location.href = redirectTo;

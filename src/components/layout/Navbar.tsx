@@ -120,8 +120,10 @@ export default function NavbarEcommerce(): React.ReactElement {
 
     const doLogout = () => {
         if (typeof window !== "undefined") {
+            localStorage.removeItem("auth");
             localStorage.removeItem("accessToken");
             localStorage.removeItem("refreshToken");
+            localStorage.removeItem("rememberedUser");
             window.dispatchEvent(new Event("authChanged"));
         }
     };

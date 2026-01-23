@@ -159,10 +159,10 @@ export default function Header({
     const handleLogout = useCallback(() => {
         try {
             if (typeof window !== "undefined") {
+                localStorage.removeItem("auth");
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("refreshToken");
-                localStorage.removeItem("tokenType");
-                localStorage.removeItem("customerToken");
+                localStorage.removeItem("rememberedUser");
                 localStorage.removeItem(CUSTOMER_KEY);
             }
             window.dispatchEvent(new Event("authChanged"));

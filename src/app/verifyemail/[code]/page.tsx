@@ -210,14 +210,16 @@ export default function VerifyEmailPage() {
                 {!isMounted || !showResendInline ? (
                     <div className="w-full flex flex-col items-center gap-2 mt-1">
                         <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => resendUsingCode()}
-                                className="text-xs text-slate-500 hover:text-slate-700"
-                                suppressHydrationWarning
-                                disabled={resendStatus === 'loading'}
-                            >
-                                {resendStatus === 'loading' ? 'Resending…' : 'Resend email'}
-                            </button>
+                            {resendStatus !== 'success' && (
+                                <button
+                                    onClick={resendUsingCode}
+                                    className="text-xs text-slate-500 hover:text-slate-700"
+                                    suppressHydrationWarning
+                                    disabled={resendStatus === 'loading'}
+                                >
+                                    {resendStatus === 'loading' ? 'Resending…' : 'Resend email'}
+                                </button>
+                            )}
 
                             {/* show a small inline resend status message (separate from verification status) */}
                             {resendStatus === 'success' && (
