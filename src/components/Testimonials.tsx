@@ -95,6 +95,9 @@ export default function TestimonialsPages({
                         <p className="mt-2 text-slate-600 max-w-xl">
                             Real stories from customers who chose handcrafted comfort for their loved ones.
                         </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Testimonials sourced from our Instagram community
+                        </p>
                     </div>
 
                     <div className="flex items-center gap-2 relative z-20">
@@ -201,8 +204,8 @@ export default function TestimonialsPages({
                             key={i}
                             onClick={() => goTo(i)}
                             className={`h-2.5 rounded-full transition-all duration-300 ${i === pageIndex
-                                    ? 'w-10 bg-wecraft-primary shadow-[0_0_0_4px_rgba(0,0,0,0.06)]'
-                                    : 'w-3 bg-slate-300 hover:bg-slate-400'
+                                ? 'w-10 bg-wecraft-primary shadow-[0_0_0_4px_rgba(0,0,0,0.06)]'
+                                : 'w-3 bg-slate-300 hover:bg-slate-400'
                                 }`}
                         />
                     ))}
