@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import HeroClient from '../components/HeroClient'
-import HomeProductGrid from '../components/HomeProductGrid'
-import Testimonials from '../components/Testimonials'
-import type { Product } from '../types/product'
+import React, { useEffect, useState } from 'react';
+import HeroClient from '../components/HeroClient';
+import HomeProductGrid from '../components/HomeProductGrid';
+import Testimonials from '../components/Testimonials';
+import HomeGallery from "@/components/HomeGallery";
+import type { Product } from '../types/product';
 
 export default function HomePage() {
     const [products, setProducts] = useState<Product[]>([])
@@ -42,6 +43,8 @@ export default function HomePage() {
                 )}
 
                 <Testimonials />
+
+                <HomeGallery />
             </main>
         </div>
     )
