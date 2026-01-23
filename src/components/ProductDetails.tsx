@@ -23,6 +23,7 @@ type Product = {
     longDescription?: string;
     isAvailableForSale?: boolean;
     sellStockQuantity?: string | number | { quantity?: number; qty?: number } | null;
+    sellStockDisplayQuantity?: string | number | null;
     productAttributes?: ProductAttribute[];
     productImages?: ProductImage[];
     salePrice?: SalePrice | null;
@@ -454,6 +455,7 @@ export default function ProductClient({ product }: { product: Product }) {
         longDescription,
         isAvailableForSale,
         sellStockQuantity,
+        sellStockDisplayQuantity,
         productAttributes = [],
         productImages = [],
         salePrice,
@@ -488,6 +490,7 @@ export default function ProductClient({ product }: { product: Product }) {
     }, []);
 
     const stockNumber = parseStockValue(sellStockQuantity);
+    const stockDisplay = sellStockDisplayQuantity ?? (stockNumber > 0 ? stockNumber : 0);
     const priceDisplay = salePrice?.discountedPrice ?? salePrice?.actualPrice ?? null;
     const isOutOfStock = stockNumber === 0 || !isAvailableForSale;
 
@@ -927,12 +930,17 @@ export default function ProductClient({ product }: { product: Product }) {
 
                                 <div className="text-right">
                                     <div className="text-xs text-gray-500">Availability</div>
-                                    <div className={`text-sm font-semibold ${isOutOfStock ? 'text-red-600' : 'text-green-700'}`}>{isOutOfStock ? 'Out of stock' : `In stock (${stockNumber})`}</div>
+                                    <div className={`text-sm font-semibold ${isOutOfStock ? 'text-red-600' : 'text-green-700'}`}>
+                                        {isOutOfStock ? 'Out of stock' : `In stock (${stockDisplay})`}
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="mt-6 flex items-center gap-4">
-                                <div className="flex items-center border rounded-lg overflow-hidden">
+                                <div
+                                    className={`flex items-center border rounded-lg overflow-hidden ${added ? "opacity-50 pointer-events-none" : ""
+                                        }`}
+                                >
                                     <button onClick={() => handleQuantity(-1)} disabled={quantity <= 1} className="px-3 py-2 disabled:opacity-50">−</button>
                                     <input aria-label="Quantity" value={quantity} onChange={(e) => {
                                         const v = Number(e.target.value || 1);
@@ -944,9 +952,25 @@ export default function ProductClient({ product }: { product: Product }) {
                                     <button onClick={() => handleQuantity(1)} disabled={Boolean(stockNumber && quantity >= stockNumber)} className="px-3 py-2 disabled:opacity-50">+</button>
                                 </div>
 
-                                <button onClick={handleAddToCart} disabled={isOutOfStock || adding} className={`flex-1 py-3 rounded-lg text-white font-semibold shadow-md transition ${isOutOfStock ? 'bg-gray-300 cursor-not-allowed' : (added ? 'bg-green-600 hover:bg-green-700' : 'bg-[#E94E4E] hover:bg-[#c93b3b]')}`}>
-                                    {adding ? 'Adding...' : (added ? 'Added ✓' : 'Add to cart')}
-                                </button>
+                                {added ? (
+                                    <button
+                                        onClick={() => router.push("/cart")}
+                                        className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md transition"
+                                    >
+                                        Go to Cart →
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleAddToCart}
+                                        disabled={isOutOfStock || adding}
+                                        className={`flex-1 py-3 rounded-lg text-white font-semibold shadow-md transition ${isOutOfStock
+                                            ? "bg-gray-300 cursor-not-allowed"
+                                            : "bg-[#E94E4E] hover:bg-[#c93b3b]"
+                                            }`}
+                                    >
+                                        {adding ? "Adding..." : "Add to cart"}
+                                    </button>
+                                )}
                             </div>
 
                             <button
