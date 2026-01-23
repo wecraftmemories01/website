@@ -497,7 +497,7 @@ export default function OrderSuccessPage(): React.ReactElement {
 
                                     <button
                                         onClick={() => {
-                                            if (order?.orderId || order?._id) router.push(`/order/${encodeURIComponent(String(order.orderId ?? order._id))}`);
+                                            if (order?.orderId || order?._id) router.push(`/profile/order/${encodeURIComponent(String(order.orderId ?? order._id))}`);
                                             else router.push("/orders");
                                         }}
                                         className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-[#065975] text-white font-semibold hover:brightness-95 transition"
