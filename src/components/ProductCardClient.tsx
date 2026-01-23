@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Product as ProdType } from '../types/product'
 import { ShoppingCart, Check, Heart, Tag } from 'lucide-react'
-import { addToCart } from '../lib/cart'
+import { addToCart, isInCart } from '../lib/cart'
 import favouritesClient from '../lib/favouritesClient'
 import ConfirmModal from "@/components/ui/ConfirmModal";
 
@@ -55,6 +55,31 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
         message: string;
     }>({ open: false, message: '' });
 
+    // 🔑 Cart sync effect — keeps "Add / Added" correct on Home, Shop & refresh
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const syncFromCart = () => {
+            try {
+                const inCart = isInCart(String(product._id));
+                setAdded(inCart);
+            } catch {
+                setAdded(false);
+            }
+        };
+
+        // Initial sync (on mount & refresh)
+        syncFromCart();
+
+        // Sync when cart changes anywhere (home / shop / cart page)
+        window.addEventListener('cartChanged', syncFromCart);
+
+        return () => {
+            window.removeEventListener('cartChanged', syncFromCart);
+        };
+    }, [product._id]);
+
+
     useEffect(() => {
         setMounted(true);
         // initialize client once
@@ -79,30 +104,6 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
         return () => {
             favouritesClient.unsubscribe(onChange);
-        }
-    }, [product._id])
-
-    // Listen to ProductGrid's global cart fetch event
-    useEffect(() => {
-        const onCartFetched = () => {
-            try {
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
-                const m = typeof window !== 'undefined' ? window.__cartAddedMap : null;
-                if (m && String(product._id) in m) {
-                    setAdded(true);
-                } else {
-                    setAdded(false);
-                }
-            } catch {
-                // ignore
-            }
-        }
-        window.addEventListener('cartFetched', onCartFetched as EventListener);
-        // immediate check
-        onCartFetched();
-        return () => {
-            window.removeEventListener('cartFetched', onCartFetched as EventListener);
         }
     }, [product._id])
 
@@ -256,7 +257,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                                                 const result = await addToCart(String(product._id), 1, inferredType)
                                                 if (result?.success) {
                                                     setAdded(true)
-                                                    window.dispatchEvent(new Event('cartUpdated'))
+                                                    window.dispatchEvent(new Event('cartChanged'))
                                                 } else {
                                                     setErrorModal({
                                                         open: true,

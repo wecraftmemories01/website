@@ -2,6 +2,29 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000").r
 
 const TOKEN_KEY = 'accessToken';
 const CUSTOMER_KEY = 'customerId';
+const CART_PRODUCTS_KEY = 'cartProductIds';
+
+let cartProductSet = new Set<string>();
+let cartFetched = false;
+
+function getCartProductIds(): string[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        return JSON.parse(localStorage.getItem(CART_PRODUCTS_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function setCartProductIds(ids: string[]) {
+    try {
+        localStorage.setItem(CART_PRODUCTS_KEY, JSON.stringify([...new Set(ids)]));
+    } catch { }
+}
+
+export function isInCart(productId: string): boolean {
+    return cartProductSet.has(String(productId));
+}
 
 function getStoredAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
@@ -48,16 +71,14 @@ export async function addToCart(productId: string, quantity = 1, type: 'SELL' | 
         const payload = await res.json().catch(() => null);
 
         if (res.ok && (res.status === 201 || payload?.ack === 'success' || res.status === 200)) {
-            // optimistic increment if we don't have explicit total from server
+            cartProductSet.add(String(productId));
+
             try {
-                if (typeof payload?.totalItems === 'number') {
-                    localStorage.setItem('cartCount', String(payload.totalItems));
-                } else {
-                    const prev = Number(localStorage.getItem('cartCount') ?? '0');
-                    const next = prev + Number(quantity);
-                    if (!Number.isNaN(next)) localStorage.setItem('cartCount', String(next));
-                }
+                const ids = getCartProductIds();
+                ids.push(String(productId));
+                setCartProductIds(ids);
             } catch { }
+
             notifyCartChange(payload);
             return { success: true, payload };
         } else {
@@ -84,6 +105,20 @@ export async function updateCartItem(cartId: string, itemId: string, quantity: n
         const payload = await res.json().catch(() => null);
 
         if (res.ok) {
+            if (quantity === 0 && itemId) {
+                cartProductSet.delete(String(itemId));
+            }
+
+            // Handle quantity = 0
+            try {
+                if (quantity === 0 && itemId) {
+                    const ids = getCartProductIds().filter(
+                        id => id !== String(itemId)
+                    );
+                    setCartProductIds(ids);
+                }
+            } catch { }
+
             // backend may return updated cart or totals — if so, write exact totalItems
             if (payload) {
                 if (typeof payload.totalItems === 'number') {
@@ -96,6 +131,7 @@ export async function updateCartItem(cartId: string, itemId: string, quantity: n
                     }
                 }
             }
+
             notifyCartChange(payload);
             return { success: true, payload };
         } else {
@@ -123,6 +159,20 @@ export async function removeFromCart(cartId: string, itemId: string | undefined,
         const payload = await res.json().catch(() => null);
 
         if (res.ok) {
+
+            try {
+                if (itemId) {
+                    const ids = getCartProductIds().filter(
+                        id => id !== String(itemId)
+                    );
+                    setCartProductIds(ids);
+                }
+            } catch { }
+
+            if (itemId) {
+                cartProductSet.delete(String(itemId));
+            }
+
             // update exact total if server returned it
             if (payload) {
                 if (typeof payload.totalItems === 'number') {
@@ -149,5 +199,49 @@ export async function removeFromCart(cartId: string, itemId: string | undefined,
         }
     } catch (err: any) {
         return { success: false, message: err?.message || String(err) };
+    }
+}
+
+/**
+ * Fetch cart from backend and cache productIds
+ */
+export async function fetchCartFromApi() {
+    if (typeof window === 'undefined') return;
+
+    const customerId = getStoredCustomerId();
+    if (!customerId) return;
+
+    try {
+        const res = await fetchWithAuth(
+            `${API_BASE}/cart?customerId=${customerId}`,
+            { method: 'GET' }
+        );
+
+        const data = await res.json().catch(() => null);
+
+        cartProductSet.clear();
+        cartFetched = true;
+
+        const cart = data?.cartData?.[0];
+        if (!cart) {
+            window.dispatchEvent(new Event('cartChanged'));
+            return;
+        }
+
+        for (const item of cart.sellItems || []) {
+            if (item.inUse) {
+                cartProductSet.add(String(item.productId));
+            }
+        }
+
+        for (const item of cart.rentItems || []) {
+            if (item.inUse) {
+                cartProductSet.add(String(item.productId));
+            }
+        }
+
+        window.dispatchEvent(new Event('cartChanged'));
+    } catch (err) {
+        console.error('fetchCartFromApi failed', err);
     }
 }

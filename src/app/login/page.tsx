@@ -345,7 +345,7 @@ export default function LoginPage() {
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Email or Username</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                                 <div className="relative">
                                     <input
                                         value={username}

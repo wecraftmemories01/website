@@ -6,10 +6,15 @@ import HomeProductGrid from '../components/HomeProductGrid';
 import Testimonials from '../components/Testimonials';
 import HomeGallery from "@/components/HomeGallery";
 import type { Product } from '../types/product';
+import { fetchCartFromApi } from '@/lib/cart';
 
 export default function HomePage() {
     const [products, setProducts] = useState<Product[]>([])
     const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchCartFromApi();
+    }, []);
 
     useEffect(() => {
         const fetchProducts = async () => {
