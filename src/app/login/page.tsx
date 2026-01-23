@@ -112,7 +112,24 @@ export default function LoginPage() {
 
     // client mount guard to avoid hydration mismatch UI
     const [isMounted, setIsMounted] = useState(false);
+
     useEffect(() => setIsMounted(true), []);
+    
+    useEffect(() => {
+        if (!isMounted) return;
+
+        try {
+            const auth = getAuth();
+            const customerId = auth?.customerId;
+            const tokenValid = isTokenValid();
+
+            if (customerId && tokenValid) {
+                router.replace("/");
+            }
+        } catch {
+            // ignore
+        }
+    }, [isMounted, router]);
 
     useEffect(() => {
         try {

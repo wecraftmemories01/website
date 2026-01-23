@@ -28,6 +28,37 @@ export function getAuth(): AuthShape | null {
     }
 }
 
+export function isTokenValid(): boolean {
+    if (typeof window === "undefined") return false;
+
+    try {
+        const auth = getAuth();
+        if (!auth?.token) return false;
+
+        const t = auth.token;
+
+        // Preferred: absolute expiry
+        if (t.tokenExpiresAt) {
+            const exp = Date.parse(t.tokenExpiresAt);
+            if (Number.isNaN(exp)) return false;
+            return Date.now() < exp - 2000; // 2s safety buffer
+        }
+
+        // Fallback: expiresIn + obtainedAt
+        if (typeof t.expiresIn === "number" && t.tokenObtainedAt) {
+            const obt = Date.parse(t.tokenObtainedAt);
+            if (Number.isNaN(obt)) return false;
+            const exp = obt + t.expiresIn * 1000;
+            return Date.now() < exp - 2000;
+        }
+
+        // Last fallback: token exists
+        return Boolean(getStoredAccessToken());
+    } catch {
+        return false;
+    }
+}
+
 export function getStoredAccessToken(): string | null {
     if (typeof window === "undefined") return null;
 

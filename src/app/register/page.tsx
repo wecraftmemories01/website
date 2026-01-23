@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect } from 'react';
+import { useRouter } from "next/navigation";
 import React, { ChangeEvent, FormEvent, useState } from 'react'
 import { Eye, EyeOff, Mail, User, Smartphone, Lock } from 'lucide-react'
+import { getAuth, isTokenValid } from "@/lib/auth";
 
 type FormState = {
     name: string
@@ -13,6 +15,7 @@ type FormState = {
 }
 
 export default function RegisterPage() {
+    const router = useRouter();
     const [form, setForm] = useState<FormState>({
         name: '',
         email: '',
@@ -24,8 +27,23 @@ export default function RegisterPage() {
     const [showConfirm, setShowConfirm] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [success, setSuccess] = useState('')
-    const [serverError, setServerError] = useState('') // general top-level message
-    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({}) // per-field messages
+    const [serverError, setServerError] = useState('')
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => setIsMounted(true), []);
+
+    useEffect(() => {
+        if (!isMounted) return;
+
+        try {
+            const auth = getAuth();
+            if (auth?.customerId && isTokenValid()) {
+                router.replace("/");
+            }
+        } catch {
+            // ignore
+        }
+    }, [isMounted, router]);
 
     useEffect(() => {
         const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;

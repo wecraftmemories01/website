@@ -3,6 +3,7 @@
 import React, { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
+import { getAuth, isTokenValid } from "@/lib/auth";
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
@@ -22,6 +23,15 @@ export default function ForgotPasswordPage() {
         /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i.test(
             e.trim()
         );
+
+    useEffect(() => {
+        if (!isMounted) return;
+
+        const auth = getAuth();
+        if (auth?.customerId && isTokenValid()) {
+            router.replace("/");
+        }
+    }, [isMounted, router]);
 
     useEffect(() => {
         if (countdown === null) return;
