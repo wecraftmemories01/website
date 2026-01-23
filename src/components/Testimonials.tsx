@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
+import Link from "next/link";
 
 type Testimonial = {
     id: number
@@ -96,7 +97,7 @@ export default function TestimonialsPages({
                             Real stories from customers who chose handcrafted comfort for their loved ones.
                         </p>
                         <p className="mt-1 text-sm text-slate-500">
-                            Testimonials sourced from our Instagram community
+                            Testimonials sourced from our <Link href="https://www.instagram.com/wecraftmemories01/" target="_blank">Instagram</Link> community
                         </p>
                     </div>
 
