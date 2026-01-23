@@ -35,6 +35,8 @@ export interface Product {
     themePublicName: string;
     designPublicName: string;
     editionPublicName: string;
+    sellStockDisplayQuantity?: string;
+    rentStockDisplayQuantity?: string;
 
     latestSalePrice?: {
         _id: string;

@@ -116,7 +116,10 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
     const actualPrice = product.latestSalePrice?.actualPrice;
     const discountedPrice = product.latestSalePrice?.discountedPrice;
-    const stock = useMemo(() => formatStock(product.sellStockQuantity as unknown), [product.sellStockQuantity]);
+    const stock = useMemo(
+        () => formatStock(product.sellStockDisplayQuantity),
+        [product.sellStockDisplayQuantity]
+    );
 
     const isOnSale = discountedPrice && actualPrice && Number(discountedPrice) < Number(actualPrice);
     const isLowStock = !stock.isInStock ? false : /^(0|1|2|3)$/.test(stock.label.replace(/\D/g, ''));
