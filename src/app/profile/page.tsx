@@ -95,7 +95,7 @@ export default function ProfilePageAlt(): React.ReactElement {
     const [ordersCount, setOrdersCount] = useState<number | null>(null);
     const [loadingOrders, setLoadingOrders] = useState(false);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
     /* fallback id */
     const defaultCustomerId = "68d98d10d8e1d8ae4744079c";

@@ -92,7 +92,7 @@ type ApiOrder = {
 export default function OrderDetails({
     customerId,
     orderId,
-    apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000",
+    apiBase = process.env.NEXT_PUBLIC_API_BASE,
 }: {
     customerId: string;
     orderId: string;

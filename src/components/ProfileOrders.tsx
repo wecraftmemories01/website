@@ -74,7 +74,7 @@ function aggregateProducts(products: ApiOrderProduct[] = []) {
 
 export default function OrdersCompact({
     customerId = "",
-    apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000",
+    apiBase = process.env.NEXT_PUBLIC_API_BASE,
 }: {
     customerId?: string;
     apiBase?: string;
