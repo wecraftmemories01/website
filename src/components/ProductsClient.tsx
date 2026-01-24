@@ -1,11 +1,11 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import ProductGrid from './ProductGrid'
 import Pagination from './ui/Pagination'
 import type { Product } from '../types/product'
 import SidebarFilters from './SidebarFilters'
-import { useSearchParams } from 'next/navigation' // <-- added
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:3000/v1'
 
