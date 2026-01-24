@@ -14,7 +14,7 @@ export type AuthShape = {
         tokenExpiresAt?: string;
         tokenObtainedAt?: string;
         expiresIn?: number;
-    };
+    } | null;
 };
 
 /* ---------- storage helpers ---------- */
@@ -80,16 +80,16 @@ export function getStoredRefreshToken(): string | null {
     return localStorage.getItem(REFRESH_KEY);
 }
 
-function storeTokens(accessToken: string, refreshToken?: string) {
+export function storeTokens(accessToken: string, refreshToken?: string) {
     localStorage.setItem(TOKEN_KEY, accessToken);
     if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
 }
 
 /* ---------- logout ---------- */
 export function logout(redirectTo = "/login") {
-    localStorage.removeItem("auth");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem("rememberedUser");
 
     window.dispatchEvent(new Event("authChanged"));
@@ -125,6 +125,10 @@ export async function authFetch(
     input: RequestInfo,
     init: RequestInit = {}
 ): Promise<Response> {
+    if (typeof window === "undefined") {
+        throw new Error("authFetch cannot be used on the server");
+    }
+
     let token = getStoredAccessToken();
 
     const headers = new Headers(init.headers ?? {});
@@ -151,4 +155,30 @@ export async function authFetch(
     }
 
     return res;
+}
+
+export function persistAuth(data: AuthShape | null) {
+    if (!data?.token?.accessToken) return;
+
+    const now = Date.now();
+    const expiresIn = data.token.expiresIn ?? 0;
+
+    const tokenObtainedAt = new Date(now).toISOString();
+    const tokenExpiresAt = expiresIn
+        ? new Date(now + expiresIn * 1000).toISOString()
+        : undefined;
+
+    localStorage.setItem(
+        AUTH_KEY,
+        JSON.stringify({
+            customerId: data.customerId,
+            token: {
+                expiresIn,
+                tokenObtainedAt,
+                tokenExpiresAt,
+            },
+        })
+    );
+
+    storeTokens(data.token.accessToken, data.token.refreshToken);
 }

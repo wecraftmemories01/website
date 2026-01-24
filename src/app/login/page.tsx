@@ -1,94 +1,15 @@
 "use client";
 
 import React, { useEffect, useState, FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, User } from "lucide-react";
-
-/* ---------------- Types & Helpers ---------------- */
-
-export type AuthShape = {
-    ack?: string;
-    message?: string;
-    customerId?: string;
-    token?: {
-        accessToken?: string;
-        refreshToken?: string;
-        tokenType?: string;
-        expiresIn?: number; // seconds
-        tokenExpiresAt?: string; // ISO
-        tokenObtainedAt?: string; // ISO
-        [key: string]: any;
-    } | null;
-    [k: string]: any;
-};
-
-/** Canonical storage key for full auth object */
-const FULL_AUTH_KEY = "auth";
-/** Legacy key some parts of app accidentally used */
-const LEGACY_ID_KEY = "customerId";
-
-/** Return parsed auth object saved under 'customerId' (preferred) or fallback to legacy data. */
-export function getAuth(): AuthShape | null {
-    try {
-        const raw = localStorage.getItem("auth");
-        if (!raw) return null;
-        return JSON.parse(raw) as AuthShape;
-    } catch {
-        return null;
-    }
-}
-
-/** Return access token (top-level accessToken or customerId.token.accessToken) */
-export function getAccessToken(): string | null {
-    try {
-        const auth = getAuth();
-        return auth?.token?.accessToken ?? null;
-    } catch {
-        return null;
-    }
-}
-
-/**
- * Returns true if tokenExpiresAt indicates token is still valid.
- * Falls back to expiresIn + tokenObtainedAt when needed.
- */
-export function isTokenValid(): boolean {
-    try {
-        const auth = getAuth();
-        if (!auth || !auth.token) return false;
-        const t = auth.token;
-
-        if (t.tokenExpiresAt) {
-            const exp = Date.parse(t.tokenExpiresAt);
-            if (Number.isNaN(exp)) return false;
-            return Date.now() < exp - 2000;
-        }
-
-        if (typeof t.expiresIn === "number" && t.tokenObtainedAt) {
-            const obt = Date.parse(t.tokenObtainedAt);
-            if (Number.isNaN(obt)) return false;
-            const exp = obt + t.expiresIn * 1000;
-            return Date.now() < exp - 2000;
-        }
-
-        if (t.accessToken) return true;
-        return false;
-    } catch {
-        return false;
-    }
-}
-
-/** Clear stored auth data and notify listeners */
-export function logout(redirectTo = "/login") {
-    try {
-        localStorage.removeItem("auth");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("rememberedUser");
-        window.dispatchEvent(new Event("authChanged"));
-        window.location.href = redirectTo;
-    } catch { }
-}
+import {
+    getAuth,
+    isTokenValid,
+    persistAuth,
+    type AuthShape,
+} from "@/lib/auth";
 
 /* ---------------- Component ---------------- */
 
@@ -114,7 +35,7 @@ export default function LoginPage() {
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => setIsMounted(true), []);
-    
+
     useEffect(() => {
         if (!isMounted) return;
 
@@ -149,54 +70,6 @@ export default function LoginPage() {
         }
         setErrorMsg("");
         return true;
-    };
-
-    /**
-     * Persist full auth object under FULL_AUTH_KEY and also write legacy id key for compatibility.
-     * Ensures token expiry normalization.
-     */
-    const persistAuth = (data: AuthShape | null) => {
-        if (!data || !data.token?.accessToken) return;
-
-        try {
-            const now = Date.now();
-            const expiresIn = data.token.expiresIn ?? 0;
-
-            const tokenObtainedAt = new Date(now).toISOString();
-            const tokenExpiresAt = expiresIn
-                ? new Date(now + expiresIn * 1000).toISOString()
-                : undefined;
-
-            // 1️⃣ store identity / metadata only
-            localStorage.setItem(
-                "auth",
-                JSON.stringify({
-                    customerId: data.customerId,
-                    ack: data.ack,
-                    message: data.message,
-                    token: {
-                        tokenType: data.token.tokenType ?? "Bearer",
-                        expiresIn,
-                        tokenObtainedAt,
-                        tokenExpiresAt,
-                    },
-                })
-            );
-
-            // 2️⃣ store tokens separately
-            localStorage.setItem("accessToken", data.token.accessToken);
-
-            if (data.customerId) {
-                localStorage.setItem("customerId", data.customerId);
-            }
-
-            if (data.token.refreshToken) {
-                localStorage.setItem("refreshToken", data.token.refreshToken);
-            }
-
-        } catch (err) {
-            console.error("persistAuth failed:", err);
-        }
     };
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -337,7 +210,10 @@ export default function LoginPage() {
                     </div>
 
                     <div className="text-sm text-gray-500">
-                        Need an account? <a href="/register" className="text-sky-600 underline">Sign up</a>
+                        Need an account?
+                        <Link href="/register" className="text-sky-600 underline">
+                            Sign up
+                        </Link>
                     </div>
                 </div>
 
@@ -414,7 +290,9 @@ export default function LoginPage() {
                                         <span>Remember me</span>
                                     </label>
 
-                                    <a href="/forgot-password" className="text-sky-600 hover:underline">Forgot Password?</a>
+                                    <Link href="/forgot-password" className="text-sky-600 hover:underline">
+                                        Forgot Password?
+                                    </Link>
                                 </div>
                             </div>
 
