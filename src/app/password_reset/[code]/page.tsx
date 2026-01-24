@@ -1,15 +1,12 @@
 import React from "react";
 import ResetPasswordClient from "../../../components/ResetPasswordClient";
 
-type PageProps = {
-    params: {
-        code: string;
-    };
-    searchParams?: Record<string, string | string[] | undefined>;
-};
-
-export default function Page({ params }: PageProps) {
-    const { code } = params;
+export default async function Page({
+    params,
+}: {
+    params: Promise<{ code: string }>;
+}) {
+    const { code } = await params;
 
     return <ResetPasswordClient code={code} />;
 }
