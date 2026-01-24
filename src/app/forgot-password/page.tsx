@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
 
         try {
             // read API base at submit time (client-only) — avoids SSR/client differences
-            const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+            const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
 
             const grecaptcha = (window as any).grecaptcha;
 
