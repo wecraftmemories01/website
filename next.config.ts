@@ -14,12 +14,12 @@ const nextConfig: NextConfig = {
                 pathname: "/uploads/**",
             },
 
-            // Production API
-            {
-                protocol: "https",
-                hostname: "api.wecraftmemories.com",
-                pathname: "/uploads/**",
-            },
+            // // Production API
+            // {
+            //     protocol: "https",
+            //     hostname: "api.wecraftmemories.com",
+            //     pathname: "/uploads/**",
+            // },
         ],
     },
 };

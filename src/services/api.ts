@@ -22,7 +22,7 @@ instance.interceptors.response.use(
       if (typeof window !== 'undefined' && error?.response?.status === 401) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/portal/auth/login';
+        window.location.href = '/login';
       }
       return Promise.reject(error);
     }
