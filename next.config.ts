@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     },
     images: {
         remotePatterns: [
-            // ✅ Local development
+            // Local development
             {
                 protocol: "http",
                 hostname: "localhost",
@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
                 pathname: "/uploads/**",
             },
 
-            // ✅ Production API
+            // Production API
             {
                 protocol: "https",
                 hostname: "api.wecraftmemories.com",
