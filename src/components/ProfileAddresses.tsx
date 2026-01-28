@@ -7,8 +7,7 @@ import ConfirmModal from "./ui/ConfirmModal";
 import AddressModalEdit, { Address as EditAddressType } from "./AddressModalEdit";
 
 const TOKEN_KEY = "accessToken";
-const CUSTOMER_KEY = "customerId";
-const PER_PAGE = 25; // 25 records per page
+const PER_PAGE = 25;
 
 /* ---- Types ---- */
 export type Address = {
@@ -55,6 +54,18 @@ async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Respon
     if (token) headers.set("Authorization", `Bearer ${token}`);
     if (!headers.get("Content-Type") && init?.body) headers.set("Content-Type", "application/json");
     return fetch(input, { ...init, headers });
+}
+
+function getStoredCustomerId(): string | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
+    } catch {
+        return null;
+    }
 }
 
 /* Map server response to local model
@@ -124,7 +135,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             setError(null);
 
             try {
-                const cust = localStorage.getItem(CUSTOMER_KEY);
+                const cust = getStoredCustomerId();
                 if (!cust) {
                     setError("Customer not logged in");
                     setLoading(false);
@@ -242,7 +253,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             return;
         }
 
-        const cust = localStorage.getItem(CUSTOMER_KEY);
+        const cust = getStoredCustomerId();
         if (!cust) {
             alert("Customer not logged in");
             return;
@@ -337,7 +348,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             return;
         }
 
-        const cust = localStorage.getItem(CUSTOMER_KEY);
+        const cust = getStoredCustomerId();
         if (!cust) {
             alert("Customer not logged in");
             return;

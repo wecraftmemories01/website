@@ -39,7 +39,6 @@ const API_ROOT = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
 const API_BASE = `${API_ROOT}`;
 
 const TOKEN_KEY = "accessToken";
-const CUSTOMER_KEY = "customerId";
 
 /* ---------------- Helpers & Spinner ---------------- */
 function getStoredAccessToken(): string | null {
@@ -50,14 +49,19 @@ function getStoredAccessToken(): string | null {
         return null;
     }
 }
+
 function getStoredCustomerId(): string | null {
     try {
         if (typeof window === "undefined") return null;
-        return localStorage.getItem(CUSTOMER_KEY);
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
     } catch {
         return null;
     }
 }
+
 async function fetchWithAuth(url: string, opts: RequestInit = {}) {
     const headers = new Headers(opts.headers ?? {});
     const token = getStoredAccessToken();
@@ -163,7 +167,7 @@ export default function Header({
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("refreshToken");
                 localStorage.removeItem("rememberedUser");
-                localStorage.removeItem(CUSTOMER_KEY);
+                localStorage.removeItem("auth");
             }
             window.dispatchEvent(new Event("authChanged"));
             window.location.href = "/";
@@ -380,7 +384,7 @@ export default function Header({
         function onCartChanged() { fetchCartCount(); }
         function onStorage(e: StorageEvent) {
             if (!e.key) return;
-            if (e.key === CUSTOMER_KEY || e.key === TOKEN_KEY || e.key === "cartCount") fetchCartCount();
+            if (e.key === "auth" || e.key === TOKEN_KEY || e.key === "cartCount") fetchCartCount();
         }
         window.addEventListener("authChanged", onAuthChanged);
         window.addEventListener("cartChanged", onCartChanged);

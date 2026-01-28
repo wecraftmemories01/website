@@ -1,7 +1,6 @@
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000").replace(/\/+$/, '');
 
 const TOKEN_KEY = 'accessToken';
-const CUSTOMER_KEY = 'customerId';
 const CART_PRODUCTS_KEY = 'cartProductIds';
 
 let cartProductSet = new Set<string>();
@@ -30,9 +29,17 @@ function getStoredAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
     try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
+
 function getStoredCustomerId(): string | null {
     if (typeof window === 'undefined') return null;
-    try { return localStorage.getItem(CUSTOMER_KEY); } catch { return null; }
+    try {
+        const raw = localStorage.getItem('auth');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
+    } catch {
+        return null;
+    }
 }
 
 async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}) {
@@ -213,7 +220,7 @@ export async function fetchCartFromApi() {
 
     try {
         const res = await fetchWithAuth(
-            `${API_BASE}/cart?customerId=${customerId}`,
+            `${API_BASE}/cart?customerId=${encodeURIComponent(customerId)}`,
             { method: 'GET' }
         );
 

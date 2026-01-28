@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 // adjust this import to match where you placed AddressModal
 import AddressModal, { Address } from "./AddressModal";
 
-const CUSTOMER_KEY = "customerId";
 const TOKEN_KEY = "accessToken";
 
 /** Cart item type */
@@ -100,6 +99,18 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         } catch { }
     }, [addresses]);
 
+    function getStoredCustomerId(): string | null {
+        if (typeof window === "undefined") return null;
+        try {
+            const raw = localStorage.getItem("auth");
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed?.customerId ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     // --- API helpers ---
     function getApiBase(): string {
         if (typeof window === "undefined") return "";
@@ -125,7 +136,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         try {
             if (typeof window !== "undefined") {
                 localStorage.removeItem(TOKEN_KEY);
-                localStorage.removeItem(CUSTOMER_KEY);
+                const raw = localStorage.getItem("auth");
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    delete parsed.customerId;
+                    localStorage.setItem("auth", JSON.stringify(parsed));
+                }
             }
         } catch {
             // ignore
@@ -286,7 +302,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     async function refreshAddresses() {
         try {
-            const cust = localStorage.getItem(CUSTOMER_KEY);
+            const cust = getStoredCustomerId();
             if (!cust) return;
 
             setLoadingAddresses(true);
@@ -393,7 +409,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     async function apiFetchDeliveryCharge(pincode: string): Promise<{ ok: boolean; charge?: number; message?: string }> {
         try {
-            const customerId = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
+            const customerId = typeof window !== "undefined" ? getStoredCustomerId() : null;
             const token = getAuthToken();
             const headers: Record<string, string> = { "Content-Type": "application/json" };
             if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -686,7 +702,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             })();
 
             (async () => {
-                const cust = localStorage.getItem(CUSTOMER_KEY);
+                const cust = getStoredCustomerId();
                 if (!cust) {
                     router.replace("/login");
                     return;
@@ -816,7 +832,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     useEffect(() => {
         try {
-            const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
+            const cust = typeof window !== "undefined" ? getStoredCustomerId() : null;
             if (!cust) {
                 router.replace("/login");
                 return;
@@ -876,7 +892,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         placeOrderLockRef.current = true;
 
         const cust = typeof window !== "undefined"
-            ? localStorage.getItem(CUSTOMER_KEY)
+            ? getStoredCustomerId()
             : null;
 
         if (!cust) {

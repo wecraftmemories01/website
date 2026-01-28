@@ -20,8 +20,7 @@ type Props = {
     onSuccess?: () => void;
 };
 
-const CUSTOMER_KEY = "customerId";
-const TOKEN_KEY = "accessToken";
+const AUTH_KEY = "auth";
 
 /** Utilities (copied / self-contained so this component is portable) */
 function getApiBase(): string {
@@ -35,13 +34,22 @@ function buildUrl(path: string) {
     return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function getAuthToken(): string | null {
+function getAuth() {
+    if (typeof window === "undefined") return null;
     try {
-        if (typeof window === "undefined") return null;
-        return localStorage.getItem(TOKEN_KEY);
+        const raw = localStorage.getItem("auth");
+        return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
     }
+}
+
+function getCustomerId(): string | null {
+    return getAuth()?.customerId ?? null;
+}
+
+function getAuthToken(): string | null {
+    return getAuth()?.token?.token ?? null;
 }
 
 async function safeJson(res: Response) {
@@ -366,8 +374,11 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
             }
 
             // ---------- SERVER SAVE ----------
-            const cust = localStorage.getItem(CUSTOMER_KEY);
-            if (!cust) return;
+            const cust = getCustomerId();
+            if (!cust) {
+                alert("Customer not logged in. Please login again.");
+                return;
+            }
 
             const json = await apiCreateAddress(cust, form);
 

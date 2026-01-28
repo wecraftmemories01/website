@@ -24,7 +24,6 @@ const Spinner: React.FC<{ size?: number }> = ({ size = 14 }) => (
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000/v1";
 const TOKEN_KEY = "accessToken";
-const CUSTOMER_KEY = "customerId";
 
 /** Helpers */
 function getStoredAccessToken(): string | null {
@@ -39,7 +38,10 @@ function getStoredAccessToken(): string | null {
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
     try {
-        return localStorage.getItem(CUSTOMER_KEY);
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
     } catch {
         return null;
     }
@@ -193,7 +195,7 @@ export default function NavbarEcommerce(): React.ReactElement {
 
         function onStorage(e: StorageEvent) {
             if (!e.key) return;
-            if (e.key === CUSTOMER_KEY || e.key === TOKEN_KEY) {
+            if (e.key === "auth" || e.key === TOKEN_KEY) {
                 console.debug(`[Navbar] storage event key=${e.key} changed -> refetch cart`);
                 fetchCartCount();
             }

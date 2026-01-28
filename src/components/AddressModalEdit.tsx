@@ -21,7 +21,6 @@ type Props = {
     editAddress?: Address | null; // optional: if provided, modal works in edit mode
 };
 
-const CUSTOMER_KEY = "customerId";
 const TOKEN_KEY = "accessToken";
 
 /** Utilities (self-contained so this component is portable) */
@@ -29,11 +28,13 @@ function getApiBase(): string {
     if (typeof window === "undefined") return "";
     return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "http://localhost:3000";
 }
+
 function buildUrl(path: string) {
     const base = getApiBase().replace(/\/$/, "");
     if (!base) return path.startsWith("/") ? path : `/${path}`;
     return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
 function getAuthToken(): string | null {
     try {
         if (typeof window === "undefined") return null;
@@ -42,6 +43,19 @@ function getAuthToken(): string | null {
         return null;
     }
 }
+
+function getStoredCustomerId(): string | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
+    } catch {
+        return null;
+    }
+}
+
 async function safeJson(res: Response) {
     const ct = res.headers.get("content-type") || "";
     const isJson = ct.includes("application/json");
@@ -425,7 +439,7 @@ export default function AddressModal({ show, onClose, onCreated, onUpdated, edit
         }
 
         // Decide create vs update based on presence of serverId (edit mode)
-        const cust = typeof window !== "undefined" ? localStorage.getItem(CUSTOMER_KEY) : null;
+        const cust = getStoredCustomerId();
         if (!cust) {
             alert("Customer not logged in");
             return;

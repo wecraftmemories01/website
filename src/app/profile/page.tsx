@@ -47,9 +47,15 @@ function getStoredAccessToken(): string | null {
 
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
+
     try {
-        return localStorage.getItem(CUST_KEY);
-    } catch {
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
+    } catch (err) {
+        console.error("Failed to read customerId from localStorage", err);
         return null;
     }
 }
@@ -413,8 +419,8 @@ export default function ProfilePageAlt(): React.ReactElement {
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key as any)}
                                     className={`flex items-center gap-3 px-5 py-3 rounded-lg text-sm font-medium border transition ${activeTab === tab.key
-                                            ? "bg-[#065975] text-white"
-                                            : "bg-white hover:bg-slate-50"
+                                        ? "bg-[#065975] text-white"
+                                        : "bg-white hover:bg-slate-50"
                                         }`}
                                 >
                                     {React.cloneElement(tab.icon, { className: "w-5 h-5" })}

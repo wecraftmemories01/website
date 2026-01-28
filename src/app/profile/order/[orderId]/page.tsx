@@ -3,13 +3,17 @@
 import React, { useEffect, useState } from "react";
 import OrderDetails from "../../../../components/OrderDetails";
 
-const CUST_KEY = "customerId";
-
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
+
     try {
-        return localStorage.getItem(CUST_KEY);
-    } catch {
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
+    } catch (err) {
+        console.error("Failed to read customerId from localStorage", err);
         return null;
     }
 }
@@ -25,12 +29,14 @@ export default function ProfileOrderPage({ params }: Props) {
     const resolvedParams = (React as any).use ? (React as any).use(params) : params;
     const orderId = resolvedParams?.orderId ?? "";
 
-    const defaultCustomerId = "68d98d10d8e1d8ae4744079c";
-
     const [customerId, setCustomerId] = useState<string | null>(null);
 
     useEffect(() => {
-        const id = getStoredCustomerId() ?? defaultCustomerId;
+        const id = getStoredCustomerId();
+        if (!id) {
+            window.location.href = "/login";
+            return;
+        }
         setCustomerId(id);
     }, []);
 
