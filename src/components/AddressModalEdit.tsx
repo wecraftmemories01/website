@@ -46,14 +46,18 @@ function getAuthToken(): string | null {
 
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
-    try {
-        const raw = localStorage.getItem("auth");
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        return parsed?.customerId ?? null;
-    } catch {
-        return null;
-    }
+
+    return (
+        localStorage.getItem("customerId") ||
+        (() => {
+            try {
+                const raw = localStorage.getItem("auth");
+                return raw ? JSON.parse(raw)?.customerId ?? null : null;
+            } catch {
+                return null;
+            }
+        })()
+    );
 }
 
 async function safeJson(res: Response) {
@@ -121,17 +125,22 @@ async function apiFetchCities(stateId?: string) {
 
 /** serviceability endpoint used by the modal */
 async function fetchPincodeServiceability(pincode: string) {
-    const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
+    const url = buildUrl(
+        `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`
+    );
+
+    const headers = new Headers({ "Content-Type": "application/json" });
+    const token = getAuthToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
     try {
-        const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
+        const res = await fetch(url, { method: "GET", headers });
         if (!res.ok) {
             const json = await safeJson(res);
             return { ok: false, message: json?.error || json?.message || `HTTP ${res.status}` };
         }
         const json = await safeJson(res);
-        const data = json?.data ?? null;
-        const prepaid = data && data.prepaid === true;
-        return { ok: true, prepaid, raw: json };
+        return { ok: true, prepaid: json?.data?.prepaid === true, raw: json };
     } catch (err: any) {
         return { ok: false, message: err?.message ?? String(err) };
     }
@@ -221,7 +230,7 @@ function mapServerAddressToLocal(serverRec: any): Address {
             serverRec.countryId ??
             (serverRec.country ? (typeof serverRec.country === "object" ? String(serverRec.country._id) : String(serverRec.country)) : null),
         stateId:
-            serverRec.stateId ?? (serverRec.state ? (typeof serverRec.state === "object" ? String(serverRec.state._1d) : String(serverRec.state)) : null),
+            serverRec.stateId ?? (serverRec.state ? (typeof serverRec.state === "object" ? String(serverRec.state._id) : String(serverRec.state)) : null),
         cityId:
             serverRec.cityId ?? (serverRec.city ? (typeof serverRec.city === "object" ? String(serverRec.city._id) : String(serverRec.city)) : null),
         countryName: serverRec.countryName ?? (serverRec.country?.countryName ?? null),

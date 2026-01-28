@@ -21,6 +21,7 @@ type Props = {
 };
 
 const AUTH_KEY = "auth";
+const TOKEN_KEY = "accessToken";
 
 /** Utilities (copied / self-contained so this component is portable) */
 function getApiBase(): string {
@@ -37,7 +38,7 @@ function buildUrl(path: string) {
 function getAuth() {
     if (typeof window === "undefined") return null;
     try {
-        const raw = localStorage.getItem("auth");
+        const raw = localStorage.getItem("accessToken");
         return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
@@ -49,7 +50,8 @@ function getCustomerId(): string | null {
 }
 
 function getAuthToken(): string | null {
-    return getAuth()?.accessToken ?? null;
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("accessToken");
 }
 
 async function safeJson(res: Response) {
@@ -120,6 +122,13 @@ async function apiFetchCities(stateId?: string) {
 /** serviceability endpoint used by the modal (same route you had) */
 async function fetchPincodeServiceability(pincode: string) {
     const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
+
+    const headers = new Headers({ "Content-Type": "application/json" });
+    const token = getAuthToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch(url, { method: "GET", headers });
+
     try {
         const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
         if (!res.ok) {
