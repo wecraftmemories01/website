@@ -21,7 +21,7 @@ export type AuthShape = {
 export function getAuth(): AuthShape | null {
     if (typeof window === "undefined") return null;
     try {
-        const raw = localStorage.getItem(AUTH_KEY);
+        const raw = localStorage.getItem(TOKEN_KEY);
         return raw ? JSON.parse(raw) : null;
     } catch {
         return null;

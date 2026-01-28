@@ -49,7 +49,7 @@ function getCustomerId(): string | null {
 }
 
 function getAuthToken(): string | null {
-    return getAuth()?.token?.token ?? null;
+    return getAuth()?.accessToken ?? null;
 }
 
 async function safeJson(res: Response) {
