@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Trash, Minus, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getAuth, logout, authFetch, getStoredAccessToken } from "@/lib/auth";
@@ -357,16 +356,30 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
-        fetchCart();
-        fetchSavedItems();
-
-        const onAuthChange = () => {
-            fetchCart();
-            fetchSavedItems();
+        const tryFetch = () => {
+            const customerId = getStoredCustomerId();
+            if (customerId) {
+                fetchCart();
+                fetchSavedItems();
+                return true;
+            }
+            return false;
         };
 
+        if (tryFetch()) return;
+
+        const interval = setInterval(() => {
+            if (tryFetch()) clearInterval(interval);
+        }, 300);
+
+        const onAuthChange = () => tryFetch();
+
         window.addEventListener("authChanged", onAuthChange);
-        return () => window.removeEventListener("authChanged", onAuthChange);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("authChanged", onAuthChange);
+        };
     }, []);
 
     async function fetchCart(): Promise<void> {
@@ -375,7 +388,7 @@ export default function ClientCart() {
         try {
             const customerId = getStoredCustomerId();
             if (!customerId) {
-                setError("No customer information available. Please login.");
+                setLoading(false);
                 return;
             }
 
@@ -840,7 +853,7 @@ export default function ClientCart() {
             </div>
         );
 
-    if (!loading && (!cart || (cart.sellItems?.length ?? 0) === 0)) {
+    if (!loading && cart && (cart.sellItems?.length ?? 0) === 0) {
         return (
             <div className="p-8">
                 <EmptyIllustration />
