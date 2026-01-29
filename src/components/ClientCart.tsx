@@ -58,6 +58,11 @@ type SavedItem = {
     productId?: string | undefined; // optional product reference
 };
 
+const accessToken =
+    typeof window !== "undefined" ? getStoredAccessToken() : null;
+
+const isAuthenticated = Boolean(accessToken);
+
 /* ---------------- Config / Auth helpers ---------------- */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
 
@@ -116,6 +121,46 @@ function normalizeCartResponse(raw: any): Cart | null {
     };
 
     return out;
+}
+
+/** Logged-Out UI component */
+function LoggedOutState() {
+    return (
+        <div className="min-h-[60vh] flex items-center justify-center p-6">
+            <div className="max-w-md w-full text-center bg-white rounded-xl shadow-lg p-8">
+                <h2 className="text-xl font-semibold mb-2">
+                    You’re not logged in
+                </h2>
+                <p className="text-sm text-gray-600 mb-6">
+                    Login or create an account to view your cart, save items,
+                    and checkout faster.
+                </p>
+
+                <div className="flex flex-col gap-3">
+                    <Link
+                        href="/products"
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-md"
+                    >
+                        Browse products
+                    </Link>
+
+                    <Link
+                        href="/login"
+                        className="w-full border px-4 py-3 rounded-md"
+                    >
+                        Login
+                    </Link>
+
+                    <Link
+                        href="/register"
+                        className="w-full border px-4 py-3 rounded-md"
+                    >
+                        Create account
+                    </Link>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 /* ---------------- Error helpers & ApiError ---------------- */
@@ -852,6 +897,11 @@ export default function ClientCart() {
                 </div>
             </div>
         );
+
+    // NOT logged in → show login / register CTA
+    if (!loading && !isAuthenticated) {
+        return <LoggedOutState />;
+    }
 
     if (!loading && cart && (cart.sellItems?.length ?? 0) === 0) {
         return (

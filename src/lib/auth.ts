@@ -87,9 +87,12 @@ export function storeTokens(accessToken: string, refreshToken?: string) {
 
 /* ---------- logout ---------- */
 export function logout(redirectTo = "/login") {
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem("auth");
+    localStorage.removeItem("customerId");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("rememberedUser");
+    localStorage.removeItem("cartProductIds");
     localStorage.removeItem("rememberedUser");
 
     window.dispatchEvent(new Event("authChanged"));
