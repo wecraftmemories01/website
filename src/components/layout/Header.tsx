@@ -164,10 +164,11 @@ export default function Header({
         try {
             if (typeof window !== "undefined") {
                 localStorage.removeItem("auth");
+                localStorage.removeItem("customerId");
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("refreshToken");
                 localStorage.removeItem("rememberedUser");
-                localStorage.removeItem("auth");
+                localStorage.removeItem("cartProductIds");
             }
             window.dispatchEvent(new Event("authChanged"));
             window.location.href = "/";
