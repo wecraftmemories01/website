@@ -20,9 +20,6 @@ type Props = {
     onSuccess?: () => void;
 };
 
-const AUTH_KEY = "auth";
-const TOKEN_KEY = "accessToken";
-
 /** Utilities (copied / self-contained so this component is portable) */
 function getApiBase(): string {
     if (typeof window === "undefined") return "";
@@ -38,7 +35,7 @@ function buildUrl(path: string) {
 function getAuth() {
     if (typeof window === "undefined") return null;
     try {
-        const raw = localStorage.getItem("accessToken");
+        const raw = localStorage.getItem("auth");
         return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
@@ -46,7 +43,18 @@ function getAuth() {
 }
 
 function getCustomerId(): string | null {
-    return getAuth()?.customerId ?? null;
+    const auth = getAuth();
+    if (auth?.customerId) return auth.customerId;
+
+    const token = getAuthToken();
+    if (!token) return null;
+
+    try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        return payload?.customerId || payload?._id || null;
+    } catch {
+        return null;
+    }
 }
 
 function getAuthToken(): string | null {
@@ -121,24 +129,31 @@ async function apiFetchCities(stateId?: string) {
 
 /** serviceability endpoint used by the modal (same route you had) */
 async function fetchPincodeServiceability(pincode: string) {
-    const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
+    const url = buildUrl(
+        `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`
+    );
 
     const headers = new Headers({ "Content-Type": "application/json" });
     const token = getAuthToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    const res = await fetch(url, { method: "GET", headers });
-
     try {
-        const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
+        const res = await fetch(url, { method: "GET", headers });
+
         if (!res.ok) {
             const json = await safeJson(res);
-            return { ok: false, message: json?.error || json?.message || `HTTP ${res.status}` };
+            return {
+                ok: false,
+                message: json?.error || json?.message || `HTTP ${res.status}`,
+            };
         }
+
         const json = await safeJson(res);
-        const data = json?.data ?? null;
-        const prepaid = data && data.prepaid === true;
-        return { ok: true, prepaid, raw: json };
+        return {
+            ok: true,
+            prepaid: json?.data?.prepaid === true,
+            raw: json,
+        };
     } catch (err: any) {
         return { ok: false, message: err?.message ?? String(err) };
     }
@@ -378,7 +393,7 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
             if (!svc.prepaid) {
                 setFormSvc({ checking: false, prepaid: false });
-                alert("This pincode is not serviceable for prepaid orders.");
+                alert("This pincode is not serviceable");
                 return;
             }
 
@@ -422,9 +437,9 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
             alert(msg);
         } finally {
-            submittingRef.current = false; // 🔑 ALWAYS RELEASE LOCK
+            submittingRef.current = false;
             if (mountedRef.current) {
-                setFormSvc({ checking: false, prepaid: true });
+                setFormSvc((s) => ({ ...s, checking: false }));
             }
         }
     }
@@ -590,9 +605,9 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
                                 {form.pincode && formSvc.checking ? (
                                     <div className="text-slate-500">Checking serviceability…</div>
                                 ) : form.pincode && formSvc.prepaid === false ? (
-                                    <div className="text-rose-600">This pincode is not serviceable for prepaid orders.</div>
+                                    <div className="text-rose-600">This pincode is not serviceable</div>
                                 ) : form.pincode && formSvc.prepaid === true ? (
-                                    <div className="text-green-600">Serviceable for prepaid orders.</div>
+                                    <div className="text-green-600">Serviceable</div>
                                 ) : null}
                             </div>
                         </div>

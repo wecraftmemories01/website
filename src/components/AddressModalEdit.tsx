@@ -25,7 +25,7 @@ type Props = {
 /** Utilities (self-contained so this component is portable) */
 function getApiBase(): string {
     if (typeof window === "undefined") return "";
-    return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "http://localhost:3000";
+    return String(process.env.NEXT_PUBLIC_API_BASE || "");
 }
 
 function buildUrl(path: string) {
@@ -36,9 +36,19 @@ function buildUrl(path: string) {
 
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
+
     try {
         const raw = localStorage.getItem("auth");
-        return raw ? JSON.parse(raw)?.customerId ?? null : null;
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.customerId) return parsed.customerId;
+        }
+
+        const token = localStorage.getItem("accessToken");
+        if (!token) return null;
+
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        return payload?.customerId || payload?._id || null;
     } catch {
         return null;
     }
@@ -113,8 +123,6 @@ async function fetchPincodeServiceability(pincode: string) {
         `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`
     );
 
-
-
     try {
         const res = await authFetch(url, { method: "GET" });
         if (!res.ok) {
@@ -136,9 +144,9 @@ async function apiCreateAddress(customerId: string, addr: Address): Promise<any>
         recipientName: addr.recipientName,
         recipientContact: addr.recipientContact,
         addressLine1: addr.addressLine1,
-        addressLine2: addr.addressLine2 ?? "",
-        addressLine3: addr.addressLine3 ?? "",
-        landmark: addr.landmark ?? "",
+        addressLine2: addr.addressLine2 || null,
+        addressLine3: addr.addressLine3 || null,
+        landmark: addr.landmark || null,
         countryId: addr.countryId,
         stateId: addr.stateId,
         cityId: addr.cityId,
@@ -168,9 +176,9 @@ async function apiUpdateAddress(customerId: string, addressId: string, addr: Add
         recipientName: addr.recipientName,
         recipientContact: addr.recipientContact,
         addressLine1: addr.addressLine1,
-        addressLine2: addr.addressLine2 ?? "",
-        addressLine3: addr.addressLine3 ?? "",
-        landmark: addr.landmark ?? "",
+        addressLine2: addr.addressLine2 || null,
+        addressLine3: addr.addressLine3 || null,
+        landmark: addr.landmark || null,
         countryId: addr.countryId,
         stateId: addr.stateId,
         cityId: addr.cityId,
@@ -225,6 +233,7 @@ export default function AddressModal({ show, onClose, onCreated, onUpdated, edit
     const [states, setStates] = useState<Array<{ _id: string; stateName: string }>>([]);
     const [cities, setCities] = useState<Array<{ _id: string; cityName: string }>>([]);
     const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false });
+    const submittingRef = useRef(false);
 
     // local pincode serviceability indicator for form
     const [formSvc, setFormSvc] = useState<{ checking: boolean; prepaid: boolean | null; error?: string }>({
@@ -377,68 +386,81 @@ export default function AddressModal({ show, onClose, onCreated, onUpdated, edit
     }
 
     async function saveAddress() {
-        if (!form.recipientName?.trim() || !form.addressLine1?.trim() || !(String(form.cityId || form.cityName || "").trim()) || !form.pincode?.trim()) {
-            return alert("Please fill at least recipient name, address line 1, city and pincode");
-        }
-        if (!isValidIndianPincode(form.pincode)) {
-            return alert("Enter a valid 6-digit PIN code");
-        }
+        if (submittingRef.current) return;
+        submittingRef.current = true;
 
-        // check serviceability
-        setFormSvc({ checking: true, prepaid: null });
-        const svc = await fetchPincodeServiceability(form.pincode);
-        if (!svc.ok) {
-            setFormSvc({ checking: false, prepaid: null, error: svc.message || "Service check failed" });
-            return alert("Unable to verify pincode serviceability right now. Please try again.");
-        }
-        if (!svc.prepaid) {
-            setFormSvc({ checking: false, prepaid: false });
-            return alert("This pincode is not serviceable for prepaid (online) orders. Please use a different address or contact support.");
-        }
-
-        // Decide create vs update based on presence of serverId (edit mode)
-        const cust = getStoredCustomerId();
-        if (!cust) {
-            alert("Customer not logged in");
-            return;
-        }
-
-        // If serverId exists -> update path
-        if (form.serverId) {
-            try {
-                // call update API
-                await apiUpdateAddress(cust, String(form.serverId), form);
-
-                // notify parent of updated address (use local form copy)
-                const updatedLocal = { ...form };
-                onUpdated?.(updatedLocal);
-
-                onClose();
-            } catch (err: any) {
-                console.error("Failed to update address", err);
-                alert(err?.message ?? "Failed to update address");
-            } finally {
-                if (mountedRef.current) setFormSvc({ checking: false, prepaid: true });
-            }
-            return;
-        }
-
-        // Otherwise create new address (optimistic)
-        const id = `local_${Date.now()}`;
-        const newAddr: Address = { ...form, id };
         try {
-            // optimistic local add
+            // ---------- VALIDATION ----------
+            if (
+                !form.recipientName?.trim() ||
+                !form.addressLine1?.trim() ||
+                !(String(form.cityId || form.cityName || "").trim()) ||
+                !form.pincode?.trim()
+            ) {
+                alert("Please fill at least recipient name, address line 1, city and pincode");
+                return;
+            }
+
+            if (!isValidIndianPincode(form.pincode)) {
+                alert("Enter a valid 6-digit PIN code");
+                return;
+            }
+
+            // ---------- SERVICEABILITY ----------
+            setFormSvc({ checking: true, prepaid: null });
+
+            if (formSvc.prepaid === false) {
+                alert("This pincode is not serviceable.");
+                return;
+            }
+
+            const svc = await fetchPincodeServiceability(form.pincode);
+
+            if (!svc.ok) {
+                setFormSvc({ checking: false, prepaid: null, error: svc.message });
+                alert("Unable to verify pincode serviceability right now.");
+                return;
+            }
+
+            if (!svc.prepaid) {
+                setFormSvc({ checking: false, prepaid: false });
+                alert("This pincode is not serviceable.");
+                return;
+            }
+
+            // ---------- AUTH ----------
+            const cust = getStoredCustomerId();
+            if (!cust) {
+                alert("Customer not logged in");
+                return;
+            }
+
+            // ---------- UPDATE ----------
+            if (form.serverId) {
+                await apiUpdateAddress(cust, String(form.serverId), form);
+                onUpdated?.({ ...form });
+                onClose();
+                return;
+            }
+
+            // ---------- CREATE ----------
+            const newAddr: Address = { ...form, id: `local_${Date.now()}` };
             onCreated?.(newAddr);
             onClose();
 
-            // attempt server save
             await apiCreateAddress(cust, newAddr);
-            // parent can refetch addresses if desired
         } catch (err: any) {
-            console.warn("Failed to save address to server", err);
-            alert(err?.message ?? "Failed to save address to server. Saved locally.");
+            console.error("Failed to save address", err);
+            alert(err?.message ?? "Failed to save address");
         } finally {
-            if (mountedRef.current) setFormSvc({ checking: false, prepaid: true });
+            submittingRef.current = false;
+
+            if (mountedRef.current) {
+                setFormSvc({
+                    checking: false,
+                    prepaid: null,
+                });
+            }
         }
     }
 
@@ -448,7 +470,9 @@ export default function AddressModal({ show, onClose, onCreated, onUpdated, edit
         <div
             ref={backdropRef}
             className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4 py-6"
-            onClick={() => onClose()} // clicking backdrop -> close
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
             aria-hidden={false}
         >
             <div
@@ -599,9 +623,9 @@ export default function AddressModal({ show, onClose, onCreated, onUpdated, edit
                                 {form.pincode && formSvc.checking ? (
                                     <div className="text-slate-500">Checking serviceability…</div>
                                 ) : form.pincode && formSvc.prepaid === false ? (
-                                    <div className="text-rose-600">This pincode is not serviceable for prepaid orders.</div>
+                                    <div className="text-rose-600">This pincode is not serviceable.</div>
                                 ) : form.pincode && formSvc.prepaid === true ? (
-                                    <div className="text-green-600">Serviceable for prepaid orders.</div>
+                                    <div className="text-green-600">Serviceable.</div>
                                 ) : null}
                             </div>
                         </div>
@@ -622,7 +646,12 @@ export default function AddressModal({ show, onClose, onCreated, onUpdated, edit
                     <button onClick={onClose} className="px-4 py-2 rounded-md border text-slate-600 hover:bg-slate-50">
                         Cancel
                     </button>
-                    <button onClick={saveAddress} className="px-4 py-2 rounded-md bg-[#065975] text-white hover:brightness-95">
+                    <button
+                        onClick={saveAddress}
+                        disabled={submittingRef.current}
+                        className={`px-4 py-2 rounded-md bg-[#065975] text-white ${submittingRef.current ? "opacity-60 cursor-not-allowed" : "hover:brightness-95"
+                            }`}
+                    >
                         {form.serverId ? "Update address" : "Save address"}
                     </button>
                 </div>
