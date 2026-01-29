@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { addToCart } from "../lib/cart";
+import { authFetch } from "@/lib/auth";
 import {
     addFavouriteAPI,
     fetchFavouritesAPI,
@@ -91,41 +92,11 @@ function parseStockValue(raw: Product['sellStockQuantity']): number {
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
     try {
-        return localStorage.getItem("customerId");
+        const raw = localStorage.getItem("auth");
+        return raw ? JSON.parse(raw)?.customerId ?? null : null;
     } catch {
         return null;
     }
-}
-
-/* lightweight API caller used only for cart-check; replace with your shared helper if available */
-async function callApi(path: string, opts: { method?: string; body?: any } = {}) {
-    const base = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_BASE || '') : ''
-    const url = `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
-
-    const headers: Record<string, string> = {}
-    if (opts.body !== undefined && opts.body !== null) headers['Content-Type'] = 'application/json'
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    if (token) headers['Authorization'] = `Bearer ${token}`
-
-    const fetchOpts: RequestInit = {
-        method: opts.method ?? (opts.body ? 'POST' : 'GET'),
-        headers,
-    }
-    if (opts.body !== undefined && opts.body !== null) {
-        fetchOpts.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body)
-    }
-
-    const res = await fetch(url, fetchOpts)
-    const contentType = res.headers.get('content-type') || ''
-    const isJson = contentType.includes('application/json')
-    const payload = isJson ? await res.json().catch(() => null) : null
-    if (!res.ok) {
-        const err: any = new Error(payload?.message || payload?.error || res.statusText || 'API error')
-        err.status = res.status
-        err.payload = payload
-        throw err
-    }
-    return payload
 }
 
 /* ---------- Review Module (embedded; copied from your original) ---------- */
@@ -627,7 +598,8 @@ export default function ProductClient({ product }: { product: Product }) {
                     if (active) setAdded(false);
                     return;
                 }
-                const payload = await callApi(`/cart?customerId=${customerId}`, { method: 'GET' });
+                const res = await authFetch(`/cart?customerId=${customerId}`, { method: "GET" });
+                const payload = await res.json();
                 if (!active) return;
                 const cartData = Array.isArray(payload?.cartData) ? payload.cartData : [];
                 let foundAny = false;

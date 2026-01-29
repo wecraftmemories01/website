@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
+import { authFetch } from "@/lib/auth";
 import { Lock, CheckCircle, Loader2, XCircle } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
 
 /** Map API error codes to user-friendly messages */
 const ERROR_MESSAGES: Record<number, string> = {
@@ -33,10 +34,11 @@ export default function SecuritySection() {
             return;
         }
 
-        const token = localStorage.getItem("accessToken");
-        const customerId = localStorage.getItem("customerId");
+        const raw = localStorage.getItem("auth");
+        const auth = raw ? JSON.parse(raw) : null;
+        const customerId = auth?.customerId;
 
-        if (!token || !customerId) {
+        if (!customerId) {
             setIsError(true);
             setStatusMessage("Missing authentication. Please log in again.");
             return;
@@ -44,18 +46,17 @@ export default function SecuritySection() {
 
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/customer/${customerId}/update_password`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    oldPassword: current,
-                    newPassword: next,
-                    confirmPassword: confirm,
-                }),
-            });
+            const res = await authFetch(
+                `${API_BASE}/customer/${customerId}/update_password`,
+                {
+                    method: "PUT",
+                    body: JSON.stringify({
+                        oldPassword: current,
+                        newPassword: next,
+                        confirmPassword: confirm,
+                    }),
+                }
+            );
 
             const contentType = res.headers.get("content-type") || "";
             const data = contentType.includes("application/json")

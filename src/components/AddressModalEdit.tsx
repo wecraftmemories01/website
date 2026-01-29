@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Select from "react-select";
 import { X } from "lucide-react";
 import type { Address as SharedAddress } from "../types/address";
+import { authFetch } from "@/lib/auth";
 
 /**
  * Re-export the shared Address type so existing imports that do:
@@ -21,8 +22,6 @@ type Props = {
     editAddress?: Address | null; // optional: if provided, modal works in edit mode
 };
 
-const TOKEN_KEY = "accessToken";
-
 /** Utilities (self-contained so this component is portable) */
 function getApiBase(): string {
     if (typeof window === "undefined") return "";
@@ -35,29 +34,14 @@ function buildUrl(path: string) {
     return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function getAuthToken(): string | null {
+function getStoredCustomerId(): string | null {
+    if (typeof window === "undefined") return null;
     try {
-        if (typeof window === "undefined") return null;
-        return localStorage.getItem(TOKEN_KEY);
+        const raw = localStorage.getItem("auth");
+        return raw ? JSON.parse(raw)?.customerId ?? null : null;
     } catch {
         return null;
     }
-}
-
-function getStoredCustomerId(): string | null {
-    if (typeof window === "undefined") return null;
-
-    return (
-        localStorage.getItem("customerId") ||
-        (() => {
-            try {
-                const raw = localStorage.getItem("auth");
-                return raw ? JSON.parse(raw)?.customerId ?? null : null;
-            } catch {
-                return null;
-            }
-        })()
-    );
 }
 
 async function safeJson(res: Response) {
@@ -129,12 +113,10 @@ async function fetchPincodeServiceability(pincode: string) {
         `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`
     );
 
-    const headers = new Headers({ "Content-Type": "application/json" });
-    const token = getAuthToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+
 
     try {
-        const res = await fetch(url, { method: "GET", headers });
+        const res = await authFetch(url, { method: "GET" });
         if (!res.ok) {
             const json = await safeJson(res);
             return { ok: false, message: json?.error || json?.message || `HTTP ${res.status}` };
@@ -149,11 +131,8 @@ async function fetchPincodeServiceability(pincode: string) {
 /** create address on server */
 async function apiCreateAddress(customerId: string, addr: Address): Promise<any> {
     const url = buildUrl(`/customer/${encodeURIComponent(customerId)}/address`);
-    const headers = new Headers({ "Content-Type": "application/json" });
-    const token = getAuthToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    const payload: any = {
+    const payload = {
         recipientName: addr.recipientName,
         recipientContact: addr.recipientContact,
         addressLine1: addr.addressLine1,
@@ -167,11 +146,11 @@ async function apiCreateAddress(customerId: string, addr: Address): Promise<any>
         isDefault: !!addr.isDefault,
     };
 
-    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
-    if (res.status === 401) {
-        const json = await safeJson(res);
-        throw new Error(json?.message || json?.error || "Unauthorized");
-    }
+    const res = await authFetch(url, {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+
     const json = await safeJson(res);
     if (!res.ok) {
         throw new Error(json?.error || json?.message || `Failed to create address (${res.status})`);
@@ -181,12 +160,11 @@ async function apiCreateAddress(customerId: string, addr: Address): Promise<any>
 
 /** update address on server (PUT) */
 async function apiUpdateAddress(customerId: string, addressId: string, addr: Address): Promise<any> {
-    const url = buildUrl(`/customer/${encodeURIComponent(customerId)}/address/${encodeURIComponent(addressId)}`);
-    const headers = new Headers({ "Content-Type": "application/json" });
-    const token = getAuthToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const url = buildUrl(
+        `/customer/${encodeURIComponent(customerId)}/address/${encodeURIComponent(addressId)}`
+    );
 
-    const payload: any = {
+    const payload = {
         recipientName: addr.recipientName,
         recipientContact: addr.recipientContact,
         addressLine1: addr.addressLine1,
@@ -200,45 +178,16 @@ async function apiUpdateAddress(customerId: string, addressId: string, addr: Add
         isDefault: !!addr.isDefault,
     };
 
-    const res = await fetch(url, { method: "PUT", headers, body: JSON.stringify(payload) });
-    if (res.status === 401) {
-        const json = await safeJson(res);
-        throw new Error(json?.message || json?.error || "Unauthorized");
-    }
+    const res = await authFetch(url, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+    });
+
     const json = await safeJson(res);
     if (!res.ok) {
         throw new Error(json?.error || json?.message || `Failed to update address (${res.status})`);
     }
     return json;
-}
-
-/** Map server record to local Address */
-function mapServerAddressToLocal(serverRec: any): Address {
-    const serverId = serverRec._id ? String(serverRec._id) : null;
-    const localId = serverId ? `srv_${serverId}` : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
-
-    return {
-        id: localId,
-        serverId: serverId,
-        recipientName: serverRec.recipientName ?? "",
-        recipientContact: serverRec.recipientContact ?? "",
-        addressLine1: serverRec.addressLine1 ?? "",
-        addressLine2: serverRec.addressLine2 ?? null,
-        addressLine3: serverRec.addressLine3 ?? null,
-        landmark: serverRec.landmark ?? null,
-        countryId:
-            serverRec.countryId ??
-            (serverRec.country ? (typeof serverRec.country === "object" ? String(serverRec.country._id) : String(serverRec.country)) : null),
-        stateId:
-            serverRec.stateId ?? (serverRec.state ? (typeof serverRec.state === "object" ? String(serverRec.state._id) : String(serverRec.state)) : null),
-        cityId:
-            serverRec.cityId ?? (serverRec.city ? (typeof serverRec.city === "object" ? String(serverRec.city._id) : String(serverRec.city)) : null),
-        countryName: serverRec.countryName ?? (serverRec.country?.countryName ?? null),
-        stateName: serverRec.stateName ?? (serverRec.state?.stateName ?? null),
-        cityName: serverRec.cityName ?? (serverRec.city?.cityName ?? null),
-        pincode: serverRec.pincode ?? "",
-        isDefault: !!serverRec.isDefault,
-    };
 }
 
 /** Blank template — use nulls for optional fields to match ../types/address */

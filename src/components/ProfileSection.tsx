@@ -9,6 +9,7 @@ import {
     RotateCcw,
     XCircle,
 } from "lucide-react";
+import { authFetch } from "@/lib/auth";
 
 export type UserProfile = {
     id: string;
@@ -27,7 +28,7 @@ type Props = {
     onSave: (updated: Partial<UserProfile>) => void | Promise<void>;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
 
 const isValidEmail = (s: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
@@ -58,56 +59,23 @@ export default function ProfileSection({
         setNewEmail(localUser.email);
     }, [localUser.email]);
 
-    // Fetch pending email (if any)
-    // useEffect(() => {
-    //     const token = localStorage.getItem("accessToken");
-    //     if (!token) return;
-
-    //     (async () => {
-    //         try {
-    //             const res = await fetch(`${API_BASE}/customer/email-pending`, {
-    //                 headers: {
-    //                     "Content-Type": "application/json",
-    //                     Authorization: `Bearer ${token}`,
-    //                 },
-    //             });
-    //             if (!res.ok) return;
-    //             const contentType = res.headers.get("content-type") || "";
-    //             const j = contentType.includes("application/json")
-    //                 ? await res.json().catch(() => ({}))
-    //                 : {};
-    //             setPendingEmail(j.pendingEmail ?? null);
-    //             setPendingSince(j.since ?? null);
-    //         } catch {
-    //             // ignore
-    //         }
-    //     })();
-    // }, []);
-
     // Helper: fetch latest customer
-    const fetchCustomer = async (customerId: string, token: string) => {
+    const fetchCustomer = async (customerId: string) => {
         try {
-            const res = await fetch(`${API_BASE}/customer/${customerId}`, {
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-            });
+            const res = await authFetch(`${API_BASE}/customer/${customerId}`);
             if (!res.ok) return null;
-            const contentType = res.headers.get("content-type") || "";
-            const j = contentType.includes("application/json")
-                ? await res.json().catch(() => null)
-                : null;
+
+            const j = await res.json().catch(() => null);
             const data = j?.customerData ?? null;
             if (!data) return null;
-            const mapped: UserProfile = {
+
+            return {
                 id: data._id ?? data.id ?? customerId,
                 name: data.name ?? "",
                 email: data.email ?? "",
                 mobile: data.mobile ?? "",
                 isEmailVerified: !!data.isEmailVerified,
             };
-            return mapped;
         } catch {
             return null;
         }
@@ -126,23 +94,20 @@ export default function ProfileSection({
         if (mobileChanged) payload.mobile = mobileDraft;
         if (Object.keys(payload).length === 0) return;
 
-        const token = localStorage.getItem("accessToken");
-        const customerId = localStorage.getItem("customerId");
-        if (!token || !customerId) {
-            setProfileMessage("Missing authentication or user details.");
+        const raw = localStorage.getItem("auth");
+        const auth = raw ? JSON.parse(raw) : null;
+        const customerId = auth?.customerId;
+
+        if (!customerId) {
+            setProfileMessage("Missing authentication. Please log in again.");
             return;
         }
 
         setLoading(true);
         setProfileMessage(null);
         try {
-            const res = await fetch(`${API_BASE}/customer/${customerId}`, {
+            const res = await authFetch(`${API_BASE}/customer/${customerId}`, {
                 method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
                 body: JSON.stringify(payload),
             });
 
@@ -159,7 +124,7 @@ export default function ProfileSection({
             await Promise.resolve(onSave(payload));
 
             // Update local copy with latest from server (best-effort)
-            const fresh = await fetchCustomer(customerId, token);
+            const fresh = await fetchCustomer(customerId);
             if (fresh) {
                 setLocalUser(fresh);
                 onChangeDraft("name", fresh.name);
@@ -192,25 +157,25 @@ export default function ProfileSection({
             return;
         }
 
-        const token = localStorage.getItem("accessToken");
-        const customerId = localStorage.getItem("customerId");
-        if (!token || !customerId) {
-            setEmailMessage("Missing authentication. Please login again.");
+        const raw = localStorage.getItem("auth");
+        const auth = raw ? JSON.parse(raw) : null;
+        const customerId = auth?.customerId;
+
+        if (!customerId) {
+            setEmailMessage("Missing authentication. Please log in again.");
             return;
         }
 
         setLoading(true);
         setEmailMessage(null);
         try {
-            const res = await fetch(`${API_BASE}/customer/${customerId}/update_email`, {
-                method: "PUT", // keep PUT if your backend expects PUT
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-                body: JSON.stringify({ email: email }),
-            });
+            const res = await authFetch(
+                `${API_BASE}/customer/${customerId}/update_email`,
+                {
+                    method: "PUT",
+                    body: JSON.stringify({ email }),
+                }
+            );
 
             const contentType = res.headers.get("content-type") || "";
             const body = contentType.includes("application/json")
