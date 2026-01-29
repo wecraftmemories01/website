@@ -58,11 +58,6 @@ type SavedItem = {
     productId?: string | undefined; // optional product reference
 };
 
-const accessToken =
-    typeof window !== "undefined" ? getStoredAccessToken() : null;
-
-const isAuthenticated = Boolean(accessToken);
-
 /* ---------------- Config / Auth helpers ---------------- */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
 
@@ -352,6 +347,7 @@ async function apiDeleteSavedByProduct(customerId: string, productId: string) {
 
 /* ---------------- Component ---------------- */
 export default function ClientCart() {
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [cart, setCart] = useState<Cart | null>(null);
     const [localCart, setLocalCart] = useState<Cart | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
@@ -401,7 +397,24 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
+        const checkAuth = () => {
+            const token = getStoredAccessToken();
+            setIsAuthenticated(Boolean(token));
+        };
+
+        checkAuth();
+
+        window.addEventListener("authChanged", checkAuth);
+
+        return () => {
+            window.removeEventListener("authChanged", checkAuth);
+        };
+    }, []);
+
+    useEffect(() => {
         const tryFetch = () => {
+            if (!isAuthenticated) return false;
+
             const customerId = getStoredCustomerId();
             if (customerId) {
                 fetchCart();
@@ -417,15 +430,19 @@ export default function ClientCart() {
             if (tryFetch()) clearInterval(interval);
         }, 300);
 
-        const onAuthChange = () => tryFetch();
-
-        window.addEventListener("authChanged", onAuthChange);
-
         return () => {
             clearInterval(interval);
-            window.removeEventListener("authChanged", onAuthChange);
         };
-    }, []);
+    }, [isAuthenticated]);
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            setCart(null);
+            setLocalCart(null);
+            setSavedItems([]);
+            setError("");
+        }
+    }, [isAuthenticated]);
 
     async function fetchCart(): Promise<void> {
         setLoading(true);
