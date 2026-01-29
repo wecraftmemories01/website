@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { getAuth, logout, authFetch, getStoredAccessToken } from "@/lib/auth";
 import MobileCartItem from "@/components/ui/MobileCartItem";
 import DesktopCartItem from "@/components/ui/DesktopCartItem";
@@ -374,7 +373,12 @@ export default function ClientCart() {
     const router = useRouter();
 
     // derived counts used for disabling checkout
-    const totalItemsCount = (localCart?.sellItems ?? []).reduce((c, it) => c + (it.inUse === false ? 0 : Number(it.quantity ?? 0)), 0);
+    const totalItemsCount = isAuthenticated
+    ? (localCart?.sellItems ?? []).reduce(
+        (c, it) => c + (it.inUse === false ? 0 : Number(it.quantity ?? 0)),
+        0
+      )
+    : 0;
     const hasItems = totalItemsCount > 0;
 
     function redirectToLogin(): void {
@@ -397,42 +401,33 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
-        const checkAuth = () => {
-            const token = getStoredAccessToken();
-            setIsAuthenticated(Boolean(token));
+        const token = getStoredAccessToken();
+        const auth = getAuth();
+
+        if (token && auth?.customerId) {
+            setIsAuthenticated(true);
+        } else {
+            setIsAuthenticated(false);
+        }
+
+        const onAuthChange = () => {
+            const t = getStoredAccessToken();
+            const a = getAuth();
+            setIsAuthenticated(Boolean(t && a?.customerId));
         };
 
-        checkAuth();
-
-        window.addEventListener("authChanged", checkAuth);
+        window.addEventListener("authChanged", onAuthChange);
 
         return () => {
-            window.removeEventListener("authChanged", checkAuth);
+            window.removeEventListener("authChanged", onAuthChange);
         };
     }, []);
 
     useEffect(() => {
-        const tryFetch = () => {
-            if (!isAuthenticated) return false;
+        if (!isAuthenticated) return;
 
-            const customerId = getStoredCustomerId();
-            if (customerId) {
-                fetchCart();
-                fetchSavedItems();
-                return true;
-            }
-            return false;
-        };
-
-        if (tryFetch()) return;
-
-        const interval = setInterval(() => {
-            if (tryFetch()) clearInterval(interval);
-        }, 300);
-
-        return () => {
-            clearInterval(interval);
-        };
+        fetchCart();
+        fetchSavedItems();
     }, [isAuthenticated]);
 
     useEffect(() => {
@@ -925,7 +920,7 @@ export default function ClientCart() {
         return <LoggedOutState />;
     }
 
-    if (!loading && localCart && (localCart.sellItems?.length ?? 0) === 0) {
+    if (!loading && cart && (cart.sellItems?.length ?? 0) === 0) {
         return (
             <div className="p-8">
                 <EmptyIllustration />
