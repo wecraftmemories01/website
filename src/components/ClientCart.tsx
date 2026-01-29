@@ -374,11 +374,11 @@ export default function ClientCart() {
 
     // derived counts used for disabling checkout
     const totalItemsCount = isAuthenticated
-    ? (localCart?.sellItems ?? []).reduce(
-        (c, it) => c + (it.inUse === false ? 0 : Number(it.quantity ?? 0)),
-        0
-      )
-    : 0;
+        ? (localCart?.sellItems ?? []).reduce(
+            (c, it) => c + (it.inUse === false ? 0 : Number(it.quantity ?? 0)),
+            0
+        )
+        : 0;
     const hasItems = totalItemsCount > 0;
 
     function redirectToLogin(): void {
@@ -401,19 +401,12 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
-        const token = getStoredAccessToken();
         const auth = getAuth();
-
-        if (token && auth?.customerId) {
-            setIsAuthenticated(true);
-        } else {
-            setIsAuthenticated(false);
-        }
+        setIsAuthenticated(Boolean(auth?.customerId));
 
         const onAuthChange = () => {
-            const t = getStoredAccessToken();
             const a = getAuth();
-            setIsAuthenticated(Boolean(t && a?.customerId));
+            setIsAuthenticated(Boolean(a?.customerId));
         };
 
         window.addEventListener("authChanged", onAuthChange);
