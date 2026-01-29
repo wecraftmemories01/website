@@ -464,7 +464,6 @@ export default function ClientCart() {
             const rawCart = Array.isArray(json.cartData) ? json.cartData[0] : json.cartData;
             const normalized = normalizeCartResponse(rawCart);
             setCart(normalized);
-            setLocalCart(normalized ? clampCartQuantities(normalized) : null);
         } catch (err: any) {
             if (err?.message === "Auth required") {
                 redirectToLogin();
@@ -476,6 +475,12 @@ export default function ClientCart() {
             setLoading(false);
         }
     }
+
+    useEffect(() => {
+        if (cart) {
+            setLocalCart(clampCartQuantities(cart));
+        }
+    }, [cart]);
 
     async function fetchSavedItems(): Promise<void> {
         setSavedLoading(true);
@@ -920,7 +925,7 @@ export default function ClientCart() {
         return <LoggedOutState />;
     }
 
-    if (!loading && cart && (cart.sellItems?.length ?? 0) === 0) {
+    if (!loading && localCart && (localCart.sellItems?.length ?? 0) === 0) {
         return (
             <div className="p-8">
                 <EmptyIllustration />
