@@ -102,7 +102,7 @@ function normalizeCartResponse(raw: any): Cart | null {
                     _id: si._id,
                     productId: si.productId,
                     quantity: si.quantity ?? 1,
-                    inUse: si.inUse,
+                    inUse: si.inUse !== false,
                     imagePath: p.productImage ?? null,
                     thumbnail: p.productImage ?? null,
                     productPublicName:
@@ -840,12 +840,13 @@ export default function ClientCart() {
             </div>
         );
 
-    if (!cart && !loading)
+    if (!loading && (!cart || (cart.sellItems?.length ?? 0) === 0)) {
         return (
             <div className="p-8">
                 <EmptyIllustration />
             </div>
         );
+    }
 
     return (
         <>
