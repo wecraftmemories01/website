@@ -152,15 +152,15 @@ export default function ForgotPasswordPage() {
     // while mounting, return a stable skeleton (prevents hydration mismatch)
     if (!isMounted) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-sky-50 flex items-center justify-center p-6">
-                <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-sky-50 md:flex md:items-center md:justify-center md:p-6">
+                <div className="w-full max-w-none md:max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-10 items-center">
                     <div className="hidden md:block p-8">
                         <div className="h-6 bg-gray-200 rounded w-2/3 mb-4" />
                         <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
                         <div className="h-48 bg-gray-100 rounded-2xl" />
                     </div>
 
-                    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-3xl shadow-xl p-8 md:p-10">
+                    <div className=" bg-white w-full px-6 pt-8 pb-6 md:bg-white/95 md:backdrop-blur-sm md:border md:border-gray-200 md:rounded-3xl md:shadow-xl md:p-10">
                         <div className="h-8 bg-gray-100 rounded mb-6" />
                         <div className="space-y-4">
                             <div className="h-12 bg-gray-100 rounded-2xl" />
@@ -175,8 +175,8 @@ export default function ForgotPasswordPage() {
 
     // mounted — render interactive UI
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-sky-50 flex items-center justify-center p-6">
-            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+        <div className="bg-gradient-to-br from-indigo-50 to-sky-50 md:flex md:items-center md:justify-center md:p-6">
+            <div className="w-full max-w-none md:max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-10 items-center">
                 {/* Left hero */}
                 <div className="hidden md:flex flex-col gap-6 px-8">
                     <div className="flex items-center gap-4">
@@ -229,7 +229,7 @@ export default function ForgotPasswordPage() {
                 </div>
 
                 {/* Right form */}
-                <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-3xl shadow-xl p-8 md:p-10">
+                <div className=" bg-white w-full px-6 pt-8 pb-6 md:bg-white/95 md:border md:border-gray-200 md:rounded-3xl md:shadow-xl md:p-10">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl md:text-3xl font-bold">Reset your password</h1>
