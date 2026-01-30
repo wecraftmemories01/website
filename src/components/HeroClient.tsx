@@ -11,14 +11,18 @@ export default function HeroClient() {
             transition={{ duration: 0.5 }}
             className="
                 relative overflow-hidden rounded-3xl
-                bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500
-                text-white shadow-lg
+                bg-gradient-to-r
+                from-[#D7EDF3]
+                via-[#E4F3F7]
+                to-[#F1F5F6]
+                text-[#0B5C73]
+                shadow-md
                 min-h-[320px] max-h-[420px]
             "
         >
-            {/* Subtle decorative blobs */}
-            <div className="absolute -top-24 -left-24 w-56 h-56 bg-white/10 rounded-full blur-3xl" />
-            <div className="absolute -bottom-28 -right-28 w-72 h-72 bg-white/10 rounded-full blur-3xl" />
+            {/* Decorative blobs – minimal, non-distracting */}
+            <div className="absolute -top-24 -left-24 w-56 h-56 bg-[#1FA6B8]/15 rounded-full blur-3xl" />
+            <div className="absolute -bottom-28 -right-28 w-72 h-72 bg-[#1FA6B8]/08 rounded-full blur-3xl" />
 
             <div className="relative max-w-7xl mx-auto h-full px-6 sm:px-10 py-10 flex items-center">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full">
@@ -31,12 +35,12 @@ export default function HeroClient() {
                     >
                         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight">
                             Handmade Treasures,
-                            <span className="block text-yellow-200">
+                            <span className="block text-[#C95A66]">
                                 Cozy Memories.
                             </span>
                         </h1>
 
-                        <p className="mt-4 text-base sm:text-lg text-white/90 max-w-md">
+                        <p className="mt-4 text-base sm:text-lg text-[#355F6B] max-w-md">
                             Woolen gifts, playful accessories & warm home accents — made with love.
                         </p>
 
@@ -46,10 +50,11 @@ export default function HeroClient() {
                                 whileTap={{ scale: 0.97 }}
                                 href="/products"
                                 className="
-                                    bg-yellow-400 text-teal-900
+                                    bg-[#C95A66] text-white
                                     font-semibold px-5 py-2.5
-                                    rounded-xl shadow-md
-                                    hover:shadow-lg transition
+                                    rounded-xl shadow-sm
+                                    hover:bg-[#B84C58]
+                                    transition
                                 "
                             >
                                 ✨ Shop New Arrivals
@@ -60,9 +65,11 @@ export default function HeroClient() {
                                 whileTap={{ scale: 0.97 }}
                                 href="/products"
                                 className="
-                                    border border-white/40
+                                    border border-[#0B5C73]
+                                    text-[#0B5C73]
                                     px-5 py-2.5 rounded-xl
-                                    hover:bg-white/10 transition
+                                    hover:bg-[#0B5C73]/10
+                                    transition
                                 "
                             >
                                 Browse All →
@@ -70,7 +77,7 @@ export default function HeroClient() {
                         </div>
                     </motion.div>
 
-                    {/* Right image/logo */}
+                    {/* Right image */}
                     <motion.div
                         initial={{ opacity: 0, x: 30 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -78,13 +85,13 @@ export default function HeroClient() {
                         className="relative hidden md:block h-full"
                     >
                         <img
-  src="/wecraftmemories-hero-premium.png"
-  alt="Handmade crochet creations"
-  className="
-    absolute right-[-25%] top-1/2 -translate-y-1/2
-    w-[150%] h-auto max-w-none
-  "
-/>
+                            src="/wecraftmemories-hero-premium.png"
+                            alt="Handmade crochet creations"
+                            className="
+                                absolute right-[-25%] top-1/2 -translate-y-1/2
+                                w-[150%] h-auto max-w-none
+                            "
+                        />
                     </motion.div>
                 </div>
             </div>
