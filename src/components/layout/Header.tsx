@@ -446,7 +446,7 @@ export default function Header({
 
                         <Link href="/" className="flex items-center">
                             <div className="rounded-md p-1" style={{ background: ACCENT_LIGHT }}>
-                                <Image src="/logo.png" alt="WeCraftMemories" width={110} height={44} priority />
+                                <Image src="/logo.png" alt="WeCraftMemories" width={75} height={44} priority />
                             </div>
                         </Link>
                     </div>

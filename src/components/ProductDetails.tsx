@@ -806,7 +806,6 @@ export default function ProductClient({ product }: { product: Product }) {
                             <div className="flex items-center gap-3">
                                 <span className="w-1.5 h-8 rounded-md bg-[#E94E4E] inline-block" />
                                 <div>
-                                    <div className="text-xs text-gray-500">You are viewing</div>
                                     <div className="text-lg md:text-2xl font-extrabold text-[#004F64] leading-tight">{productName ?? "Product"}</div>
                                 </div>
                             </div>
@@ -965,7 +964,7 @@ export default function ProductClient({ product }: { product: Product }) {
                             </button>
 
                             <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-                                <div>Delivery: <span className="font-medium text-gray-800">3–5 business days</span></div>
+                                <div>Delivery: <span className="font-medium text-gray-800">3–7 business days</span></div>
                                 <div className="flex gap-2">
                                     <button onClick={copyProductId} className="px-3 py-1 border rounded text-xs">Copy ID</button>
                                     <button onClick={openSharePopup} className="px-3 py-1 border rounded text-xs">Share</button>

@@ -209,7 +209,7 @@ export default function FooterWithInstagram({
                         <div className="flex items-center gap-6">
                             <div className="hidden sm:flex items-center gap-2 text-slate-600">
                                 <span className="px-2 py-1 rounded bg-teal-100 text-teal-700 text-xs">Handmade</span>
-                                Sustainable materials & small batches
+                                Sustainable materials
                             </div>
                         </div>
 
