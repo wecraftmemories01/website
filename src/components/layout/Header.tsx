@@ -522,8 +522,16 @@ export default function Header({
                                     <Menu size={20} />
                                 </button>
 
-                                <Link href="/">
-                                    <Image src="/logo.png" alt="WeCraftMemories" width={52} height={32} />
+                                <Link href="/" className="flex items-center">
+                                    <div className="relative w-[110px] h-[40px] sm:w-[120px] sm:h-[44px]">
+                                        <Image
+                                            src="/logo.png"
+                                            alt="WeCraftMemories"
+                                            fill
+                                            priority
+                                            className="object-contain"
+                                        />
+                                    </div>
                                 </Link>
                             </div>
 
