@@ -72,22 +72,19 @@ export default function HeroClient() {
 
                     {/* Right image/logo */}
                     <motion.div
-                        initial={{ opacity: 0, x: 20 }}
+                        initial={{ opacity: 0, x: 30 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.7 }}
-                        className="hidden md:flex justify-end"
+                        className="relative hidden md:block h-full"
                     >
-                        <motion.div
-                            animate={{ y: [0, -8, 0] }}
-                            transition={{ repeat: Infinity, duration: 5 }}
-                            className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl"
-                        >
-                            <img
-                                src="/logo.png"
-                                alt="logo"
-                                className="max-w-[220px] object-contain drop-shadow-lg"
-                            />
-                        </motion.div>
+                        <img
+  src="/wecraftmemories-hero-premium.png"
+  alt="Handmade crochet creations"
+  className="
+    absolute right-[-25%] top-1/2 -translate-y-1/2
+    w-[150%] h-auto max-w-none
+  "
+/>
                     </motion.div>
                 </div>
             </div>
