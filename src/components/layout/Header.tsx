@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
 import { getCategories, apiFetch } from "../../lib/api";
+import { fetchCartFromApi } from "../../lib/cart";
 
 /* dynamic import for client-only widget */
 const DeliveryPincodeInput = dynamic(() => import("../../components/DeliveryPincodeInput"), { ssr: false });
@@ -159,6 +160,13 @@ export default function Header({
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // 🔑 Hydrate cart from server on first load (refresh-safe)
+    useEffect(() => {
+        if (!mounted) return;
+
+        fetchCartFromApi();
+    }, [mounted]);
 
     const handleLogout = useCallback(() => {
         try {

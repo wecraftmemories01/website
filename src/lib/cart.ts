@@ -22,7 +22,18 @@ function setCartProductIds(ids: string[]) {
 }
 
 export function isInCart(productId: string): boolean {
-    return cartProductSet.has(String(productId));
+    const id = String(productId);
+
+    // memory first
+    if (cartProductSet.has(id)) return true;
+
+    // fallback to localStorage (refresh-safe)
+    try {
+        const ids = JSON.parse(localStorage.getItem(CART_PRODUCTS_KEY) || '[]');
+        return Array.isArray(ids) && ids.includes(id);
+    } catch {
+        return false;
+    }
 }
 
 function getStoredAccessToken(): string | null {
@@ -227,26 +238,32 @@ export async function fetchCartFromApi() {
         const data = await res.json().catch(() => null);
 
         cartProductSet.clear();
-        cartFetched = true;
+
+        const productIds: string[] = [];
 
         const cart = data?.cartData?.[0];
-        if (!cart) {
-            window.dispatchEvent(new Event('cartChanged'));
-            return;
-        }
+        if (cart) {
+            for (const item of cart.sellItems || []) {
+                if (item.inUse && item.productId) {
+                    const id = String(item.productId);
+                    cartProductSet.add(id);
+                    productIds.push(id);
+                }
+            }
 
-        for (const item of cart.sellItems || []) {
-            if (item.inUse) {
-                cartProductSet.add(String(item.productId));
+            for (const item of cart.rentItems || []) {
+                if (item.inUse && item.productId) {
+                    const id = String(item.productId);
+                    cartProductSet.add(id);
+                    productIds.push(id);
+                }
             }
         }
 
-        for (const item of cart.rentItems || []) {
-            if (item.inUse) {
-                cartProductSet.add(String(item.productId));
-            }
-        }
+        // 🔑 persist for refresh safety
+        setCartProductIds(productIds);
 
+        cartFetched = true;
         window.dispatchEvent(new Event('cartChanged'));
     } catch (err) {
         console.error('fetchCartFromApi failed', err);
