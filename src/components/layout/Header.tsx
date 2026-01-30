@@ -442,173 +442,117 @@ export default function Header({
     }, [mobileOpen]);
 
     return (
-        <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100">
+        <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100 mt-3">
             <div className={containerClass}>
-                <div className="flex flex-col gap-4 md:gap-0">
-                    <div className="flex items-center justify-between mb-3">
-                        {/* left */}
-                        <div className="flex items-center gap-4 shrink-0">
-                            <button
-                                onClick={() => setMobileOpen((v) => !v)}
-                                aria-label="menu"
-                                className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition"
-                            >
-                                {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-                            </button>
-
-                            {/* Logo only on desktop */}
-                            <Link href="/" className="flex items-center shrink-0">
+                <div className="relative">
+                    {/* ================= DESKTOP HEADER ================= */}
+                    <div className="hidden md:flex items-center justify-between gap-6 py-2">
+                        {/* LEFT */}
+                        <div className="flex items-center gap-4">
+                            <Link href="/" className="flex items-center">
                                 <div className="rounded-md p-1" style={{ background: ACCENT_LIGHT }}>
-                                    <Image
-                                        src="/logo.png"
-                                        alt="WeCraftMemories"
-                                        width={64}
-                                        height={38}
-                                        priority
-                                    />
+                                    <Image src="/logo.png" alt="WeCraftMemories" width={64} height={38} priority />
                                 </div>
                             </Link>
+
+                            <nav className="flex items-center gap-6">
+                                <Link href="/" className="flex items-center gap-1 text-sm font-medium">
+                                    <House size={14} /> Home
+                                </Link>
+                                <Link href="/products" className="flex items-center gap-1 text-sm font-medium">
+                                    <Store size={14} /> Shop
+                                </Link>
+                                <Link href="/contact" className="flex items-center gap-1 text-sm font-medium">
+                                    <Headset size={14} /> Contact
+                                </Link>
+                            </nav>
                         </div>
 
-                        {/* right controls */}
-                        <div className="flex items-center gap-3 shrink-0">
-
-                            <div className="hidden sm:flex items-center">
-                                {/* DeliveryPincodeInput is client-only (dynamically imported with ssr:false) */}
-                                {/* Render a stable placeholder when not mounted to keep DOM identical */}
-                                {!mounted ? (
-                                    <div aria-hidden={true} className="w-[160px] h-8 rounded-md bg-transparent" />
-                                ) : (
-                                    <DeliveryPincodeInput />
-                                )}
-                            </div>
-
-                            <Link href="/cart" className="relative group flex items-center" aria-label="View cart">
-                                <button className="p-2 rounded-full hover:bg-slate-100 transition" aria-hidden>
-                                    <ShoppingCart size={18} />
-                                </button>
-
-                                {/* Cart badge: same span node both server and client to avoid node replacement */}
-                                <span
-                                    className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-400 text-slate-900 text-xs flex items-center justify-center font-semibold"
-                                    style={{ visibility: (mounted && (cartLoading || cartCount > 0)) ? "visible" : "hidden" }}
-                                    aria-hidden={!mounted}
-                                >
-                                    {mounted ? (cartLoading ? <Spinner size={12} /> : String(cartCount)) : ""}
-                                </span>
-                            </Link>
-
-                            {/* MOBILE USER ICON (after cart) */}
-                            {mounted && (
-                                <button
-                                    onClick={() => router.push(isAuthed ? "/profile" : "/login")}
-                                    aria-label="User account"
-                                    className="md:hidden p-2 rounded-full hover:bg-slate-100 transition"
-                                >
-                                    <UserIcon size={18} />
-                                </button>
-                            )}
-
-                            <div className="hidden md:flex items-center gap-3">
-                                {/* To avoid hydration mismatch we only render auth-dependent UI after mount.
-                                During SSR we render a stable placeholder of the same node shape. */}
-                                {!mounted ? (
-                                    // stable placeholder area (same DOM footprint)
-                                    <div className="w-40 h-8 rounded-md bg-transparent" aria-hidden />
-                                ) : (
-                                    <>
-                                        {!authReady && <div className="w-6 h-6 flex items-center justify-center"><Spinner size={14} /></div>}
-
-                                        {authReady && !isAuthed && (
-                                            <>
-                                                <Link href="/login" className="text-sm text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>Login</Link>
-                                                <Link href="/register" className="px-3 py-1.5 rounded-md" style={{ background: ACCENT, color: "#fff" }}>Register</Link>
-                                            </>
-                                        )}
-
-                                        {authReady && isAuthed && (
-                                            <div className="relative">
-                                                <button
-                                                    ref={accountTriggerRef}
-                                                    className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 transition"
-                                                    aria-haspopup="true"
-                                                    onClick={() => setAccountOpen((v) => !v)}
-                                                >
-                                                    <UserIcon size={16} />
-                                                    <span className="text-sm font-medium">Account</span>
-                                                    <ChevronDown size={14} />
-                                                </button>
-
-                                                <AnimatePresence>
-                                                    {accountOpen && (
-                                                        <motion.div
-                                                            ref={accountPanelRef}
-                                                            initial={{ opacity: 0, y: -6 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -6 }}
-                                                            className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border z-50 py-2"
-                                                        >
-                                                            <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-50">Profile</Link>
-                                                            <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50">Logout</button>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* center nav */}
-                    <div className="hidden md:flex items-center gap-6 flex-1 min-w-0">
-                        {/* NAV */}
-                        <nav className="flex items-center gap-6 shrink-0">
-                            <Link href="/" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700">
-                                <House size={14} /> Home
-                            </Link>
-                            <Link href="/products" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700">
-                                <Store size={14} /> Shop
-                            </Link>
-                            <Link href="/contact" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700">
-                                <Headset size={14} /> Contact
-                            </Link>
-                        </nav>
-
-                        {/* SEARCH (fills remaining space) */}
+                        {/* CENTER SEARCH */}
                         <div className="flex items-center bg-slate-100 rounded-full px-4 py-2 gap-2 flex-1 max-w-xl">
-                            <Search size={14} className="text-slate-600 shrink-0" />
+                            <Search size={14} className="text-slate-600" />
                             <input
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 onKeyDown={onHeaderKeyDown}
                                 placeholder="Search products..."
-                                className="bg-transparent outline-none text-sm text-slate-800 placeholder-slate-400 flex-1 min-w-0"
+                                className="bg-transparent outline-none text-sm flex-1"
                             />
                             <button
                                 onClick={() => doHeaderSearch(query)}
-                                className="text-sm px-3 py-1 rounded-full bg-white hover:bg-slate-200 shrink-0"
+                                className="text-sm px-3 py-1 rounded-full bg-white"
                             >
                                 Search
                             </button>
                         </div>
+
+                        {/* RIGHT */}
+                        <div className="flex items-center gap-3">
+                            {mounted && <DeliveryPincodeInput />}
+
+                            <Link href="/cart" className="relative">
+                                <ShoppingCart size={18} />
+                                <span
+                                    className="absolute -top-2 -right-2 min-w-[18px] h-[18px] text-xs bg-amber-400 rounded-full flex items-center justify-center"
+                                    style={{ visibility: cartCount > 0 ? "visible" : "hidden" }}
+                                >
+                                    {cartCount}
+                                </span>
+                            </Link>
+
+                            {!isAuthed ? (
+                                <>
+                                    <Link href="/login">Login</Link>
+                                    <Link href="/register" className="px-3 py-1 rounded-md text-white" style={{ background: ACCENT }}>
+                                        Register
+                                    </Link>
+                                </>
+                            ) : (
+                                <button onClick={handleLogout}>Logout</button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ================= MOBILE HEADER ================= */}
+                    <div className="md:hidden flex flex-col gap-3 py-2">
+                        {/* ROW 1 */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setMobileOpen(true)}>
+                                    <Menu size={20} />
+                                </button>
+
+                                <Link href="/">
+                                    <Image src="/logo.png" alt="WeCraftMemories" width={52} height={32} />
+                                </Link>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <Link href="/cart">
+                                    <ShoppingCart size={18} />
+                                </Link>
+                                <button onClick={() => router.push(isAuthed ? "/profile" : "/login")}>
+                                    <UserIcon size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* ROW 2 – SEARCH */}
+                        <div className="mt-2">
+                            <div className="flex items-center bg-slate-100 rounded-full px-3 py-2 gap-2">
+                                <Search size={16} />
+                                <input
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    onKeyDown={onHeaderKeyDown}
+                                    placeholder="Search products..."
+                                    className="bg-transparent outline-none text-sm w-full"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* MOBILE SEARCH – SECOND ROW */}
-                <div className="md:hidden px-2 pb-2">
-                    <div className="flex items-center bg-slate-100 rounded-full px-3 py-2 gap-2 w-full">
-                        <Search size={16} className="text-slate-600 shrink-0" />
-                        <input
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            onKeyDown={onHeaderKeyDown}
-                            placeholder="Search products..."
-                            className="bg-transparent outline-none text-sm w-full"
-                        />
-                    </div>
-                </div>
             </div>
 
             {/* ================= MOBILE DRAWER (PORTAL) ================= */}
