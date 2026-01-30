@@ -176,8 +176,8 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-violet-50 flex items-center justify-center p-6">
-            <div className="max-w-5xl w-full grid md:grid-cols-2 bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 md:flex md:items-center md:justify-center md:p-6">
+            <div className="w-full max-w-none md:max-w-5xl grid grid-cols-1 md:grid-cols-2 md:bg-white md:rounded-2xl md:shadow-lg md:overflow-hidden">
                 {/* Left promo panel (desktop only) */}
                 <div className="hidden md:flex flex-col justify-center p-10 bg-gradient-to-b from-indigo-600 to-violet-500 text-white">
                     <h2 className="text-3xl font-extrabold mb-2">Join We Craft Memories</h2>
@@ -191,8 +191,8 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Right form area */}
-                <div className="p-8 md:p-12">
-                    <div className="max-w-md mx-auto">
+                <div className="bg-white px-6 pt-8 pb-6 md:p-12">
+                    <div className="w-full max-w-md md:mx-auto">
                         <h3 className="text-2xl font-bold mb-1">Create your account</h3>
                         <p className="text-sm text-gray-500 mb-6">Sign up to get started — it only takes a minute.</p>
 
