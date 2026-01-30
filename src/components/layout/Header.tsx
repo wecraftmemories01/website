@@ -442,7 +442,7 @@ export default function Header({
     }, [mobileOpen]);
 
     return (
-        <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100 mt-3">
+        <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100 mt-1">
             <div className={containerClass}>
                 <div className="relative">
                     {/* ================= DESKTOP HEADER ================= */}

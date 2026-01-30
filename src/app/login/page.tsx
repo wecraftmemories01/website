@@ -164,8 +164,8 @@ export default function LoginPage() {
     }, []);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-sky-50 to-indigo-50 flex items-center justify-center p-8">
-            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 md:flex md:items-center md:justify-center md:p-8">
+            <div className="w-full max-w-none md:max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-12 items-center">
                 {/* Left hero panel */}
                 <div className="hidden md:flex flex-col justify-center gap-8 px-10">
                     <div className="flex items-center gap-4">
@@ -218,7 +218,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Right form */}
-                <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-3xl shadow-xl p-10 md:p-12">
+                <div className="bg-white w-full px-6 pt-8 pb-6 md:min-h-0 md:bg-white/95 md:backdrop-blur-sm md:border md:border-gray-200 md:rounded-3xl md:shadow-xl md:p-12">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h1 className="text-2xl md:text-3xl font-bold">Sign in to your account</h1>
@@ -323,11 +323,11 @@ export default function LoginPage() {
                                 )}
                             </button>
 
-                            <div className="text-center text-sm text-gray-500 mt-4">
+                            <div className="text-center text-sm text-gray-500 mt-2">
                                 Don't have an account? <a href="/register" className="text-sky-600 font-medium">Create one</a>
                             </div>
 
-                            <div className="mt-6 text-xs text-center text-gray-400">
+                            <div className="mt-3 text-xs text-center text-gray-400">
                                 By signing in you agree to our <a className="underline">Terms</a> and <a className="underline">Privacy</a>.
                             </div>
                         </form>
