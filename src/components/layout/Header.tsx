@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { House, Store, Headset } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -13,294 +13,692 @@ import {
     X,
     User as UserIcon,
     ChevronDown,
+    Tag,
+    Sparkles,
+    House,
+    Store,
+    Headset,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
+import { getCategories, apiFetch } from "../../lib/api";
 import { fetchCartFromApi } from "../../lib/cart";
 
-/* ================= BRAND ================= */
-const ACCENT = "#0B5C73";
+/* dynamic import for client-only widget */
+const DeliveryPincodeInput = dynamic(() => import("../../components/DeliveryPincodeInput"), { ssr: false });
 
-/* ================= HEADER ================= */
-export default function Header() {
+/* ---------------- Theme ---------------- */
+const ACCENT = "#065975";
+const ACCENT_LIGHT = "#eaf6f8";
+
+/* ---------------- Types ---------------- */
+type Category = { _id: string; publicName: string; sortNumber?: number;[k: string]: any };
+type SubCategory = { _id: string; publicName: string; sortNumber?: number; categoryId?: string | null;[k: string]: any };
+
+/* ---------------- Config ---------------- */
+const API_ROOT = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
+const API_BASE = `${API_ROOT}`;
+
+const TOKEN_KEY = "accessToken";
+
+/* ---------------- Helpers & Spinner ---------------- */
+function getStoredAccessToken(): string | null {
+    try {
+        if (typeof window === "undefined") return null;
+        return localStorage.getItem(TOKEN_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function getStoredCustomerId(): string | null {
+    try {
+        if (typeof window === "undefined") return null;
+        const raw = localStorage.getItem("auth");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.customerId ?? null;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchWithAuth(url: string, opts: RequestInit = {}) {
+    const headers = new Headers(opts.headers ?? {});
+    const token = getStoredAccessToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.get("Content-Type")) headers.set("Content-Type", "application/json");
+    return fetch(url, { ...opts, headers });
+}
+const Spinner: React.FC<{ size?: number }> = ({ size = 14 }) => (
+    <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.12"></circle>
+        <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round"></path>
+    </svg>
+);
+
+/* ---------------- Header ---------------- */
+interface HeaderProps {
+    containerClass?: string;
+    headerHeight?: string;
+}
+
+export default function Header({
+    containerClass = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    headerHeight = "h-16",
+}: HeaderProps): React.ReactElement {
+    // split states: mobile menu vs account dropdown
+    const [mobileOpen, setMobileOpen] = useState(false); // mobile menu
+    const [mobileCollectionsOpen, setMobileCollectionsOpen] = useState(false);
+    const [accountOpen, setAccountOpen] = useState(false); // account dropdown
+    const [collectionsOpen, setCollectionsOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const [debouncedQuery, setDebouncedQuery] = useState("");
+    const [mounted, setMounted] = useState(false);
+    const [cartCount, setCartCount] = useState<number>(0);
+    const [cartLoading, setCartLoading] = useState<boolean>(false);
+    const [portalReady, setPortalReady] = useState(false);
+
     const router = useRouter();
+
     const { ready: authReady, isAuthed } = useAuthGuard({ verifyWithServer: true });
 
-    const [mounted, setMounted] = useState(false);
-    const [portalReady, setPortalReady] = useState(false);
-    const [mobileOpen, setMobileOpen] = useState(false);
-    const [query, setQuery] = useState("");
-    const [cartCount, setCartCount] = useState(0);
+    // separate refs: collections trigger (button) and panel (mega)
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const panelRef = useRef<HTMLDivElement | null>(null);
 
-    /* account menu */
-    const [accountOpen, setAccountOpen] = useState(false);
-    const accountRef = useRef<HTMLDivElement | null>(null);
+    // account trigger + panel refs
+    const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const accountPanelRef = useRef<HTMLDivElement | null>(null);
+
+    // hover/leave close helpers
+    const hoverInsideRef = useRef(false);
+    const closeTimerRef = useRef<number | null>(null);
+    const CLOSE_DELAY = 200; // ms
 
     useEffect(() => {
-        setMounted(true);
         setPortalReady(true);
     }, []);
 
-    /* ===== SEARCH ===== */
-    const doSearch = useCallback(
-        (q: string) => {
-            const v = q.trim();
-            router.push(v ? `/products?q=${encodeURIComponent(v)}` : "/products");
-        },
-        [router]
-    );
+    function scheduleCloseCollections() {
+        if (closeTimerRef.current && typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
+        if (typeof window !== "undefined") {
+            closeTimerRef.current = window.setTimeout(() => {
+                if (!hoverInsideRef.current) setCollectionsOpen(false);
+            }, CLOSE_DELAY) as unknown as number;
+        }
+    }
+    function cancelCloseCollections() {
+        if (closeTimerRef.current && typeof window !== "undefined") {
+            window.clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = null;
+        }
+    }
 
-    /* ===== CART ===== */
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [categoriesWithSubs, setCategoriesWithSubs] = useState<Set<string>>(new Set());
+    const [loadingCats, setLoadingCats] = useState(false);
+    const [catsError, setCatsError] = useState<string | null>(null);
+
+    const [subsMap, setSubsMap] = useState<Record<string, SubCategory[]>>({});
+    const [loadingSubsMap, setLoadingSubsMap] = useState(false);
+    const [subsMapError, setSubsMapError] = useState<string | null>(null);
+
+    const [selectedCat, setSelectedCat] = useState<string | null>(null);
+
+    const catsAbortRef = useRef<AbortController | null>(null);
+
+    // debounce search locally (kept for parity) - only uses window.setTimeout inside effect (safe)
+    useEffect(() => {
+        const t = (typeof window !== "undefined") ? window.setTimeout(() => setDebouncedQuery(query), 300) : null;
+        return () => {
+            if (t && typeof window !== "undefined") window.clearTimeout(t);
+        };
+    }, [query]);
+
+    // mounted flag to avoid rendering client-only values server-side
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    // 🔑 Hydrate cart from server on first load (refresh-safe)
     useEffect(() => {
         if (!mounted) return;
+
         fetchCartFromApi();
-        const stored = localStorage.getItem("cartCount");
-        if (stored) setCartCount(Number(stored));
     }, [mounted]);
 
-    /* ===== CLOSE ACCOUNT MENU ON OUTSIDE CLICK ===== */
+    const handleLogout = useCallback(() => {
+        try {
+            if (typeof window !== "undefined") {
+                localStorage.removeItem("auth");
+                localStorage.removeItem("customerId");
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem("refreshToken");
+                localStorage.removeItem("rememberedUser");
+                localStorage.removeItem("cartProductIds");
+            }
+            window.dispatchEvent(new Event("authChanged"));
+            window.location.href = "/";
+        } catch (e) {
+            console.error("Logout error", e);
+        }
+    }, []);
+
+    // click / escape / blur handlers: cover collections + account + mobile
     useEffect(() => {
-        function onClick(e: MouseEvent) {
-            if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        function onDocClick(e: MouseEvent) {
+            const t = e.target as Node | null;
+
+            // collections: if click not on trigger nor inside panel -> close
+            const clickedCollectionsTrigger = triggerRef.current && t && triggerRef.current.contains(t);
+            const clickedCollectionsPanel = panelRef.current && t && panelRef.current.contains(t);
+            if (!clickedCollectionsTrigger && !clickedCollectionsPanel) {
+                setCollectionsOpen(false);
+            }
+
+            // account: if click not on account trigger nor account panel -> close
+            const clickedAccountTrigger = accountTriggerRef.current && t && accountTriggerRef.current.contains(t);
+            const clickedAccountPanel = accountPanelRef.current && t && accountPanelRef.current.contains(t);
+            if (!clickedAccountTrigger && !clickedAccountPanel) {
                 setAccountOpen(false);
             }
         }
-        document.addEventListener("mousedown", onClick);
-        return () => document.removeEventListener("mousedown", onClick);
+        function onKey(e: KeyboardEvent) {
+            if (e.key === "Escape") {
+                setCollectionsOpen(false);
+                setAccountOpen(false);
+                setMobileOpen(false);
+            }
+        }
+
+        function onWindowBlur() {
+            setAccountOpen(false);
+        }
+
+        function onVisibilityChange() {
+            if (typeof document !== "undefined" && document.hidden) {
+                setAccountOpen(false);
+            }
+        }
+
+        function onWindowMouseOut(e: MouseEvent) {
+            // when the mouse leaves the window, relatedTarget is null
+            // @ts-ignore
+            const related = (e as any).relatedTarget || (e as any).toElement;
+            if (!related) {
+                setAccountOpen(false);
+            }
+        }
+
+        document.addEventListener("click", onDocClick);
+        document.addEventListener("keydown", onKey);
+        if (typeof window !== "undefined") {
+            window.addEventListener("blur", onWindowBlur);
+            window.addEventListener("mouseout", onWindowMouseOut);
+        }
+        document.addEventListener("visibilitychange", onVisibilityChange);
+
+        return () => {
+            document.removeEventListener("click", onDocClick);
+            document.removeEventListener("keydown", onKey);
+            if (typeof window !== "undefined") {
+                window.removeEventListener("blur", onWindowBlur);
+                window.removeEventListener("mouseout", onWindowMouseOut);
+            }
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+        };
     }, []);
 
-    /* ===== BODY LOCK ===== */
     useEffect(() => {
-        document.body.style.overflow = mobileOpen ? "hidden" : "";
-    }, [mobileOpen]);
+        catsAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        catsAbortRef.current = ctrl;
 
-    /* ===== USER NAME ===== */
-    function getUserName() {
+        async function load() {
+            setLoadingCats(true);
+            setCatsError(null);
+            setLoadingSubsMap(true);
+            setSubsMapError(null);
+
+            try {
+                const [cats, allSubsRaw] = await Promise.all([
+                    getCategories(ctrl.signal),
+                    apiFetch(`${API_BASE}/sub_category`, { signal: ctrl.signal }),
+                ]);
+
+                const allSubs = (allSubsRaw?.subCategoryData || []).map((s: any) => ({
+                    ...s,
+                    categoryId: s.categoryId ?? s.superCategoryId ?? (s.category && s.category._id) ?? null,
+                })) as SubCategory[];
+
+                // build map
+                const map: Record<string, SubCategory[]> = {};
+                allSubs.forEach((s) => {
+                    const cid = s.categoryId ?? "uncategorized";
+                    if (!map[cid]) map[cid] = [];
+                    map[cid].push(s);
+                });
+                setSubsMap(map);
+
+                // categories that have subs
+                const setIds = new Set<string>();
+                allSubs.forEach((s) => {
+                    if (s.categoryId) setIds.add(s.categoryId);
+                });
+                setCategoriesWithSubs(setIds);
+
+                // filter categories to only those with subs for tidy UI
+                const filtered = (cats || []).filter((c: any) => setIds.has(c._id));
+                setCategories(filtered);
+
+                if ((filtered || []).length > 0) setSelectedCat(filtered[0]._id);
+            } catch (err: any) {
+                if (err?.name !== "AbortError") {
+                    console.error("Failed loading categories", err);
+                    setCatsError("Failed to load collections");
+                    setSubsMapError("Failed to load sub-collections");
+                }
+            } finally {
+                setLoadingCats(false);
+                setLoadingSubsMap(false);
+                catsAbortRef.current = null;
+            }
+        }
+
+        // load categories only on client (avoid SSR fetch differences)
+        if (typeof window !== "undefined") load();
+        return () => ctrl.abort();
+    }, []);
+
+    // lock body scroll when mega open
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        // Save previous values so we can restore them exactly
+        const prevOverflow = document.body.style.overflow;
+        const prevPaddingRight = document.body.style.paddingRight || "";
+
+        function getScrollbarWidth() {
+            return window.innerWidth - document.documentElement.clientWidth;
+        }
+
+        if (collectionsOpen) {
+            const scrollBarWidth = getScrollbarWidth();
+            if (scrollBarWidth > 0) {
+                document.body.style.paddingRight = `${scrollBarWidth}px`;
+            }
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = prevOverflow || "";
+            document.body.style.paddingRight = prevPaddingRight;
+        }
+
+        return () => {
+            document.body.style.overflow = prevOverflow || "";
+            document.body.style.paddingRight = prevPaddingRight;
+        };
+    }, [collectionsOpen]);
+
+    // cleanup close timer on unmount
+    useEffect(() => {
+        return () => {
+            if (closeTimerRef.current && typeof window !== "undefined") {
+                window.clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+        };
+    }, []);
+
+    async function fetchCartCount() {
+        if (typeof window === "undefined") return;
+        setCartLoading(true);
         try {
-            const raw = localStorage.getItem("auth");
-            if (!raw) return "Account";
-            const parsed = JSON.parse(raw);
-            return parsed?.name || parsed?.firstName || "Account";
-        } catch {
-            return "Account";
+            const customerId = getStoredCustomerId();
+            const param = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
+            const url = `${API_BASE}/cart${param}`;
+            const res = await fetchWithAuth(url, { method: "GET" });
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                setCartCount(0);
+                try { localStorage.setItem("cartCount", "0"); } catch { }
+                return;
+            }
+            const raw = Array.isArray(body?.cartData) ? body.cartData[0] : body.cartData;
+            if (!raw) {
+                setCartCount(0);
+                try { localStorage.setItem("cartCount", "0"); } catch { }
+                return;
+            }
+            let count = 0;
+            if (typeof raw.totalItems === "number") count = raw.totalItems;
+            else if (Array.isArray(raw.sellItems)) count = raw.sellItems.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+            else count = 0;
+            setCartCount(count);
+            try { localStorage.setItem("cartCount", String(count)); } catch { }
+        } catch (err) {
+            console.error("[Header] fetchCartCount error:", err);
+            setCartCount(0);
+            try { localStorage.setItem("cartCount", "0"); } catch { }
+        } finally {
+            setCartLoading(false);
         }
     }
 
-    function handleLogout() {
-        localStorage.clear();
-        window.location.href = "/";
-    }
+    // only fetch cart after mount to avoid SSR/CSR mismatch
+    useEffect(() => {
+        if (!mounted) return;
+        fetchCartCount();
+        function onAuthChanged() { fetchCartCount(); }
+        function onCartChanged() { fetchCartCount(); }
+        function onStorage(e: StorageEvent) {
+            if (!e.key) return;
+            if (e.key === "auth" || e.key === TOKEN_KEY || e.key === "cartCount") fetchCartCount();
+        }
+        window.addEventListener("authChanged", onAuthChanged);
+        window.addEventListener("cartChanged", onCartChanged);
+        window.addEventListener("storage", onStorage);
+        return () => {
+            window.removeEventListener("authChanged", onAuthChanged);
+            window.removeEventListener("cartChanged", onCartChanged);
+            window.removeEventListener("storage", onStorage);
+        };
+    }, [mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        if (authReady) fetchCartCount();
+    }, [authReady, isAuthed, mounted]);
+
+    const totalSubCount = useMemo(() => Object.values(subsMap).reduce((s, arr) => s + arr.length, 0), [subsMap]);
+    const selectedSubs = selectedCat ? (subsMap[selectedCat] || []) : [];
+
+    // ----- Search redirect logic -----
+    const doHeaderSearch = useCallback((q: string) => {
+        const trimmed = (q ?? "").trim();
+        if (trimmed.length === 0) {
+            router.push("/products");
+        } else {
+            const encoded = encodeURIComponent(trimmed);
+            router.push(`/products?q=${encoded}`);
+        }
+    }, [router]);
+
+    // allow Enter key to submit search
+    const onHeaderKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            doHeaderSearch(query);
+        }
+    };
+
+    useEffect(() => {
+        if (mobileOpen) {
+            document.body.style.overflow = "hidden";
+            document.body.style.touchAction = "none";
+        } else {
+            document.body.style.overflow = "";
+            document.body.style.touchAction = "";
+        }
+    }, [mobileOpen]);
 
     return (
-        <>
-            {/* ================= HEADER ================= */}
-            <header className="sticky top-0 z-50 bg-white border-b">
-                <div className="max-w-7xl mx-auto px-4">
+        <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100">
+            <div className={containerClass}>
+                <div className={`flex items-center gap-6 ${headerHeight}`}>
+                    {/* left */}
+                    <div className="flex items-center gap-4 shrink-0">
+                        <button
+                            onClick={() => setMobileOpen((v) => !v)}
+                            aria-label="menu"
+                            className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition"
+                        >
+                            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+                        </button>
 
-                    {/* ================= TOP ROW ================= */}
-                    <div className="min-h-[64px] flex items-center gap-6">
-
-                        {/* LEFT */}
-                        <div className="flex items-center gap-4 shrink-0">
-                            <Link href="/">
-                                <Image src="/logo.png" alt="WeCraftMemories" width={78} height={44} />
-                            </Link>
-                        </div>
-
-                        {/* DESKTOP MENU */}
-                        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 shrink-0">
-
-                            <Link
-                                href="/"
-                                className="flex items-center gap-1.5 hover:text-[color:var(--a)] transition"
-                                style={{ "--a": ACCENT } as any}
-                            >
-                                <House size={16} />
-                                <span>Home</span>
-                            </Link>
-
-                            <Link
-                                href="/products"
-                                className="flex items-center gap-1.5 hover:text-[color:var(--a)] transition"
-                                style={{ "--a": ACCENT } as any}
-                            >
-                                <Store size={16} />
-                                <span>Shop</span>
-                            </Link>
-
-                            <Link
-                                href="/contact"
-                                className="flex items-center gap-1.5 hover:text-[color:var(--a)] transition"
-                                style={{ "--a": ACCENT } as any}
-                            >
-                                <Headset size={16} />
-                                <span>Contact</span>
-                            </Link>
-
-                        </nav>
-
-                        {/* SEARCH — EXPANDS */}
-                        <div className="hidden md:flex flex-1 mx-4">
-                            <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-4 py-2 w-full">
-                                <Search size={16} className="text-slate-500" />
-                                <input
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && doSearch(query)}
-                                    placeholder="Search handmade gifts, crochet toys, decor…"
-                                    className="bg-transparent outline-none text-sm w-full"
+                        {/* Logo only on desktop */}
+                        <Link href="/" className="flex items-center shrink-0">
+                            <div className="rounded-md p-1" style={{ background: ACCENT_LIGHT }}>
+                                <Image
+                                    src="/logo.png"
+                                    alt="WeCraftMemories"
+                                    width={64}
+                                    height={38}
+                                    priority
                                 />
                             </div>
-                        </div>
+                        </Link>
+                    </div>
 
-                        {/* RIGHT — DESKTOP */}
-                        <div className="hidden md:flex items-center gap-3 shrink-0">
+                    {/* MOBILE SEARCH (open by default) */}
+                    <div className="flex md:hidden items-center bg-slate-100 rounded-full px-3 py-2 gap-2 flex-1 min-w-0">
+                        <Search size={16} className="text-slate-600 shrink-0" />
+                        <input
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyDown={onHeaderKeyDown}
+                            placeholder="Search products..."
+                            className="bg-transparent outline-none text-sm flex-1 min-w-0"
+                        />
+                    </div>
 
-                            {/* CART */}
-                            <Link href="/cart" className="relative p-2">
-                                <ShoppingCart size={20} />
-                                {mounted && cartCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 min-w-[18px] h-5 rounded-full bg-amber-400 text-xs font-semibold flex items-center justify-center">
-                                        {cartCount}
-                                    </span>
-                                )}
+                    {/* center nav */}
+                    <div className="hidden md:flex items-center gap-6 flex-1 min-w-0">
+                        {/* NAV */}
+                        <nav className="flex items-center gap-6 shrink-0">
+                            <Link href="/" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700">
+                                <House size={14} /> Home
                             </Link>
-
-                            {/* AUTH */}
-                            {authReady && !isAuthed && (
-                                <>
-                                    <Link href="/login" className="text-sm font-medium">Login</Link>
-                                    <Link
-                                        href="/register"
-                                        className="px-4 py-2 rounded-lg text-sm font-medium text-white"
-                                        style={{ background: ACCENT }}
-                                    >
-                                        Register
-                                    </Link>
-                                </>
-                            )}
-
-                            {authReady && isAuthed && (
-                                <div ref={accountRef} className="relative">
-                                    <button
-                                        onClick={() => setAccountOpen(v => !v)}
-                                        className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100"
-                                    >
-                                        <UserIcon size={18} />
-                                        <span
-                                            className="max-w-[120px] truncate text-sm font-medium"
-                                            title={mounted ? getUserName() : ""}
-                                        >
-                                            {mounted ? getUserName() : "Account"}
-                                        </span>
-                                        <ChevronDown size={14} />
-                                    </button>
-
-                                    <AnimatePresence>
-                                        {accountOpen && (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: -6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -6 }}
-                                                className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-50"
-                                            >
-                                                <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-100">
-                                                    Profile
-                                                </Link>
-                                                <Link href="/orders" className="block px-4 py-2 text-sm hover:bg-slate-100">
-                                                    Orders
-                                                </Link>
-                                                <button
-                                                    onClick={handleLogout}
-                                                    className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-slate-100"
-                                                >
-                                                    Logout
-                                                </button>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* RIGHT — MOBILE */}
-                        <div className="md:hidden flex items-center gap-2 ml-auto">
-                            <Link href="/cart" className="relative p-2">
-                                <ShoppingCart size={20} />
-                                {mounted && cartCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 min-w-[18px] h-5 rounded-full bg-amber-400 text-xs font-semibold flex items-center justify-center">
-                                        {cartCount}
-                                    </span>
-                                )}
+                            <Link href="/products" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700">
+                                <Store size={14} /> Shop
                             </Link>
+                            <Link href="/contact" className="flex items-center gap-1 text-sm font-medium hover:text-rose-700">
+                                <Headset size={14} /> Contact
+                            </Link>
+                        </nav>
 
-                            {authReady && (
-                                <Link href={isAuthed ? "/profile" : "/login"} className="flex items-center gap-1 p-2">
-                                    <UserIcon size={18} />
-                                    {isAuthed && (
-                                        <span className="max-w-[80px] truncate text-sm">
-                                            {mounted ? getUserName() : ""}
-                                        </span>
-                                    )}
-                                </Link>
-                            )}
-
-                            <button onClick={() => setMobileOpen(true)} className="p-2">
-                                <Menu size={22} />
+                        {/* SEARCH (fills remaining space) */}
+                        <div className="flex items-center bg-slate-100 rounded-full px-4 py-2 gap-2 flex-1 max-w-xl">
+                            <Search size={14} className="text-slate-600 shrink-0" />
+                            <input
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                onKeyDown={onHeaderKeyDown}
+                                placeholder="Search products..."
+                                className="bg-transparent outline-none text-sm text-slate-800 placeholder-slate-400 flex-1 min-w-0"
+                            />
+                            <button
+                                onClick={() => doHeaderSearch(query)}
+                                className="text-sm px-3 py-1 rounded-full bg-white hover:bg-slate-200 shrink-0"
+                            >
+                                Search
                             </button>
                         </div>
                     </div>
 
-                    {/* ================= SEARCH DOWN (MOBILE / WRAP) ================= */}
-                    <div className="md:hidden pb-3">
-                        <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-2">
-                            <Search size={16} className="text-slate-500" />
-                            <input
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && doSearch(query)}
-                                placeholder="Search handmade gifts…"
-                                className="bg-transparent outline-none w-full text-sm"
-                            />
+                    {/* right controls */}
+                    <div className="flex items-center gap-3 shrink-0">
+
+                        <div className="hidden sm:flex items-center">
+                            {/* DeliveryPincodeInput is client-only (dynamically imported with ssr:false) */}
+                            {/* Render a stable placeholder when not mounted to keep DOM identical */}
+                            {!mounted ? (
+                                <div aria-hidden={true} className="w-[160px] h-8 rounded-md bg-transparent" />
+                            ) : (
+                                <DeliveryPincodeInput />
+                            )}
+                        </div>
+
+                        <Link href="/cart" className="relative group flex items-center" aria-label="View cart">
+                            <button className="p-2 rounded-full hover:bg-slate-100 transition" aria-hidden>
+                                <ShoppingCart size={18} />
+                            </button>
+
+                            {/* Cart badge: same span node both server and client to avoid node replacement */}
+                            <span
+                                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-400 text-slate-900 text-xs flex items-center justify-center font-semibold"
+                                style={{ visibility: (mounted && (cartLoading || cartCount > 0)) ? "visible" : "hidden" }}
+                                aria-hidden={!mounted}
+                            >
+                                {mounted ? (cartLoading ? <Spinner size={12} /> : String(cartCount)) : ""}
+                            </span>
+                        </Link>
+
+                        <div className="hidden md:flex items-center gap-3">
+                            {/* To avoid hydration mismatch we only render auth-dependent UI after mount.
+                                During SSR we render a stable placeholder of the same node shape. */}
+                            {!mounted ? (
+                                // stable placeholder area (same DOM footprint)
+                                <div className="w-40 h-8 rounded-md bg-transparent" aria-hidden />
+                            ) : (
+                                <>
+                                    {!authReady && <div className="w-6 h-6 flex items-center justify-center"><Spinner size={14} /></div>}
+
+                                    {authReady && !isAuthed && (
+                                        <>
+                                            <Link href="/login" className="text-sm text-slate-700 hover:text-[color:var(--accent)] transition" style={{ ["--accent" as any]: ACCENT }}>Login</Link>
+                                            <Link href="/register" className="px-3 py-1.5 rounded-md" style={{ background: ACCENT, color: "#fff" }}>Register</Link>
+                                        </>
+                                    )}
+
+                                    {authReady && isAuthed && (
+                                        <div className="relative">
+                                            <button
+                                                ref={accountTriggerRef}
+                                                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 transition"
+                                                aria-haspopup="true"
+                                                onClick={() => setAccountOpen((v) => !v)}
+                                            >
+                                                <UserIcon size={16} />
+                                                <span className="text-sm font-medium">Account</span>
+                                                <ChevronDown size={14} />
+                                            </button>
+
+                                            <AnimatePresence>
+                                                {accountOpen && (
+                                                    <motion.div
+                                                        ref={accountPanelRef}
+                                                        initial={{ opacity: 0, y: -6 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -6 }}
+                                                        className="absolute right-0 mt-2 w-48 rounded-lg bg-white shadow-lg border z-50 py-2"
+                                                    >
+                                                        <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-50">Profile</Link>
+                                                        <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50">Logout</button>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
-            </header>
+            </div>
 
-            {/* ================= MOBILE DRAWER ================= */}
+            {/* ================= MOBILE DRAWER (PORTAL) ================= */}
             {portalReady &&
                 createPortal(
                     <AnimatePresence>
                         {mobileOpen && (
                             <>
+                                {/* BACKDROP */}
                                 <motion.div
-                                    className="fixed inset-0 bg-black/50 z-[100]"
+                                    className="fixed inset-0 bg-black/50 z-[1000]"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
                                     onClick={() => setMobileOpen(false)}
                                 />
+
+                                {/* DRAWER */}
                                 <motion.aside
-                                    className="fixed top-0 left-0 h-full w-[80%] max-w-sm bg-white z-[101]"
                                     initial={{ x: "-100%" }}
                                     animate={{ x: 0 }}
                                     exit={{ x: "-100%" }}
+                                    transition={{ type: "spring", stiffness: 260, damping: 28 }}
+                                    className="fixed top-0 left-0 h-full w-[85%] max-w-sm bg-white z-[1001] flex flex-col"
                                 >
+                                    {/* HEADER */}
                                     <div className="h-14 px-4 flex items-center justify-between border-b">
-                                        <span className="font-semibold">Menu</span>
+                                        <span className="text-lg font-semibold">Menu</span>
                                         <button onClick={() => setMobileOpen(false)}>
                                             <X size={20} />
                                         </button>
                                     </div>
 
-                                    <nav className="p-4 space-y-2 text-sm font-medium">
-                                        <Link href="/" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-lg hover:bg-slate-100">Home</Link>
-                                        <Link href="/products" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-lg hover:bg-slate-100">Shop</Link>
-                                        <Link href="/contact" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-lg hover:bg-slate-100">Contact</Link>
+                                    {/* SEARCH */}
+                                    <div className="px-4 py-3">
+                                        <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2">
+                                            <Search size={16} />
+                                            <input
+                                                value={query}
+                                                onChange={(e) => setQuery(e.target.value)}
+                                                onKeyDown={(e) => e.key === "Enter" && doHeaderSearch(query)}
+                                                placeholder="Search products"
+                                                className="bg-transparent outline-none w-full text-sm"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* NAV */}
+                                    <nav className="px-4 space-y-1">
+                                        <Link
+                                            href="/"
+                                            onClick={() => setMobileOpen(false)}
+                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
+                                        >
+                                            Home
+                                        </Link>
+                                        <Link
+                                            href="/products"
+                                            onClick={() => setMobileOpen(false)}
+                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
+                                        >
+                                            Shop
+                                        </Link>
                                     </nav>
+
+                                    {/* PINCODE */}
+                                    <div className="px-4 py-4 border-t">
+                                        <div className="text-sm font-medium mb-2">Delivery Pincode</div>
+                                        {mounted ? <DeliveryPincodeInput /> : <div className="h-10 bg-slate-100 rounded" />}
+                                    </div>
+
+                                    {/* FOOTER */}
+                                    <div className="mt-auto px-4 py-4 border-t">
+                                        {!authReady ? (
+                                            <div className="text-center py-3 bg-slate-100 rounded-xl">
+                                                Checking…
+                                            </div>
+                                        ) : !isAuthed ? (
+                                            <Link
+                                                href="/login"
+                                                onClick={() => setMobileOpen(false)}
+                                                className="block text-center py-3 rounded-xl text-white font-semibold"
+                                                style={{ background: ACCENT }}
+                                            >
+                                                Login / Register
+                                            </Link>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    localStorage.clear();
+                                                    window.location.href = "/";
+                                                }}
+                                                className="w-full py-3 rounded-xl bg-rose-600 text-white font-semibold"
+                                            >
+                                                Logout
+                                            </button>
+                                        )}
+                                    </div>
                                 </motion.aside>
                             </>
                         )}
                     </AnimatePresence>,
                     document.body
                 )}
-        </>
+        </header>
     );
 }
