@@ -6,6 +6,7 @@ import ProductGrid from './ProductGrid'
 import Pagination from './ui/Pagination'
 import type { Product } from '../types/product'
 import SidebarFilters from './SidebarFilters'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:3000/v1'
 
@@ -35,6 +36,7 @@ export default function ProductsClient() {
     const [selectedAges, setSelectedAges] = useState<string[]>([])
     const [selectedThemes, setSelectedThemes] = useState<string[]>([])
     const [inStockOnly, setInStockOnly] = useState(false)
+    const [filtersOpen, setFiltersOpen] = useState(false)
 
     const [page, setPage] = useState(1)
     const perPageOptions = [8, 12, 16]
@@ -260,12 +262,18 @@ export default function ProductsClient() {
                         <p className="text-sm text-slate-600">Handmade woolen items — interactive filters on the left.</p>
                     </div>
                     <div className="md:hidden">
-                        {/* mobile: nothing fancy here */}
+                        <button
+                            onClick={() => setFiltersOpen(true)}
+                            className="px-4 py-2 rounded-md border bg-white shadow-sm text-sm font-medium"
+                        >
+                            Filters
+                        </button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6">
-                    <aside className="bg-white rounded-lg shadow-sm p-4">
+                    {/* Desktop sidebar */}
+                    <aside className="hidden md:block bg-white rounded-lg shadow-sm p-4">
                         <SidebarFilters
                             q={q}
                             onQChange={setQ}
@@ -292,6 +300,63 @@ export default function ProductsClient() {
                             onClearAll={clearAll}
                         />
                     </aside>
+
+                    <AnimatePresence>
+                        {filtersOpen && (
+                            <div className="fixed inset-0 z-50 md:hidden">
+                                {/* Overlay */}
+                                <div
+                                    className="absolute inset-0 bg-black/40"
+                                    onClick={() => setFiltersOpen(false)}
+                                />
+
+                                {/* Drawer */}
+                                <motion.div
+                                    initial={{ x: '-100%' }}
+                                    animate={{ x: 0 }}
+                                    exit={{ x: '-100%' }}
+                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                    className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-white shadow-xl p-4 overflow-y-auto"
+                                >
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-lg font-semibold">Filters</h2>
+                                        <button
+                                            onClick={() => setFiltersOpen(false)}
+                                            className="p-2 rounded-md hover:bg-slate-100"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <SidebarFilters
+                                        q={q}
+                                        onQChange={setQ}
+                                        inStockOnly={inStockOnly}
+                                        onToggleInStock={() => setInStockOnly((s) => !s)}
+                                        masterOptions={toArrayWithCounts(availableFilterSets.masters)}
+                                        superOptions={toArrayWithCounts(availableFilterSets.supers)}
+                                        categoryOptions={toArrayWithCounts(availableFilterSets.cats)}
+                                        subOptions={toArrayWithCounts(availableFilterSets.subs)}
+                                        ageOptions={toArrayWithCounts(availableFilterSets.ages)}
+                                        themeOptions={toArrayWithCounts(availableFilterSets.themes)}
+                                        selectedMasters={selectedMasters}
+                                        selectedSupers={selectedSupers}
+                                        selectedCategories={selectedCategories}
+                                        selectedSubs={selectedSubs}
+                                        selectedAges={selectedAges}
+                                        selectedThemes={selectedThemes}
+                                        onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
+                                        onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
+                                        onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
+                                        onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
+                                        onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
+                                        onToggleTheme={(id) => toggle(selectedThemes, setSelectedThemes, id)}
+                                        onClearAll={clearAll}
+                                    />
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
 
                     <main>
                         <div className="mb-4 flex items-center justify-between">
@@ -339,6 +404,6 @@ export default function ProductsClient() {
                     </main>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }
