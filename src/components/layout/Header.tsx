@@ -512,9 +512,10 @@ export default function Header({
                                     <button
                                         ref={accountTriggerRef}
                                         onClick={() => setAccountOpen((v) => !v)}
-                                        className="flex items-center gap-1 text-sm font-medium ml-3"
+                                        className="flex items-center gap-1 text-sm font-medium ml-2"
                                     >
                                         <UserIcon size={16} />
+                                        Account
                                         <ChevronDown size={14} />
                                     </button>
 
