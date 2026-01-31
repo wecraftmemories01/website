@@ -624,6 +624,13 @@ export default function Header({
                                         >
                                             Shop
                                         </Link>
+                                        <Link
+                                            href="/contact"
+                                            onClick={() => setMobileOpen(false)}
+                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
+                                        >
+                                            Contact
+                                        </Link>
                                     </nav>
 
                                     {/* PINCODE */}
