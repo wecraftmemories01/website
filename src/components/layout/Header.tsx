@@ -508,7 +508,42 @@ export default function Header({
                                     </Link>
                                 </>
                             ) : (
-                                <button onClick={handleLogout}>Logout</button>
+                                <div className="relative">
+                                    <button
+                                        ref={accountTriggerRef}
+                                        onClick={() => setAccountOpen((v) => !v)}
+                                        className="flex items-center gap-1 text-sm font-medium ml-3"
+                                    >
+                                        <UserIcon size={16} />
+                                        <ChevronDown size={14} />
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {accountOpen && (
+                                            <motion.div
+                                                ref={accountPanelRef}
+                                                initial={{ opacity: 0, y: 6 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 6 }}
+                                                className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border z-50"
+                                            >
+                                                <Link
+                                                    href="/profile"
+                                                    onClick={() => setAccountOpen(false)}
+                                                    className="block px-4 py-2 text-sm hover:bg-slate-100 rounded-t-xl"
+                                                >
+                                                    Profile
+                                                </Link>
+                                                <button
+                                                    onClick={handleLogout}
+                                                    className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-slate-100 rounded-b-xl"
+                                                >
+                                                    Logout
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             )}
                         </div>
                     </div>
