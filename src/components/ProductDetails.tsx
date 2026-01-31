@@ -729,71 +729,41 @@ export default function ProductClient({ product }: { product: Product }) {
         }
     }
 
-    async function copyProductId() {
-        try {
-            await navigator.clipboard.writeText(_id);
-            setToast("Product ID copied");
-        } catch {
-            setToast("Copy failed");
-        }
-    }
-
     function openSharePopup() {
-        const url = typeof window !== "undefined" ? window.location.href : "";
-        const encodedUrl = encodeURIComponent(url);
-        const encodedText = encodeURIComponent(productName ?? "");
-        const encodedDesc = encodeURIComponent(shortDescription ?? "");
+        if (typeof window === "undefined") return;
 
-        const shareOptions = [
-            { name: "WhatsApp", link: `https://wa.me/?text=${encodedText}%20${encodedUrl}` },
-            { name: "Facebook", link: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}` },
-            { name: "Twitter", link: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}` },
-            { name: "Pinterest", link: `https://pinterest.com/pin/create/button/?url=${encodedUrl}&description=${encodedDesc}` },
-        ];
+        const url = window.location.href;
+        const title = productName ?? "Check this product";
+        const text = shortDescription ?? "";
 
-        const w = 420;
-        const h = 520;
-        const left = (window.screen.width / 2) - (w / 2);
-        const top = (window.screen.height / 2) - (h / 2);
-
-        const popup = window.open("", "Share", `width=${w},height=${h},left=${left},top=${top},noopener`);
-        if (!popup) {
-            window.open(shareOptions[0].link, "_blank", "noopener");
+        // ✅ 1. Native Share (mobile + modern browsers)
+        if (navigator.share) {
+            navigator
+                .share({
+                    title,
+                    text,
+                    url,
+                })
+                .catch((err) => {
+                    // user cancelled → ignore
+                    if (err?.name !== "AbortError") {
+                        console.warn("Share failed:", err);
+                    }
+                });
             return;
         }
 
-        const pageTitle = escape(String(productName ?? "Share"));
-        popup.document.write(`
-        <!doctype html>
-        <html>
-            <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width,initial-scale=1" />
-            <title>Share</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 18px; color: #062024; }
-                h2 { margin: 0 0 12px 0; font-size: 18px; color: #004F64; }
-                .opt { display:block; margin:10px 0; padding:12px 14px; border-radius:8px; text-decoration:none; color:#fff; font-weight:600; }
-                .wa { background:#25D366; }
-                .fb { background:#1877F2; }
-                .tw { background:#1DA1F2; }
-                .pt { background:#E60023; }
-                .desc { margin-top:14px; font-size:13px; color:#375a5a; }
-                small { display:block; margin-top:8px; color:#7a8a8a; }
-            </style>
-            </head>
-            <body>
-            <h2>Share "${pageTitle}"</h2>
-            <a class="opt wa" href="${shareOptions[0].link}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-            <a class="opt fb" href="${shareOptions[1].link}" target="_blank" rel="noopener noreferrer">Facebook</a>
-            <a class="opt tw" href="${shareOptions[2].link}" target="_blank" rel="noopener noreferrer">Twitter</a>
-            <a class="opt pt" href="${shareOptions[3].link}" target="_blank" rel="noopener noreferrer">Pinterest</a>
-            <div class="desc">Opens in a new tab. Close this window when done.</div>
-            <small>${escape(String(shortDescription ?? ""))}</small>
-            </body>
-        </html>
-    `);
-        popup.document.close();
+        // ✅ 2. Fallback (desktop / unsupported browsers)
+        const encodedUrl = encodeURIComponent(url);
+        const encodedText = encodeURIComponent(title);
+
+        const shareLinks = [
+            `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
+            `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+            `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+        ];
+
+        window.open(shareLinks[0], "_blank", "noopener,noreferrer");
     }
 
     return (
@@ -966,7 +936,6 @@ export default function ProductClient({ product }: { product: Product }) {
                             <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
                                 <div>Delivery: <span className="font-medium text-gray-800">3–7 business days</span></div>
                                 <div className="flex gap-2">
-                                    <button onClick={copyProductId} className="px-3 py-1 border rounded text-xs">Copy ID</button>
                                     <button onClick={openSharePopup} className="px-3 py-1 border rounded text-xs">Share</button>
                                 </div>
                             </div>

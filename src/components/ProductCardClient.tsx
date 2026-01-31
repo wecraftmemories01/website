@@ -122,8 +122,10 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
     );
 
     const isOnSale = discountedPrice && actualPrice && Number(discountedPrice) < Number(actualPrice);
-    const isLowStock = !stock.isInStock ? false : /^(0|1|2|3)$/.test(stock.label.replace(/\D/g, ''));
-    const limitedBadge = String(stock.label).endsWith('+') || isLowStock;
+    // const isLowStock = !stock.isInStock ? false : /^(0|1|2|3)$/.test(stock.label.replace(/\D/g, ''));
+    const limitedBadge = product.sellStockQuantity < 10;
+    // String(stock.label).endsWith('+') || isLowStock;
+    // console.log('limitedBadge: ', limitedBadge);
 
     const inferredType: 'SELL' | 'RENT' = useMemo(() => {
         const raw = String(product.sellStockQuantity ?? '')
