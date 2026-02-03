@@ -572,8 +572,14 @@ export default function Header({
                             </div>
 
                             <div className="flex items-center gap-3">
-                                <Link href="/cart">
+                                <Link href="/cart" className="relative">
                                     <ShoppingCart size={18} />
+
+                                    {mounted && cartCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 min-w-[16px] h-[16px] text-[10px] bg-amber-400 rounded-full flex items-center justify-center font-semibold">
+                                            {cartCount}
+                                        </span>
+                                    )}
                                 </Link>
                                 <button onClick={() => router.push(isAuthed ? "/profile" : "/login")}>
                                     <UserIcon size={18} />
