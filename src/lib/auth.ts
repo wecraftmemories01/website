@@ -10,6 +10,7 @@ export type AuthShape = {
     customerId?: string;
     token?: {
         accessToken?: string;
+        refreshToken?: string;
         tokenExpiresAt?: string;
         tokenObtainedAt?: string;
         expiresIn?: number;
@@ -133,7 +134,11 @@ export async function refreshAccessToken(): Promise<boolean> {
 
         persistAuth({
             customerId: data.customerId ?? existingAuth?.customerId,
-            token: data,
+            token: {
+                accessToken: data.accessToken,
+                refreshToken: data.refreshToken,
+                expiresIn: data.expiresIn,
+            },
         });
 
         return true;
@@ -223,6 +228,7 @@ export function persistAuth(data: AuthShape | null) {
             customerId: data.customerId,
             token: {
                 accessToken: data.token.accessToken,
+                refreshToken: data.token.refreshToken,
                 expiresIn,
                 tokenObtainedAt,
                 tokenExpiresAt,
