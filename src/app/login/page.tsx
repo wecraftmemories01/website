@@ -127,7 +127,14 @@ export default function LoginPage() {
                 return;
             }
 
-            persistAuth(data);
+            persistAuth({
+                customerId: data.customerId,
+                token: {
+                    accessToken: data.token?.accessToken ?? data.accessToken,
+                    refreshToken: data.token?.refreshToken ?? data.refreshToken,
+                    expiresIn: data.token?.expiresIn ?? data.expiresIn,
+                }
+            });
 
             if (remember) {
                 localStorage.setItem("rememberedUser", username.trim());

@@ -21,8 +21,9 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
-import { getCategories, apiFetch } from "../../lib/api";
 import { fetchCartFromApi } from "../../lib/cart";
+import { logout } from "../../lib/auth";
+import api from "../../services/api";
 
 /* dynamic import for client-only widget */
 const DeliveryPincodeInput = dynamic(() => import("../../components/DeliveryPincodeInput"), { ssr: false });
@@ -34,22 +35,6 @@ const ACCENT_LIGHT = "#eaf6f8";
 /* ---------------- Types ---------------- */
 type Category = { _id: string; publicName: string; sortNumber?: number;[k: string]: any };
 type SubCategory = { _id: string; publicName: string; sortNumber?: number; categoryId?: string | null;[k: string]: any };
-
-/* ---------------- Config ---------------- */
-const API_ROOT = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
-const API_BASE = `${API_ROOT}`;
-
-const TOKEN_KEY = "accessToken";
-
-/* ---------------- Helpers & Spinner ---------------- */
-function getStoredAccessToken(): string | null {
-    try {
-        if (typeof window === "undefined") return null;
-        return localStorage.getItem(TOKEN_KEY);
-    } catch {
-        return null;
-    }
-}
 
 function getStoredCustomerId(): string | null {
     try {
@@ -63,13 +48,6 @@ function getStoredCustomerId(): string | null {
     }
 }
 
-async function fetchWithAuth(url: string, opts: RequestInit = {}) {
-    const headers = new Headers(opts.headers ?? {});
-    const token = getStoredAccessToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.get("Content-Type")) headers.set("Content-Type", "application/json");
-    return fetch(url, { ...opts, headers });
-}
 const Spinner: React.FC<{ size?: number }> = ({ size = 14 }) => (
     <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.12"></circle>
@@ -167,21 +145,8 @@ export default function Header({
         fetchCartFromApi();
     }, [mounted]);
 
-    const handleLogout = useCallback(() => {
-        try {
-            if (typeof window !== "undefined") {
-                localStorage.removeItem("auth");
-                localStorage.removeItem("customerId");
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem("refreshToken");
-                localStorage.removeItem("rememberedUser");
-                localStorage.removeItem("cartProductIds");
-            }
-            window.dispatchEvent(new Event("authChanged"));
-            window.location.href = "/";
-        } catch (e) {
-            console.error("Logout error", e);
-        }
+    const handleLogout = useCallback(async () => {
+        await logout("/");
     }, []);
 
     // click / escape / blur handlers: cover collections + account + mobile
@@ -261,10 +226,13 @@ export default function Header({
             setSubsMapError(null);
 
             try {
-                const [cats, allSubsRaw] = await Promise.all([
-                    getCategories(ctrl.signal),
-                    apiFetch(`${API_BASE}/sub_category`, { signal: ctrl.signal }),
+                const [catsRes, subsRes] = await Promise.all([
+                    api.get("/category"),
+                    api.get("/sub_category")
                 ]);
+
+                const cats = catsRes.data?.categoryData || [];
+                const allSubsRaw = subsRes.data;
 
                 const allSubs = (allSubsRaw?.subCategoryData || []).map((s: any) => ({
                     ...s,
@@ -350,35 +318,60 @@ export default function Header({
     }, []);
 
     async function fetchCartCount() {
+        // Do NOT call cart if not authenticated
+        if (!isAuthed) {
+            setCartCount(0);
+            return;
+        }
+
         if (typeof window === "undefined") return;
+
+        // Do NOT call cart if no access token
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+            setCartCount(0);
+            return;
+        }
+
         setCartLoading(true);
+
         try {
             const customerId = getStoredCustomerId();
-            const param = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
-            const url = `${API_BASE}/cart${param}`;
-            const res = await fetchWithAuth(url, { method: "GET" });
-            const body = await res.json().catch(() => null);
-            if (!res.ok) {
-                setCartCount(0);
-                try { localStorage.setItem("cartCount", "0"); } catch { }
-                return;
-            }
-            const raw = Array.isArray(body?.cartData) ? body.cartData[0] : body.cartData;
+
+            const res = await api.get("/cart", {
+                params: { customerId }
+            });
+
+            const body = res.data;
+
+            const raw = Array.isArray(body?.cartData)
+                ? body.cartData[0]
+                : body.cartData;
+
             if (!raw) {
                 setCartCount(0);
-                try { localStorage.setItem("cartCount", "0"); } catch { }
+                localStorage.setItem("cartCount", "0");
                 return;
             }
+
             let count = 0;
-            if (typeof raw.totalItems === "number") count = raw.totalItems;
-            else if (Array.isArray(raw.sellItems)) count = raw.sellItems.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
-            else count = 0;
+
+            if (typeof raw.totalItems === "number") {
+                count = raw.totalItems;
+            } else if (Array.isArray(raw.sellItems)) {
+                count = raw.sellItems.reduce(
+                    (s: number, it: any) => s + (Number(it.quantity) || 0),
+                    0
+                );
+            }
+
             setCartCount(count);
-            try { localStorage.setItem("cartCount", String(count)); } catch { }
-        } catch (err) {
+            localStorage.setItem("cartCount", String(count));
+
+        } catch (err: any) {
             console.error("[Header] fetchCartCount error:", err);
             setCartCount(0);
-            try { localStorage.setItem("cartCount", "0"); } catch { }
+            localStorage.setItem("cartCount", "0");
         } finally {
             setCartLoading(false);
         }
@@ -387,26 +380,49 @@ export default function Header({
     // only fetch cart after mount to avoid SSR/CSR mismatch
     useEffect(() => {
         if (!mounted) return;
+        if (!authReady || !isAuthed) return;
+
         fetchCartCount();
-        function onAuthChanged() { fetchCartCount(); }
-        function onCartChanged() { fetchCartCount(); }
+
+        function onAuthChanged() {
+            if (isAuthed) fetchCartCount();
+        }
+
+        function onCartChanged() {
+            if (isAuthed) fetchCartCount();
+        }
+
         function onStorage(e: StorageEvent) {
             if (!e.key) return;
-            if (e.key === "auth" || e.key === TOKEN_KEY || e.key === "cartCount") fetchCartCount();
+            if (
+                e.key === "auth" ||
+                e.key === "accessToken" ||
+                e.key === "cartCount"
+            ) {
+                if (isAuthed) fetchCartCount();
+            }
         }
+
         window.addEventListener("authChanged", onAuthChanged);
         window.addEventListener("cartChanged", onCartChanged);
         window.addEventListener("storage", onStorage);
+
         return () => {
             window.removeEventListener("authChanged", onAuthChanged);
             window.removeEventListener("cartChanged", onCartChanged);
             window.removeEventListener("storage", onStorage);
         };
-    }, [mounted]);
+    }, [mounted, authReady, isAuthed]);
 
     useEffect(() => {
         if (!mounted) return;
-        if (authReady) fetchCartCount();
+        if (!authReady) return;
+        if (!isAuthed) {
+            setCartCount(0);
+            return;
+        }
+
+        fetchCartCount();
     }, [authReady, isAuthed, mounted]);
 
     const totalSubCount = useMemo(() => Object.values(subsMap).reduce((s, arr) => s + arr.length, 0), [subsMap]);
@@ -451,7 +467,7 @@ export default function Header({
                         <div className="flex items-center gap-4">
                             <Link href="/" className="flex items-center">
                                 <div className="rounded-md p-1" style={{ background: ACCENT_LIGHT }}>
-                                    <Image src="/logo.png" alt="WeCraftMemories" width={64} height={38} priority />
+                                    <Image src="/logo.png" alt="WeCraftMemories" width={64} height={38} style={{ height: "auto" }} priority />
                                 </div>
                             </Link>
 
@@ -698,9 +714,8 @@ export default function Header({
                                             </Link>
                                         ) : (
                                             <button
-                                                onClick={() => {
-                                                    localStorage.clear();
-                                                    window.location.href = "/";
+                                                onClick={async () => {
+                                                    await logout("/");
                                                 }}
                                                 className="w-full py-3 rounded-xl bg-rose-600 text-white font-semibold"
                                             >

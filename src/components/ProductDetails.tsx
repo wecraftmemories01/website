@@ -444,7 +444,7 @@ export default function ProductClient({ product }: { product: Product }) {
     const [selectedImage, setSelectedImage] = useState<string | null>(() => images[0] ?? null);
 
     const [quantity, setQuantity] = useState<number>(1);
-    const [added, setAdded] = useState(false);
+    const [cartState, setCartState] = useState<"unknown" | "added" | "not_added">("unknown");
     const [toast, setToast] = useState<string | null>(null);
     const [lightbox, setLightbox] = useState(false);
     const [adding, setAdding] = useState(false); // indicates API call in progress
@@ -475,9 +475,10 @@ export default function ProductClient({ product }: { product: Product }) {
     }, [sellStockQuantity])
 
     useEffect(() => {
-        if (quantity > stockNumber) setQuantity(stockNumber || 1);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sellStockQuantity, stockNumber, _id]);
+        if (cartState === "not_added" && quantity > stockNumber) {
+            setQuantity(stockNumber || 1);
+        }
+    }, [sellStockQuantity, stockNumber, _id, cartState]);
 
     useEffect(() => {
         if (!toast) return;
@@ -595,7 +596,7 @@ export default function ProductClient({ product }: { product: Product }) {
             try {
                 const customerId = getStoredCustomerId();
                 if (!customerId) {
-                    if (active) setAdded(false);
+                    if (active) setCartState("not_added");
                     return;
                 }
                 const res = await authFetch(`/cart?customerId=${customerId}`, { method: "GET" });
@@ -608,12 +609,22 @@ export default function ProductClient({ product }: { product: Product }) {
                     const found = sellItems.find((s: any) => String(s.productId) === String(_id) || String(s.product?.productId) === String(_id));
                     if (found) {
                         foundAny = true;
+
+                        // sync quantity from cart
+                        const q = Number(found.quantity ?? found.qty ?? 1);
+                        if (Number.isFinite(q) && q > 0) {
+                            setQuantity(q);
+                        }
+
                         break;
                     }
                 }
-                if (active) setAdded(foundAny);
+                if (active) {
+                    setCartState(foundAny ? "added" : "not_added");
+                }
             } catch (err) {
                 console.warn('Could not fetch cart to check presence', err);
+                if (active) setCartState("not_added");
             }
         }
 
@@ -636,7 +647,7 @@ export default function ProductClient({ product }: { product: Product }) {
             setToast("Cannot add — out of stock");
             return;
         }
-        if (adding || added) return;
+        if (adding || cartState !== "not_added") return;
 
         setToast("Adding to cart...");
         setAdding(true);
@@ -665,7 +676,7 @@ export default function ProductClient({ product }: { product: Product }) {
                         incrementLocalCartCount(quantity);
                     }
                     setToast("Added to cart");
-                    setAdded(true);
+                    setCartState("added");
                     // notify other parts of the app to refetch cart
                     window.dispatchEvent(new Event('cartUpdated'));
                     setAdding(false);
@@ -718,12 +729,12 @@ export default function ProductClient({ product }: { product: Product }) {
             }
 
             setToast("Added to cart");
-            setAdded(true);
+            setCartState("added");
             window.dispatchEvent(new Event('cartUpdated'));
         } catch (err) {
             console.error("Add to cart unexpected error:", err);
             setToast("Network error — try again");
-            setAdded(false);
+            setCartState("not_added");
         } finally {
             setAdding(false);
         }
@@ -878,10 +889,12 @@ export default function ProductClient({ product }: { product: Product }) {
                             </div>
 
                             <div className="mt-6 flex items-center gap-4">
-                                <div
-                                    className={`flex items-center border rounded-lg overflow-hidden ${added ? "opacity-50 pointer-events-none" : ""
-                                        }`}
-                                >
+                                <div className={`flex items-center border rounded-lg overflow-hidden ${cartState !== "not_added" ? "opacity-50 pointer-events-none" : ""}`}>
+                                    {cartState === "unknown" && (
+                                        <div className="text-xs text-gray-400 mt-1">
+                                            Checking cart…
+                                        </div>
+                                    )}
                                     <button onClick={() => handleQuantity(-1)} disabled={quantity <= 1} className="px-3 py-2 disabled:opacity-50">−</button>
                                     <input aria-label="Quantity" value={quantity} onChange={(e) => {
                                         const v = Number(e.target.value || 1);
@@ -893,7 +906,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                     <button onClick={() => handleQuantity(1)} disabled={Boolean(stockNumber && quantity >= stockNumber)} className="px-3 py-2 disabled:opacity-50">+</button>
                                 </div>
 
-                                {added ? (
+                                {cartState === "added" ? (
                                     <button
                                         onClick={() => router.push("/cart")}
                                         className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md transition"
@@ -903,13 +916,17 @@ export default function ProductClient({ product }: { product: Product }) {
                                 ) : (
                                     <button
                                         onClick={handleAddToCart}
-                                        disabled={isOutOfStock || adding}
+                                        disabled={cartState !== "not_added" || adding || isOutOfStock}
                                         className={`flex-1 py-3 rounded-lg text-white font-semibold shadow-md transition ${isOutOfStock
                                             ? "bg-gray-300 cursor-not-allowed"
                                             : "bg-[#E94E4E] hover:bg-[#c93b3b]"
                                             }`}
                                     >
-                                        {adding ? "Adding..." : "Add to cart"}
+                                        {cartState === "unknown"
+                                            ? "Checking cart…"
+                                            : adding
+                                                ? "Adding…"
+                                                : "Add to cart"}
                                     </button>
                                 )}
                             </div>

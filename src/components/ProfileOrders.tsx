@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import api from "@/services/api";
 import { Search, FileText, Sliders } from "lucide-react";
 import Pagination from "../components/ui/Pagination";
 
@@ -23,25 +24,6 @@ type ApiOrder = {
     orderId?: string;
     orderProductsDetails: ApiOrderProduct[];
 };
-
-const TOKEN_KEY = "accessToken";
-
-function getStoredAccessToken(): string | null {
-    if (typeof window === "undefined") return null;
-    try {
-        return localStorage.getItem(TOKEN_KEY);
-    } catch {
-        return null;
-    }
-}
-
-async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-    const token = getStoredAccessToken();
-    const headers = new Headers(init?.headers ?? {});
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.get("Content-Type")) headers.set("Content-Type", "application/json");
-    return fetch(input, { ...init, headers });
-}
 
 function currency(n: number) {
     return `₹${n.toLocaleString("en-IN")}`;
@@ -73,10 +55,8 @@ function aggregateProducts(products: ApiOrderProduct[] = []) {
 }
 
 export default function OrdersCompact({
-    customerId = "",
     apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000",
 }: {
-    customerId?: string;
     apiBase?: string;
 }) {
     // server-provided page items
@@ -109,17 +89,9 @@ export default function OrdersCompact({
             setError(null);
 
             try {
-                if (!customerId) {
-                    setOrders([]);
-                    setServerTotalRecords(0);
-                    setLoading(false);
-                    return;
-                }
-
                 const base = apiBase.replace(/\/$/, "");
                 const params = new URLSearchParams();
 
-                params.set("customerId", customerId);
                 params.set("page", String(page));
                 params.set("limit", String(perPage));
 
@@ -132,13 +104,18 @@ export default function OrdersCompact({
 
                 const url = `${base}/sell_order/orders?${params.toString()}`;
 
-                const res = await authFetch(url, { method: "GET" });
-                if (!res.ok) {
-                    const txt = await res.text().catch(() => "");
-                    throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`);
-                }
-
-                const json = await res.json().catch(() => ({} as any));
+                const res = await api.get(`/sell_order/orders`, {
+                    params: {
+                        page,
+                        limit: perPage,
+                        ...(query && { q: query.trim() }),
+                        ...(dateFrom && { dateFrom }),
+                        ...(dateTo && { dateTo }),
+                        ...(minItems !== "" && { minItems }),
+                        ...(minTotal !== "" && { minTotal }),
+                    },
+                });
+                const json = res.data;
                 if (!mounted) return;
 
                 // Expect server to return: { ack, page, limit, totalRecords, data }
@@ -171,7 +148,7 @@ export default function OrdersCompact({
         return () => {
             mounted = false;
         };
-    }, [customerId, apiBase, page, perPage, query, dateFrom, dateTo, minItems, minTotal, refreshToggle]);
+    }, [apiBase, page, perPage, query, dateFrom, dateTo, minItems, minTotal, refreshToggle]);
 
     // Derived pagination info
     const total = serverTotalRecords;

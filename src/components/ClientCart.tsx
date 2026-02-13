@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAuth, logout, authFetch, getStoredAccessToken } from "@/lib/auth";
+import api from "@/services/api";
+import { getStoredAccessToken, getAuth, logout } from "@/lib/auth";
 import MobileCartItem from "@/components/ui/MobileCartItem";
 import DesktopCartItem from "@/components/ui/DesktopCartItem";
 
@@ -57,9 +58,6 @@ type SavedItem = {
     productId?: string | undefined; // optional product reference
 };
 
-/* ---------------- Config / Auth helpers ---------------- */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000";
-
 /* ---------------- Helpers ---------------- */
 function safeNumber(v: any): number | null {
     if (v === null || v === undefined) return null;
@@ -77,7 +75,7 @@ function normalizeCartResponse(raw: any): Cart | null {
     if (!raw) return null;
 
     const out: Cart = {
-        _id: raw._id,
+        _id: raw.cartId ?? raw._id ?? null,
         cartId: raw.cartId ?? raw._id,
         customerId: raw.customerId,
         inUse: raw.inUse,
@@ -201,147 +199,107 @@ function getStoredCustomerId(): string | null {
 
 /* ---------------- Saved API helpers (updated to throw ApiError) ---------------- */
 async function apiGetSaved(customerId: string): Promise<SavedItem[]> {
-    const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product`;
-    const res = await authFetch(url, { method: "GET" });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-        const message = extractErrorMessage(json, `Failed to fetch saved (${res.status})`);
-        const code = json?.error?.code ?? json?.code ?? null;
-        console.warn("apiGetSaved failed response json:", json);
-        throw new ApiError(message, code, json);
+    try {
+        const res = await api.get(
+            `/customer/${customerId}/saved_product`
+        );
+
+        const json = res.data;
+
+        const arr =
+            Array.isArray(json?.savedData)
+                ? json.savedData
+                : Array.isArray(json?.saved)
+                    ? json.saved
+                    : Array.isArray(json?.savedProducts)
+                        ? json.savedProducts
+                        : Array.isArray(json?.data)
+                            ? json.data
+                            : [];
+
+        return arr.map((s: any) => {
+            const product = s.product || s.productObj || s;
+
+            return {
+                id: product?._id ?? s._id,
+                title: product?.productName ?? s.title ?? "Untitled",
+                price: product?.price?.discountedPrice ?? product?.price?.actualPrice,
+                img: product?.productImage ?? s.img ?? null,
+                _savedId: s._id,
+                productId: product?._id,
+            } as SavedItem;
+        });
+
+    } catch (error: any) {
+        throw new ApiError(
+            error?.response?.data?.error?.message ||
+            error?.message ||
+            "Failed to fetch saved",
+            error?.response?.data?.error?.code,
+            error?.response?.data
+        );
     }
-
-    const arr =
-        Array.isArray(json?.savedData)
-            ? json.savedData
-            : Array.isArray(json?.saved)
-                ? json.saved
-                : Array.isArray(json?.savedProducts)
-                    ? json.savedProducts
-                    : Array.isArray(json?.data)
-                        ? json.data
-                        : [];
-
-    return arr.map((s: any) => {
-        const product = s.product || s.productObj || s;
-        const rawProdId =
-            (product && ((product as any).productId ?? (product as any)._id ?? (product as any).id)) ?? s.productId ?? s.product_id ?? s._id ?? s.id ?? "";
-
-        const prodId = rawProdId === null || rawProdId === undefined ? "" : String(rawProdId);
-
-        const title =
-            (product && ((product as any).productName ?? (product as any).name ?? (product as any).title)) ?? s.title ?? "Untitled";
-
-        let priceVal: number | undefined = undefined;
-        try {
-            const p = product && (product as any).price;
-            if (p) {
-                if (typeof p.discountedPrice === "number") priceVal = p.discountedPrice;
-                else if (typeof p.actualPrice === "number") priceVal = p.actualPrice;
-                else if (typeof p.price === "number") priceVal = p.price;
-            }
-            if (priceVal === undefined && typeof s.price === "number") priceVal = s.price;
-        } catch {
-            priceVal = undefined;
-        }
-
-        const rawImg = (product && ((product as any).productImage ?? (product as any).productImg ?? (product as any).image)) ?? s.img ?? s.image ?? null;
-        const img = rawImg ? String(rawImg) : null;
-
-        return {
-            id: prodId,
-            title: String(title),
-            price: typeof priceVal === "number" ? priceVal : undefined,
-            img,
-            qty: 1,
-            _savedId: s.savedId ?? s._id ?? s.id ?? undefined,
-            productId: (product && ((product as any).productId ?? (product as any)._id)) ?? undefined,
-        } as SavedItem;
-    });
 }
 
 async function apiAddSaved(customerId: string, product: any) {
-    const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product`;
+    try {
+        const res = await api.post(
+            `/customer/${customerId}/saved_product`,
+            {
+                productId: product.productId ?? product.id,
+            }
+        );
 
-    const pAny = product as any;
+        return res.data;
 
-    const resolvedProductId = (pAny.productId ?? pAny.id ?? pAny._id ?? pAny.product_id ?? "") || "";
-
-    const resolvedTitle = (pAny.productPublicName ?? pAny.productName ?? pAny.title ?? pAny.name ?? "") || "";
-
-    let resolvedPrice: number | undefined = undefined;
-    if (typeof pAny.price === "number") resolvedPrice = pAny.price;
-    else if (pAny.price && typeof pAny.price === "object") {
-        if (typeof pAny.price.discountedPrice === "number") resolvedPrice = pAny.price.discountedPrice;
-        else if (typeof pAny.price.actualPrice === "number") resolvedPrice = pAny.price.actualPrice;
-        else if (typeof pAny.price.price === "number") resolvedPrice = pAny.price.price;
-    } else if (typeof pAny.priceVal === "number") {
-        resolvedPrice = pAny.priceVal;
+    } catch (error: any) {
+        throw new ApiError(
+            error?.response?.data?.error?.message ||
+            error?.message ||
+            "Unable to save item",
+            error?.response?.data?.error?.code,
+            error?.response?.data
+        );
     }
-
-    const resolvedImg = (pAny.image ?? pAny.img ?? pAny.imagePath ?? pAny.thumbnail ?? pAny.productImage ?? null) ?? null;
-
-    const body: any = {
-        productId: String(resolvedProductId),
-        title: String(resolvedTitle),
-        ...(typeof resolvedPrice === "number" ? { price: resolvedPrice } : {}),
-        img: resolvedImg,
-    };
-
-    const res = await authFetch(url, { method: "POST", body: JSON.stringify(body) });
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok) {
-        const message = extractErrorMessage(json, `Failed to add saved (${res.status})`);
-        const code = json?.error?.code ?? json?.code ?? null;
-        console.warn("apiAddSaved failed response json:", json);
-        throw new ApiError(message, code, json);
-    }
-
-    if (json && (json.ack === "failure" || json.status === "failure")) {
-        const message = extractErrorMessage(json, "Unable to save item");
-        const code = json?.error?.code ?? json?.code ?? null;
-        console.warn("apiAddSaved returned ack failure:", json);
-        throw new ApiError(message, code, json);
-    }
-
-    return json;
 }
 
 async function apiDeleteSaved(customerId: string, savedId: string) {
-    const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product/${encodeURIComponent(savedId)}`;
-    const res = await authFetch(url, { method: "DELETE" });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-        const message = extractErrorMessage(json, `Failed to delete saved (${res.status})`);
-        const code = json?.error?.code ?? json?.code ?? null;
-        console.warn("apiDeleteSaved failed response json:", json);
-        throw new ApiError(message, code, json);
+    try {
+        const res = await api.delete(
+            `/customer/${customerId}/saved_product/${savedId}`
+        );
+        return res.data;
+    } catch (error: any) {
+        throw new ApiError(
+            error?.response?.data?.error?.message ||
+            error?.message ||
+            "Unable to delete saved item",
+            error?.response?.data?.error?.code,
+            error?.response?.data
+        );
     }
-    if (json && (json.ack === "failure" || json.status === "failure")) {
-        const message = extractErrorMessage(json, "Unable to delete saved item");
-        const code = json?.error?.code ?? json?.code ?? null;
-        throw new ApiError(message, code, json);
-    }
-    return json;
 }
 
 async function apiDeleteSavedByProduct(customerId: string, productId: string) {
-    const url = `${API_BASE}/customer/${encodeURIComponent(customerId)}/saved_product?productId=${encodeURIComponent(productId)}`;
-    const res = await authFetch(url, { method: "DELETE" });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-        const message = extractErrorMessage(json, `Failed to delete saved by productId (${res.status})`);
-        const code = json?.error?.code ?? json?.code ?? null;
-        console.warn("apiDeleteSavedByProduct failed response json:", json);
-        throw new ApiError(message, code, json);
+    try {
+        const res = await api.delete(
+            `/customer/${customerId}/saved_product`,
+            {
+                params: { productId }
+            }
+        );
+
+        return res.data;
+
+    } catch (error: any) {
+        throw new ApiError(
+            error?.response?.data?.error?.message ||
+            error?.message ||
+            "Unable to delete saved item by product",
+            error?.response?.data?.error?.code,
+            error?.response?.data
+        );
     }
-    if (json && (json.ack === "failure" || json.status === "failure")) {
-        const message = extractErrorMessage(json, "Unable to delete saved item by product");
-        const code = json?.error?.code ?? json?.code ?? null;
-        throw new ApiError(message, code, json);
-    }
-    return json;
 }
 
 /* ---------------- Component ---------------- */
@@ -401,18 +359,19 @@ export default function ClientCart() {
     }
 
     useEffect(() => {
-        const auth = getAuth();
-        setIsAuthenticated(Boolean(auth?.customerId));
-
-        const onAuthChange = () => {
-            const a = getAuth();
-            setIsAuthenticated(Boolean(a?.customerId));
+        const checkAuth = () => {
+            const token = getStoredAccessToken();
+            setIsAuthenticated(Boolean(token));
         };
 
-        window.addEventListener("authChanged", onAuthChange);
+        checkAuth();
+
+        window.addEventListener("authChanged", checkAuth);
+        window.addEventListener("storage", checkAuth);
 
         return () => {
-            window.removeEventListener("authChanged", onAuthChange);
+            window.removeEventListener("authChanged", checkAuth);
+            window.removeEventListener("storage", checkAuth);
         };
     }, []);
 
@@ -442,33 +401,38 @@ export default function ClientCart() {
                 return;
             }
 
-            const url = `${API_BASE}/cart?customerId=${encodeURIComponent(customerId)}`;
-            const res = await authFetch(url, { method: "GET" });
-            const json = await res.json().catch(() => null);
-            if (!res.ok) {
-                throw new Error((json?.error || json?.message) ?? `Failed to fetch cart (${res.status})`);
+            const res = await api.get(`/cart`);
+
+            const json = res.data;
+
+            const rawCart = Array.isArray(json.cartData)
+                ? json.cartData[0]
+                : json.cartData;
+
+            const normalized = normalizeCartResponse(rawCart);
+            console.log("RAW CART:", rawCart);
+            console.log("NORMALIZED:", normalized);
+
+            if (normalized) {
+                setCart(normalized);
+                setLocalCart(clampCartQuantities(normalized));
+            } else {
+                setCart(null);
+                setLocalCart(null);
             }
 
-            const rawCart = Array.isArray(json.cartData) ? json.cartData[0] : json.cartData;
-            const normalized = normalizeCartResponse(rawCart);
-            setCart(normalized);
         } catch (err: any) {
-            if (err?.message === "Auth required") {
-                redirectToLogin();
-                return;
-            }
             console.error("fetchCart error:", err);
-            setError(err?.message || "Unable to load cart");
+
+            setError(
+                err?.response?.data?.error?.message ||
+                err?.message ||
+                "Unable to load cart"
+            );
         } finally {
             setLoading(false);
         }
     }
-
-    useEffect(() => {
-        if (cart) {
-            setLocalCart(clampCartQuantities(cart));
-        }
-    }, [cart]);
 
     async function fetchSavedItems(): Promise<void> {
         setSavedLoading(true);
@@ -758,16 +722,10 @@ export default function ClientCart() {
                 quantity: 1,
             };
 
-            const res = await authFetch(
-                `${API_BASE}/cart/${cartId}/move_to_cart`,
-                {
-                    method: "PUT",
-                    body: JSON.stringify(body),
-                }
+            await api.put(
+                `/cart/${cartId}/move_to_cart`,
+                body
             );
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || data?.message || "Failed to move item to cart");
 
             await Promise.all([fetchCart(), fetchSavedItems()]);
         } catch (err: any) {
@@ -913,7 +871,7 @@ export default function ClientCart() {
         return <LoggedOutState />;
     }
 
-    if (!loading && cart && (cart.sellItems?.length ?? 0) === 0) {
+    if (!loading && localCart &&  Array.isArray(localCart.sellItems) && localCart.sellItems.length === 0) {
         return (
             <div className="p-8">
                 <EmptyIllustration />

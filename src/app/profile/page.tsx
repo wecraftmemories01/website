@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { User, Edit2, Lock, MapPin, Box } from "lucide-react";
 import type { Address as SharedAddress } from "../../types/address";
+import api from "@/services/api";
 
 import ProfileOrders from "../../components/ProfileOrders";
 import ProfileAddresses from "../../components/ProfileAddresses";
@@ -32,19 +33,6 @@ type LocalAddress = {
     isDefault?: boolean;
 };
 
-/* ---------- TOKEN + CUSTOMER ID HELPERS ---------- */
-const TOKEN_KEY = "accessToken";
-const CUST_KEY = "customerId";
-
-function getStoredAccessToken(): string | null {
-    if (typeof window === "undefined") return null;
-    try {
-        return localStorage.getItem(TOKEN_KEY);
-    } catch {
-        return null;
-    }
-}
-
 function getStoredCustomerId(): string | null {
     if (typeof window === "undefined") return null;
 
@@ -58,25 +46,6 @@ function getStoredCustomerId(): string | null {
         console.error("Failed to read customerId from localStorage", err);
         return null;
     }
-}
-
-/* ---------- AUTH FETCH ---------- */
-async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-    const token = getStoredAccessToken();
-
-    const headers = new Headers(init?.headers ?? {});
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (init?.body && !headers.get("Content-Type")) headers.set("Content-Type", "application/json");
-
-    const res = await fetch(input, { ...init, headers });
-
-    if (res.status === 401) {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem(TOKEN_KEY);
-            window.location.href = "/login";
-        }
-    }
-    return res;
 }
 
 /* ---------- MAIN PAGE ---------- */
@@ -103,30 +72,29 @@ export default function ProfilePageAlt(): React.ReactElement {
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
 
-    /* fallback id */
-    const defaultCustomerId = "68d98d10d8e1d8ae4744079c";
-
     /* SAFE CUSTOMER ID RESOLVER */
-    const resolveCustomerId = () =>
-        getStoredCustomerId() ?? user?.id ?? defaultCustomerId;
+    const resolveCustomerId = () => getStoredCustomerId() ?? user?.id ?? null;
 
     /* ---------- FETCH USER ---------- */
     useEffect(() => {
         const controller = new AbortController();
-        const custId = getStoredCustomerId() ?? defaultCustomerId;
-
-        const apiUrl = `${API_BASE.replace(/\/$/, "")}/customer/${encodeURIComponent(custId)}`;
+        const custId = getStoredCustomerId();
+        if (!custId) {
+            window.location.href = "/login";
+            return;
+        }
 
         async function fetchCustomer() {
             setLoadingUser(true);
             setUserError(null);
+
             try {
-                const res = await authFetch(apiUrl, { method: "GET", signal: controller.signal });
-                if (!res.ok) throw new Error(`Failed to fetch customer (${res.status})`);
-                const payload = await res.json();
+                const res = await api.get(`/customer/${custId}`);
+                const payload = res.data;
 
                 if (payload?.ack === "success" && payload?.customerData?._id) {
                     const cd = payload.customerData;
+
                     const mapped: UserProfile = {
                         id: cd._id,
                         name: cd.name ?? "",
@@ -137,19 +105,12 @@ export default function ProfilePageAlt(): React.ReactElement {
 
                     setUser(mapped);
                     setProfileDraft(mapped);
-
-                    // ensure customerId is saved
-                    if (typeof window !== "undefined") {
-                        localStorage.setItem(CUST_KEY, cd._id);
-                    }
                 } else {
                     throw new Error("Unexpected response shape from customer API");
                 }
             } catch (err: any) {
-                if (err.name !== "AbortError") {
-                    console.error("Error fetching customer", err);
-                    setUserError(err.message || "Failed to load customer");
-                }
+                console.error("Error fetching customer", err);
+                setUserError(err?.message ?? "Failed to load customer");
             } finally {
                 setLoadingUser(false);
             }
@@ -168,12 +129,9 @@ export default function ProfilePageAlt(): React.ReactElement {
 
         async function fetchAddresses() {
             try {
-                const apiBase = API_BASE.replace(/\/$/, "");
-                const url = `${apiBase}/customer/${encodeURIComponent(custId)}/address`;
-                const res = await authFetch(url, { method: "GET" });
+                const res = await api.get(`/customer/${custId}/address`);
+                const json = res.data;
 
-                if (!res.ok) throw new Error(`Failed to fetch addresses (${res.status})`);
-                const json = await res.json();
                 if (!mounted) return;
 
                 const data: LocalAddress[] = Array.isArray(json.addressData)
@@ -221,14 +179,11 @@ export default function ProfilePageAlt(): React.ReactElement {
             try {
                 const apiBase = API_BASE.replace(/\/$/, "");
 
-                const url = `${apiBase}/sell_order/orders?customerId=${encodeURIComponent(
-                    custId
-                )}&page=1&limit=1`;
+                const res = await api.get(`/sell_order/orders`, {
+                    params: { page: 1, limit: 1 }
+                });
 
-                const res = await authFetch(url, { method: "GET", signal: controller.signal });
-                if (!res.ok) throw new Error(`Failed to fetch orders (${res.status})`);
-
-                const payload = await res.json();
+                const payload = res.data;
 
                 if (typeof payload.totalRecords === "number") {
                     setOrdersCount(payload.totalRecords);
@@ -551,10 +506,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                     )}
 
                     {activeTab === "orders" && (
-                        <ProfileOrders
-                            customerId={resolveCustomerId()}
-                            apiBase={API_BASE}
-                        />
+                        <ProfileOrders apiBase={API_BASE} />
                     )}
                 </main>
             </div>

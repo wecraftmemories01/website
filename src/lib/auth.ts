@@ -1,20 +1,19 @@
 "use client";
 
 const TOKEN_KEY = "accessToken";
-const REFRESH_KEY = "refreshToken";
 const AUTH_KEY = "auth";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 /* ---------- types ---------- */
 export type AuthShape = {
     customerId?: string;
     token?: {
         accessToken?: string;
-        refreshToken?: string;
         tokenExpiresAt?: string;
         tokenObtainedAt?: string;
         expiresIn?: number;
-    } | null;
+    }
 };
 
 /* ---------- storage helpers ---------- */
@@ -75,48 +74,68 @@ export function getStoredAccessToken(): string | null {
     }
 }
 
-export function getStoredRefreshToken(): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(REFRESH_KEY);
-}
-
-export function storeTokens(accessToken: string, refreshToken?: string) {
+export function storeTokens(accessToken: string) {
     localStorage.setItem(TOKEN_KEY, accessToken);
-    if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
 }
 
 /* ---------- logout ---------- */
-export function logout(redirectTo = "/login") {
+export async function logout(redirectTo = "/login") {
+    try {
+        const token = getStoredAccessToken();
+
+        await fetch(`${API_BASE}/customer/logout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+        });
+    } catch (e) {
+        console.error("Logout API failed", e);
+    }
+
+    // Stop silent refresh timer
+    if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
+
+    // Clear storage
+    localStorage.removeItem("accessToken");
     localStorage.removeItem("auth");
     localStorage.removeItem("customerId");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
     localStorage.removeItem("rememberedUser");
     localStorage.removeItem("cartProductIds");
-    localStorage.removeItem("rememberedUser");
 
+    // Notify app
     window.dispatchEvent(new Event("authChanged"));
+
+    // Redirect
     window.location.href = redirectTo;
 }
 
 /* ---------- refresh ---------- */
-async function refreshAccessToken(): Promise<boolean> {
-    const refreshToken = getStoredRefreshToken();
-    if (!refreshToken) return false;
-
+export async function refreshAccessToken(): Promise<boolean> {
     try {
-        const res = await fetch(`${API_BASE}/auth/refresh`, {
+        const res = await fetch(`${API_BASE}/token/refresh_token`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken }),
+            credentials: "include", // 🔥 VERY IMPORTANT
         });
 
         if (!res.ok) return false;
 
         const data = await res.json();
+
         if (!data?.accessToken) return false;
 
-        storeTokens(data.accessToken, data.refreshToken);
+        const existingAuth = getAuth();
+
+        persistAuth({
+            customerId: data.customerId ?? existingAuth?.customerId,
+            token: data,
+        });
+
         return true;
     } catch {
         return false;
@@ -128,36 +147,63 @@ export async function authFetch(
     input: RequestInfo,
     init: RequestInit = {}
 ): Promise<Response> {
-    if (typeof window === "undefined") {
-        throw new Error("authFetch cannot be used on the server");
-    }
 
     let token = getStoredAccessToken();
 
     const headers = new Headers(init.headers ?? {});
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.get("Content-Type"))
-        headers.set("Content-Type", "application/json");
 
-    let res = await fetch(input, { ...init, headers });
+    let res = await fetch(input, {
+        ...init,
+        headers,
+        credentials: "include",
+    });
 
     if (res.status === 401) {
-        const refreshed = await refreshAccessToken();
-        if (!refreshed) {
-            logout();
-            throw new Error("Auth required");
+
+        // ❗ if no token at all, do NOT attempt refresh
+        if (!token) {
+            return res;
         }
 
-        const retryHeaders = new Headers(init.headers ?? {});
-        const retryToken = getStoredAccessToken();
-        if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`);
-        if (!retryHeaders.get("Content-Type"))
-            retryHeaders.set("Content-Type", "application/json");
+        const refreshed = await refreshAccessToken();
 
-        res = await fetch(input, { ...init, headers: retryHeaders });
+        if (!refreshed) {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("auth");
+            return res; // ❗ DO NOT call logout here
+        }
+
+        const retryToken = getStoredAccessToken();
+        const retryHeaders = new Headers(init.headers ?? {});
+        if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`);
+
+        return fetch(input, {
+            ...init,
+            headers: retryHeaders,
+            credentials: "include",
+        });
     }
 
     return res;
+}
+
+export function scheduleSilentRefresh() {
+    const auth = getAuth();
+    if (!auth?.token?.tokenExpiresAt) return;
+
+    const expiry = Date.parse(auth.token.tokenExpiresAt);
+    const delay = expiry - Date.now() - 30000; // 30 sec before expiry
+
+    if (refreshTimer) {
+        clearTimeout(refreshTimer);
+    }
+
+    if (delay > 0) {
+        refreshTimer = setTimeout(() => {
+            refreshAccessToken();
+        }, delay);
+    }
 }
 
 export function persistAuth(data: AuthShape | null) {
@@ -176,6 +222,7 @@ export function persistAuth(data: AuthShape | null) {
         JSON.stringify({
             customerId: data.customerId,
             token: {
+                accessToken: data.token.accessToken,
                 expiresIn,
                 tokenObtainedAt,
                 tokenExpiresAt,
@@ -183,5 +230,9 @@ export function persistAuth(data: AuthShape | null) {
         })
     );
 
-    storeTokens(data.token.accessToken, data.token.refreshToken);
+    localStorage.setItem(TOKEN_KEY, data.token.accessToken);
+
+    scheduleSilentRefresh();
+
+    window.dispatchEvent(new Event("authChanged"));
 }

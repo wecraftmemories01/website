@@ -1,43 +1,43 @@
 {
-  "name": "user",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
-    "start": "next start -p $PORT",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@heroicons/react": "^2.2.0",
-    "@tiptap/react": "^2.12.0",
-    "@tiptap/starter-kit": "^2.12.0",
-    "axios": "^1.8.4",
-    "date-fns": "^4.1.0",
-    "framer-motion": "^12.23.22",
-    "lucide-react": "^0.488.0",
-    "next": "15.3.1",
-    "pincode-lat-long": "^1.0.3",
-    "react": "^19.0.0",
-    "react-colorful": "^5.6.1",
-    "react-dom": "^19.0.0",
-    "react-dropzone": "^14.3.8",
-    "react-easy-crop": "^5.4.2",
-    "react-hot-toast": "^2.5.2",
-    "react-image-crop": "^11.0.10",
-    "react-select": "^5.10.1"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19.2.2",
-    "@types/react-color": "^3.0.13",
-    "@types/react-dom": "^19.2.2",
-    "@types/react-google-recaptcha": "^2.1.9",
-    "eslint": "^9",
-    "eslint-config-next": "15.3.1",
-    "tailwindcss": "^4",
-    "typescript": "^5.9.2"
-  }
+    "name": "user",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev -H 127.0.0.1 -p 3002",
+        "build": "next build",
+        "start": "next start -p $PORT",
+        "lint": "next lint"
+    },
+    "dependencies": {
+        "@heroicons/react": "^2.2.0",
+        "@tiptap/react": "^2.12.0",
+        "@tiptap/starter-kit": "^2.12.0",
+        "axios": "^1.8.4",
+        "date-fns": "^4.1.0",
+        "framer-motion": "^12.23.22",
+        "lucide-react": "^0.488.0",
+        "next": "15.3.1",
+        "pincode-lat-long": "^1.0.3",
+        "react": "^19.0.0",
+        "react-colorful": "^5.6.1",
+        "react-dom": "^19.0.0",
+        "react-dropzone": "^14.3.8",
+        "react-easy-crop": "^5.4.2",
+        "react-hot-toast": "^2.5.2",
+        "react-image-crop": "^11.0.10",
+        "react-select": "^5.10.1"
+    },
+    "devDependencies": {
+        "@eslint/eslintrc": "^3",
+        "@tailwindcss/postcss": "^4",
+        "@types/node": "^20",
+        "@types/react": "^19.2.2",
+        "@types/react-color": "^3.0.13",
+        "@types/react-dom": "^19.2.2",
+        "@types/react-google-recaptcha": "^2.1.9",
+        "eslint": "^9",
+        "eslint-config-next": "15.3.1",
+        "tailwindcss": "^4",
+        "typescript": "^5.9.2"
+    }
 }
