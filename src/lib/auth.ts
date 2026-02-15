@@ -3,9 +3,13 @@
 const TOKEN_KEY = "accessToken";
 const AUTH_KEY = "auth";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-/* ---------- types ---------- */
+/* =========================
+   Types
+========================= */
+
 export type AuthShape = {
     customerId?: string;
     token?: {
@@ -14,59 +18,30 @@ export type AuthShape = {
         tokenExpiresAt?: string;
         tokenObtainedAt?: string;
         expiresIn?: number;
-    }
+    };
 };
 
-/* ---------- storage helpers ---------- */
+/* =========================
+   Storage Helpers
+========================= */
+
 export function getAuth(): AuthShape | null {
     if (typeof window === "undefined") return null;
+
     try {
-        const raw = localStorage.getItem("auth");
+        const raw = localStorage.getItem(AUTH_KEY);
         return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
     }
 }
 
-export function isTokenValid(): boolean {
-    if (typeof window === "undefined") return false;
-
-    try {
-        const auth = getAuth();
-        if (!auth?.token) return false;
-
-        const t = auth.token;
-
-        // Preferred: absolute expiry
-        if (t.tokenExpiresAt) {
-            const exp = Date.parse(t.tokenExpiresAt);
-            if (Number.isNaN(exp)) return false;
-            return Date.now() < exp - 2000; // 2s safety buffer
-        }
-
-        // Fallback: expiresIn + obtainedAt
-        if (typeof t.expiresIn === "number" && t.tokenObtainedAt) {
-            const obt = Date.parse(t.tokenObtainedAt);
-            if (Number.isNaN(obt)) return false;
-            const exp = obt + t.expiresIn * 1000;
-            return Date.now() < exp - 2000;
-        }
-
-        // Last fallback: token exists
-        return Boolean(getStoredAccessToken());
-    } catch {
-        return false;
-    }
-}
-
 export function getStoredAccessToken(): string | null {
     if (typeof window === "undefined") return null;
 
-    // preferred
     const direct = localStorage.getItem(TOKEN_KEY);
     if (direct) return direct;
 
-    // fallback
     try {
         const auth = getAuth();
         return auth?.token?.accessToken ?? null;
@@ -79,7 +54,42 @@ export function storeTokens(accessToken: string) {
     localStorage.setItem(TOKEN_KEY, accessToken);
 }
 
-/* ---------- logout ---------- */
+/* =========================
+   Token Validation
+========================= */
+
+export function isTokenValid(): boolean {
+    if (typeof window === "undefined") return false;
+
+    try {
+        const auth = getAuth();
+        if (!auth?.token) return false;
+
+        const t = auth.token;
+
+        if (t.tokenExpiresAt) {
+            const exp = Date.parse(t.tokenExpiresAt);
+            if (Number.isNaN(exp)) return false;
+            return Date.now() < exp - 2000;
+        }
+
+        if (typeof t.expiresIn === "number" && t.tokenObtainedAt) {
+            const obt = Date.parse(t.tokenObtainedAt);
+            if (Number.isNaN(obt)) return false;
+            const exp = obt + t.expiresIn * 1000;
+            return Date.now() < exp - 2000;
+        }
+
+        return Boolean(getStoredAccessToken());
+    } catch {
+        return false;
+    }
+}
+
+/* =========================
+   Logout
+========================= */
+
 export async function logout(redirectTo = "/login") {
     try {
         const token = getStoredAccessToken();
@@ -96,38 +106,35 @@ export async function logout(redirectTo = "/login") {
         console.error("Logout API failed", e);
     }
 
-    // Stop silent refresh timer
     if (refreshTimer) {
         clearTimeout(refreshTimer);
         refreshTimer = null;
     }
 
-    // Clear storage
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("auth");
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem("customerId");
     localStorage.removeItem("rememberedUser");
     localStorage.removeItem("cartProductIds");
 
-    // Notify app
     window.dispatchEvent(new Event("authChanged"));
-
-    // Redirect
     window.location.href = redirectTo;
 }
 
-/* ---------- refresh ---------- */
+/* =========================
+   Refresh Token
+========================= */
+
 export async function refreshAccessToken(): Promise<boolean> {
     try {
         const res = await fetch(`${API_BASE}/token/refresh_token`, {
             method: "POST",
-            credentials: "include", // 🔥 VERY IMPORTANT
+            credentials: "include",
         });
 
         if (!res.ok) return false;
 
         const data = await res.json();
-
         if (!data?.accessToken) return false;
 
         const existingAuth = getAuth();
@@ -147,16 +154,26 @@ export async function refreshAccessToken(): Promise<boolean> {
     }
 }
 
-/* ---------- authFetch (ONLY ONE IN APP) ---------- */
+/* =========================
+   Universal authFetch
+========================= */
+
 export async function authFetch(
     input: RequestInfo,
     init: RequestInit = {}
 ): Promise<Response> {
 
     let token = getStoredAccessToken();
-
     const headers = new Headers(init.headers ?? {});
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    // 🔥 Automatically set JSON header if body exists
+    if (init.body && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+
+    if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+    }
 
     let res = await fetch(input, {
         ...init,
@@ -166,22 +183,26 @@ export async function authFetch(
 
     if (res.status === 401) {
 
-        // ❗ if no token at all, do NOT attempt refresh
-        if (!token) {
-            return res;
-        }
+        if (!token) return res;
 
         const refreshed = await refreshAccessToken();
-
         if (!refreshed) {
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("auth");
-            return res; // ❗ DO NOT call logout here
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(AUTH_KEY);
+            return res;
         }
 
         const retryToken = getStoredAccessToken();
         const retryHeaders = new Headers(init.headers ?? {});
-        if (retryToken) retryHeaders.set("Authorization", `Bearer ${retryToken}`);
+
+        // 🔥 Re-apply JSON header on retry
+        if (init.body && !retryHeaders.has("Content-Type")) {
+            retryHeaders.set("Content-Type", "application/json");
+        }
+
+        if (retryToken) {
+            retryHeaders.set("Authorization", `Bearer ${retryToken}`);
+        }
 
         return fetch(input, {
             ...init,
@@ -193,12 +214,16 @@ export async function authFetch(
     return res;
 }
 
+/* =========================
+   Silent Refresh Scheduler
+========================= */
+
 export function scheduleSilentRefresh() {
     const auth = getAuth();
     if (!auth?.token?.tokenExpiresAt) return;
 
     const expiry = Date.parse(auth.token.tokenExpiresAt);
-    const delay = expiry - Date.now() - 30000; // 30 sec before expiry
+    const delay = expiry - Date.now() - 30000;
 
     if (refreshTimer) {
         clearTimeout(refreshTimer);
@@ -210,6 +235,10 @@ export function scheduleSilentRefresh() {
         }, delay);
     }
 }
+
+/* =========================
+   Persist Auth
+========================= */
 
 export function persistAuth(data: AuthShape | null) {
     if (!data?.token?.accessToken) return;
@@ -239,6 +268,5 @@ export function persistAuth(data: AuthShape | null) {
     localStorage.setItem(TOKEN_KEY, data.token.accessToken);
 
     scheduleSilentRefresh();
-
     window.dispatchEvent(new Event("authChanged"));
 }
