@@ -5,6 +5,7 @@ const AUTH_KEY = "auth";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 /* =========================
    Types
@@ -42,12 +43,8 @@ export function getStoredAccessToken(): string | null {
     const direct = localStorage.getItem(TOKEN_KEY);
     if (direct) return direct;
 
-    try {
-        const auth = getAuth();
-        return auth?.token?.accessToken ?? null;
-    } catch {
-        return null;
-    }
+    const auth = getAuth();
+    return auth?.token?.accessToken ?? null;
 }
 
 export function storeTokens(accessToken: string) {
@@ -102,14 +99,14 @@ export async function logout(redirectTo = "/login") {
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
         });
-    } catch (e) {
-        console.error("Logout API failed", e);
-    }
+    } catch { }
 
     if (refreshTimer) {
         clearTimeout(refreshTimer);
         refreshTimer = null;
     }
+
+    refreshPromise = null;
 
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(AUTH_KEY);
@@ -122,36 +119,50 @@ export async function logout(redirectTo = "/login") {
 }
 
 /* =========================
-   Refresh Token
+   Refresh Token (LOCKED)
 ========================= */
 
 export async function refreshAccessToken(): Promise<boolean> {
-    try {
-        const res = await fetch(`${API_BASE}/token/refresh_token`, {
-            method: "POST",
-            credentials: "include",
-        });
-
-        if (!res.ok) return false;
-
-        const data = await res.json();
-        if (!data?.accessToken) return false;
-
-        const existingAuth = getAuth();
-
-        persistAuth({
-            customerId: data.customerId ?? existingAuth?.customerId,
-            token: {
-                accessToken: data.accessToken,
-                refreshToken: data.refreshToken,
-                expiresIn: data.expiresIn,
-            },
-        });
-
-        return true;
-    } catch {
-        return false;
+    if (refreshPromise) {
+        return refreshPromise; // 🔒 Return existing promise
     }
+
+    refreshPromise = (async () => {
+        try {
+            const res = await fetch(`${API_BASE}/token/refresh_token`, {
+                method: "POST",
+                credentials: "include",
+            });
+
+            if (!res.ok) {
+                return false;
+            }
+
+            const data = await res.json();
+            if (!data?.accessToken) {
+                return false;
+            }
+
+            const existingAuth = getAuth();
+
+            persistAuth({
+                customerId: data.customerId ?? existingAuth?.customerId,
+                token: {
+                    accessToken: data.accessToken,
+                    refreshToken: data.refreshToken,
+                    expiresIn: data.expiresIn,
+                },
+            });
+
+            return true;
+        } catch {
+            return false;
+        } finally {
+            refreshPromise = null; // 🔓 Unlock
+        }
+    })();
+
+    return refreshPromise;
 }
 
 /* =========================
@@ -162,11 +173,9 @@ export async function authFetch(
     input: RequestInfo,
     init: RequestInit = {}
 ): Promise<Response> {
-
     let token = getStoredAccessToken();
     const headers = new Headers(init.headers ?? {});
 
-    // 🔥 Automatically set JSON header if body exists
     if (init.body && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
     }
@@ -182,20 +191,16 @@ export async function authFetch(
     });
 
     if (res.status === 401) {
-
-        if (!token) return res;
-
         const refreshed = await refreshAccessToken();
+
         if (!refreshed) {
-            localStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(AUTH_KEY);
+            await logout();
             return res;
         }
 
         const retryToken = getStoredAccessToken();
         const retryHeaders = new Headers(init.headers ?? {});
 
-        // 🔥 Re-apply JSON header on retry
         if (init.body && !retryHeaders.has("Content-Type")) {
             retryHeaders.set("Content-Type", "application/json");
         }
