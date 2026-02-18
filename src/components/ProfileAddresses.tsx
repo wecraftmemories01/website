@@ -531,8 +531,8 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             {!loading && !error && addresses.length > 0 && (
                 <div className="mt-6 grid gap-4">
                     {addresses.map((a) => (
-                        <div key={a.id} className="flex items-start justify-between p-5 border rounded-2xl hover:shadow-md transition bg-white">
-                            <div>
+                        <div key={a.id} className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 p-5 border rounded-2xl hover:shadow-md transition bg-white">
+                            <div className="w-full md:w-auto break-words">
                                 <div className="flex items-center gap-3">
                                     <div className="font-semibold text-lg">{a.recipientName} {a.recipientContact ? `- ${a.recipientContact}` : ""}</div>
                                     {a.isDefault && <div className="text-xs bg-[#ecfdf5] text-[#065975] px-3 py-0.5 rounded-full">Default</div>}
