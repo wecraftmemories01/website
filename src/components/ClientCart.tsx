@@ -266,7 +266,7 @@ async function apiAddSaved(customerId: string, product: any) {
 async function apiDeleteSaved(customerId: string, savedId: string) {
     try {
         const res = await api.delete(
-            `/customer/${customerId}/saved_product/${savedId}`
+            `/customer/saved_product/${savedId}`
         );
         return res.data;
     } catch (error: any) {
