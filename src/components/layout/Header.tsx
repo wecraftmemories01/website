@@ -588,7 +588,7 @@ export default function Header({
                             </div>
 
                             <div className="flex items-center gap-3">
-                                <Link href="/cart" className="relative">
+                                <Link href="/cart" className="relative mr-2">
                                     <ShoppingCart size={18} />
 
                                     {mounted && cartCount > 0 && (
