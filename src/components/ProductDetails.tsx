@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from "react";
+import DOMPurify from "dompurify";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { addToCart } from "../lib/cart";
@@ -10,6 +11,10 @@ import {
     fetchFavouritesAPI,
     removeFavouriteAPI,
 } from "../lib/favourites";
+
+const purify = typeof window !== "undefined"
+    ? DOMPurify(window)
+    : null;
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
@@ -451,6 +456,18 @@ export default function ProductClient({ product }: { product: Product }) {
     const [isFavourite, setIsFavourite] = useState(false);
     const [favouriteId, setFavouriteId] = useState<string | null>(null);
     const [favLoading, setFavLoading] = useState(false);
+    const [unitSystem, setUnitSystem] = useState<"metric" | "converted">("metric");
+
+    useEffect(() => {
+        const saved = localStorage.getItem("wc_units");
+        if (saved === "metric" || saved === "converted") {
+            setUnitSystem(saved);
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem("wc_units", unitSystem);
+    }, [unitSystem]);
 
     // NEW: show thumbnails only after main image is loaded or after a small timeout
     const [thumbsVisible, setThumbsVisible] = useState(false);
@@ -777,6 +794,29 @@ export default function ProductClient({ product }: { product: Product }) {
         window.open(shareLinks[0], "_blank", "noopener,noreferrer");
     }
 
+    /** Gms to Kg and Cms to Inch */
+    function formatNumber(n: number, decimals = 2) {
+        return Number.isFinite(n)
+            ? n.toFixed(decimals).replace(/\.00$/, "")
+            : "";
+    }
+
+    function toKg(grams: number) {
+        return grams / 1000;
+    }
+
+    function toInches(cm: number) {
+        return cm / 2.54;
+    }
+
+    const deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + 5);
+
+    const formattedDelivery = deliveryDate.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+    });
+
     return (
         <div className="relative">
             {/* Sticky product title */}
@@ -795,81 +835,200 @@ export default function ProductClient({ product }: { product: Product }) {
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-6 py-10">
+            <div className="max-w-7xl mx-auto px-6 py-10 pb-28 lg:pb-10">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                     <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-white rounded-2xl shadow-lg p-4">
-                            <div className="relative w-full h-[360px] md:h-[460px] lg:h-[520px] max-h-[60vh] bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
-                                {selectedImage ? (
-                                    <button
-                                        onClick={() => setLightbox(true)}
-                                        aria-label="Open image"
-                                        className="absolute inset-0 focus:outline-none"
-                                    >
-                                        <div className="relative w-full h-full">
+                        <div className="relative">
+                            {/* Main Image Container */}
+                            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-gray-50 to-white shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
+
+                                <div className="relative w-full h-[420px] md:h-[520px] lg:h-[600px] flex items-center justify-center">
+
+                                    {selectedImage ? (
+                                        <button
+                                            onClick={() => setLightbox(true)}
+                                            className="relative w-full h-full group"
+                                        >
                                             <Image
                                                 src={selectedImage}
                                                 alt={productName ?? "Product image"}
                                                 fill
-                                                style={{ objectFit: "contain" }}
-                                                sizes="(max-width: 1024px) 100vw, 60vw"
-                                                priority // main image priority remains
-                                                onLoadingComplete={() => {
-                                                    // when main image finishes loading, reveal thumbnails
-                                                    setThumbsVisible(true);
-                                                }}
+                                                priority
+                                                sizes="(max-width:1024px) 100vw, 60vw"
+                                                className="object-contain transition-transform duration-500 group-hover:scale-[1.04]"
                                             />
-                                        </div>
-                                    </button>
-                                ) : (
-                                    <div className="text-gray-400">No image available</div>
-                                )}
+                                        </button>
+                                    ) : (
+                                        <div className="text-gray-400">No image available</div>
+                                    )}
+                                </div>
                             </div>
 
-                            <div className="mt-4 flex gap-3 overflow-x-auto">
-                                {images.length === 0 && <div className="text-sm text-gray-500">No thumbnails</div>}
+                            {/* Floating Thumbnail Strip */}
+                            {images.length > 1 && (
+                                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-4 bg-white px-6 py-3 rounded-2xl shadow-xl border border-gray-100">
+                                    {images.map((src, idx) => {
+                                        const isSelected = selectedImage === src;
 
-                                {/* if thumbsVisible is false, render skeleton placeholders to keep layout stable */}
-                                {!thumbsVisible && images.length > 0 && (
-                                    <>
-                                        {images.map((_, idx) => (
-                                            <div key={idx} className="w-20 h-20 rounded-lg overflow-hidden border-gray-200 border bg-gray-100 animate-pulse" />
-                                        ))}
-                                    </>
-                                )}
-
-                                {/* once thumbsVisible is true, render the actual thumbnails (they will lazy-load by default) */}
-                                {thumbsVisible && images.map((src, idx) => {
-                                    const isSelected = selectedImage === src;
-                                    return (
-                                        <button
-                                            key={idx}
-                                            onClick={() => setSelectedImage(src)}
-                                            className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition ${isSelected ? 'border-[#E94E4E] scale-105' : 'border-gray-200 hover:scale-105'}`}
-                                            aria-pressed={isSelected}
-                                            aria-label={`Select image ${idx + 1}`}
-                                        >
-                                            <div className="relative w-full h-full">
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => setSelectedImage(src)}
+                                                className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-300
+                            ${isSelected
+                                                        ? "ring-2 ring-[#E94E4E] scale-110"
+                                                        : "hover:scale-110 opacity-80 hover:opacity-100"
+                                                    }`}
+                                            >
                                                 <Image
                                                     src={src}
-                                                    alt={`${productName ?? 'Product'} ${idx + 1}`}
+                                                    alt={`${productName ?? "Product"} ${idx + 1}`}
                                                     fill
-                                                    style={{ objectFit: "cover" }}
-                                                    sizes="80px"
-                                                // leave default lazy loading for thumbnails (do not set priority)
+                                                    sizes="64px"
+                                                    className="object-cover"
                                                 />
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
+
+                        {/* ================= MOBILE PRODUCT INFO ================= */}
+                        <div className="lg:hidden space-y-6">
+
+                            {/* Short Description */}
+                            {shortDescription && (
+                                <div className="bg-white rounded-2xl shadow p-5 text-gray-700 text-sm leading-relaxed">
+                                    {shortDescription}
+                                </div>
+                            )}
+
+                            {/* Add to Favourites */}
+                            <button
+                                onClick={toggleFavourite}
+                                disabled={favLoading}
+                                className={`w-full py-3 rounded-xl border font-medium transition
+            ${isFavourite
+                                        ? "bg-[#E94E4E]/10 text-[#E94E4E] border-[#E94E4E]"
+                                        : "text-gray-700 bg-white"
+                                    }
+            ${favLoading ? "opacity-60 cursor-not-allowed" : ""}
+        `}
+                            >
+                                {favLoading
+                                    ? "Please wait..."
+                                    : isFavourite
+                                        ? "♥ Added to Favourites"
+                                        : "♡ Add to Favourites"
+                                }
+                            </button>
+
+                            {/* Estimated Delivery */}
+                            <div className="bg-[#004F64]/5 rounded-xl p-4 text-sm text-gray-700">
+                                <div className="mt-1">
+                                    Estimated Delivery by <span className="font-semibold">{formattedDelivery}</span>
+                                </div>
+                            </div>
+
+                            {/* Product Details */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-base font-semibold text-[#004F64]">
+                                        Product Details
+                                    </h3>
+
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <button
+                                            onClick={() => setUnitSystem("metric")}
+                                            className={`px-3 py-1 rounded-full border transition
+                        ${unitSystem === "metric"
+                                                    ? "bg-[#004F64] text-white border-[#004F64]"
+                                                    : "border-gray-300 text-gray-600"
+                                                }`}
+                                        >
+                                            gms / cms
+                                        </button>
+
+                                        <button
+                                            onClick={() => setUnitSystem("converted")}
+                                            className={`px-3 py-1 rounded-full border transition
+                        ${unitSystem === "converted"
+                                                    ? "bg-[#004F64] text-white border-[#004F64]"
+                                                    : "border-gray-300 text-gray-600"
+                                                }`}
+                                        >
+                                            kg / inches
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-[#F58634]/10 rounded-xl p-5 shadow">
+                                    <ul className="text-sm text-gray-700 space-y-2">
+                                        {productAttributes.length === 0 ? (
+                                            <li className="text-gray-500">
+                                                No attributes provided
+                                            </li>
+                                        ) : (
+                                            productAttributes.map((attr) => {
+                                                const name = attr.attributePublicName;
+                                                const rawValue = parseFloat(attr.value);
+                                                let displayValue: React.ReactNode = attr.value;
+
+                                                if (!Number.isNaN(rawValue)) {
+                                                    if (name === "Weight") {
+                                                        displayValue =
+                                                            unitSystem === "metric"
+                                                                ? `${formatNumber(rawValue, 0)} gms`
+                                                                : `${formatNumber(toKg(rawValue))} kg`;
+                                                    }
+
+                                                    if (["Width", "Length", "Height"].includes(name)) {
+                                                        displayValue =
+                                                            unitSystem === "metric"
+                                                                ? `${formatNumber(rawValue)} cms`
+                                                                : `${formatNumber(toInches(rawValue))}"`;
+                                                    }
+                                                }
+
+                                                return (
+                                                    <li key={attr.attributeId} className="flex justify-between">
+                                                        <span className="text-gray-600">{name}</span>
+                                                        <span className="font-medium text-gray-800">
+                                                            {displayValue}
+                                                        </span>
+                                                    </li>
+                                                );
+                                            })
+                                        )}
+                                    </ul>
+                                </div>
+                            </div>
+
+                        </div>
+                        {/* ================= END MOBILE PRODUCT INFO ================= */}
+
+                        {/* Long Description */}
+                        {longDescription && (
+                            <div className="bg-white rounded-2xl shadow p-6">
+                                <h3 className="text-lg font-semibold text-[#004F64] mb-4">
+                                    Description
+                                </h3>
+
+                                <div
+                                    className="prose max-w-none text-gray-700"
+                                    dangerouslySetInnerHTML={{
+                                        __html: purify ? purify.sanitize(longDescription) : longDescription
+                                    }}
+                                />
+                            </div>
+                        )}
 
                         {/* Reviews Module inserted here */}
                         {/* <ReviewModule productName={productName} /> */}
                     </div>
 
-                    <aside className="space-y-6">
+                    <aside className="hidden lg:block space-y-6">
                         <div className="bg-white rounded-2xl shadow-2xl p-6 sticky top-28">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -885,6 +1044,12 @@ export default function ProductClient({ product }: { product: Product }) {
                                     <div className={`text-sm font-semibold ${isOutOfStock ? 'text-red-600' : 'text-green-700'}`}>
                                         {isOutOfStock ? 'Out of stock' : `In stock (${stockDisplay})`}
                                     </div>
+
+                                    {stockNumber > 0 && stockNumber <= 5 && (
+                                        <div className="text-xs text-orange-600 mt-1 font-medium">
+                                            Only {stockNumber} left in stock!
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -950,33 +1115,94 @@ export default function ProductClient({ product }: { product: Product }) {
                                 }
                             </button>
 
+                            <div className="mt-4 text-xs text-gray-600 space-y-1">
+                                <div>✔ Secure checkout</div>
+                                <div>✔ Handmade in India</div>
+                                <div>✔ Easy returns</div>
+                            </div>
+
                             <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-                                <div>Delivery: <span className="font-medium text-gray-800">3–7 business days</span></div>
-                                <div className="flex gap-2">
-                                    <button onClick={openSharePopup} className="px-3 py-1 border rounded text-xs">Share</button>
+                                <div>
+                                    Estimated Delivery by{" "}
+                                    <span className="font-medium text-gray-800">
+                                        {formattedDelivery}
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
+                        {/* Short Description */}
+                        {shortDescription && (
+                            <div className="bg-white rounded-xl p-5 shadow-sm text-gray-700 text-sm leading-relaxed">
+                                {shortDescription}
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-[#004F64]">
+                                Product Details
+                            </h3>
+
+                            <div className="flex items-center gap-2 text-xs">
+                                <button
+                                    onClick={() => setUnitSystem("metric")}
+                                    className={`px-3 py-1 rounded-full border transition ${unitSystem === "metric"
+                                        ? "bg-[#004F64] text-white border-[#004F64]"
+                                        : "border-gray-300 text-gray-600"
+                                        }`}
+                                >
+                                    gms / cms
+                                </button>
+
+                                <button
+                                    onClick={() => setUnitSystem("converted")}
+                                    className={`px-3 py-1 rounded-full border transition ${unitSystem === "converted"
+                                        ? "bg-[#004F64] text-white border-[#004F64]"
+                                        : "border-gray-300 text-gray-600"
+                                        }`}
+                                >
+                                    kg / inches
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="bg-[#F58634]/10 rounded-xl p-6 shadow">
-                            <h3 className="text-lg font-semibold text-[#004F64] mb-3">Product Details</h3>
                             <ul className="text-sm text-gray-700 space-y-2">
                                 {productAttributes.length === 0 ? (
                                     <li className="text-gray-500">No attributes provided</li>
                                 ) : (
-                                    productAttributes.map((attr) => (
-                                        <li key={attr.attributeId} className="flex justify-between">
-                                            <span className="text-gray-600">{attr.attributePublicName}</span>
-                                            <span className="font-medium text-gray-800">{attr.value}</span>
-                                        </li>
-                                    ))
+                                    productAttributes.map((attr) => {
+                                        const name = attr.attributePublicName;
+                                        const rawValue = parseFloat(attr.value);
+                                        let displayValue: React.ReactNode = attr.value;
+
+                                        if (!Number.isNaN(rawValue)) {
+                                            if (name === "Weight") {
+                                                displayValue =
+                                                    unitSystem === "metric"
+                                                        ? `${formatNumber(rawValue, 0)} gms`
+                                                        : `${formatNumber(toKg(rawValue))} kg`;
+                                            }
+
+                                            if (["Width", "Length", "Height"].includes(name)) {
+                                                displayValue =
+                                                    unitSystem === "metric"
+                                                        ? `${formatNumber(rawValue)} cms`
+                                                        : `${formatNumber(toInches(rawValue))}"`;
+                                            }
+                                        }
+
+                                        return (
+                                            <li key={attr.attributeId} className="flex justify-between">
+                                                <span className="text-gray-600">{name}</span>
+                                                <span className="font-medium text-gray-800">
+                                                    {displayValue}
+                                                </span>
+                                            </li>
+                                        );
+                                    })
                                 )}
                             </ul>
-                        </div>
-
-                        <div className="bg-[#2BAE66]/10 rounded-xl p-6 shadow">
-                            <h3 className="text-lg font-semibold text-[#004F64] mb-3">About</h3>
-                            <div className="prose max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: longDescription ?? "<p>No description provided.</p>" }} />
                         </div>
 
                         <div className="bg-white rounded-xl p-4 shadow-sm">
@@ -998,6 +1224,75 @@ export default function ProductClient({ product }: { product: Product }) {
                         </div>
                     </div>
                 )}
+
+                {/* ================= STICKY MOBILE BUY BAR ================= */}
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40">
+
+                    {/* subtle fade */}
+                    <div className="h-6 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+
+                    <div className="bg-white border-t shadow-[0_-6px_20px_rgba(0,0,0,0.08)] px-4 py-3">
+
+                        <div className="flex items-center gap-3">
+
+                            {/* Price */}
+                            <div className="flex flex-col min-w-[90px]">
+                                <span className="text-lg font-extrabold text-[#E94E4E] leading-tight">
+                                    {priceDisplay ? formatINR(priceDisplay) : "—"}
+                                </span>
+                                <span className={`text-xs font-medium ${isOutOfStock ? "text-red-600" : "text-green-700"}`}>
+                                    {isOutOfStock ? "Out of stock" : "In stock"}
+                                </span>
+                            </div>
+
+                            {/* Quantity */}
+                            <div className={`flex items-center border rounded-xl overflow-hidden ${cartState !== "not_added" ? "opacity-50 pointer-events-none" : ""}`}>
+                                <button
+                                    onClick={() => handleQuantity(-1)}
+                                    disabled={quantity <= 1}
+                                    className="px-3 py-2 text-lg disabled:opacity-40"
+                                >
+                                    −
+                                </button>
+
+                                <span className="px-3 font-medium text-sm">
+                                    {quantity}
+                                </span>
+
+                                <button
+                                    onClick={() => handleQuantity(1)}
+                                    disabled={Boolean(stockNumber && quantity >= stockNumber)}
+                                    className="px-3 py-2 text-lg disabled:opacity-40"
+                                >
+                                    +
+                                </button>
+                            </div>
+
+                            {/* Button */}
+                            {cartState === "added" ? (
+                                <button
+                                    onClick={() => router.push("/cart")}
+                                    className="flex-1 py-3 rounded-xl bg-green-600 text-white font-semibold shadow-md"
+                                >
+                                    Go to Cart →
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleAddToCart}
+                                    disabled={cartState !== "not_added" || adding || isOutOfStock}
+                                    className={`flex-1 py-3 rounded-xl text-white font-semibold shadow-md transition-all duration-200 active:scale-[0.98]
+                                        ${isOutOfStock
+                                            ? "bg-gray-300 cursor-not-allowed"
+                                            : "bg-[#E94E4E] hover:bg-[#c93b3b]"
+                                        }`}
+                                >
+                                    {adding ? "Adding…" : "Add to Cart"}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                {/* ================= END STICKY MOBILE BUY BAR ================= */}
 
                 {/* Toast */}
                 {toast && (
