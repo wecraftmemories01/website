@@ -871,7 +871,7 @@ export default function ClientCart() {
         return <LoggedOutState />;
     }
 
-    if (!loading && localCart &&  Array.isArray(localCart.sellItems) && localCart.sellItems.length === 0) {
+    if (!loading && localCart && Array.isArray(localCart.sellItems) && localCart.sellItems.length === 0) {
         return (
             <div className="p-8">
                 <EmptyIllustration />
@@ -891,7 +891,7 @@ export default function ClientCart() {
             ) : null}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start">
-                <section className="md:col-span-2 space-y-6">
+                <section className="order-1 md:order-none md:col-span-2 space-y-6">
                     <div className="bg-white rounded-xl shadow-lg p-5">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold">Items in your cart</h3>
@@ -955,57 +955,9 @@ export default function ClientCart() {
                             </>
                         )}
                     </div>
-
-                    {/* Saved for later */}
-                    <div className="bg-white rounded-xl shadow-lg p-5">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold">Saved for later</h3>
-                            <div className="text-sm text-gray-500">{savedLoading ? "Loading…" : `${savedItems.length} item${savedItems.length !== 1 ? "s" : ""}`}</div>
-                        </div>
-
-                        {savedLoading ? (
-                            <div className="text-sm text-gray-500">Loading saved items…</div>
-                        ) : savedItems.length === 0 ? (
-                            <div className="text-center text-gray-500 py-8">You don’t have any saved items.</div>
-                        ) : (
-                            <ul className="space-y-3">
-                                {savedItems.map((s) => (
-                                    <li key={s._savedId ?? s.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-3">
-                                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-white border">
-                                            <Link href={s.productId ? `/products/${s.productId}` : "/products"} className="block w-full h-full">
-                                                <Image src={s.img ?? "/placeholder-80x80.png"} alt={s.title} width={80} height={80} className="object-cover" />
-                                            </Link>
-                                        </div>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-medium truncate">{s.title}</div>
-                                            <div className="text-sm text-gray-500 mt-1">{typeof s.price === "number" ? formatCurrency(s.price) : ""}</div>
-                                        </div>
-
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => moveSavedToCart(s)}
-                                                disabled={saving}
-                                                className="px-3 py-1 rounded bg-white border hover:shadow-sm"
-                                            >
-                                                Move to cart
-                                            </button>
-                                            <button
-                                                onClick={() => openSavedConfirm(s)}
-                                                disabled={saving || deletingSaved}
-                                                className="px-3 py-1 rounded border text-rose-600 hover:bg-rose-50"
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
                 </section>
 
-                <aside className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
+                <aside className="order-2 md:order-none bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
                     <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-lg">Summary</h4>
                         <div className="text-sm text-gray-500">Ready when you are</div>
@@ -1049,6 +1001,82 @@ export default function ClientCart() {
 
                     <p className="text-xs text-gray-500 mt-4">Quantities update automatically when changed. Final price will be calculated at checkout.</p>
                 </aside>
+
+                {/* Saved for later */}
+                <div className="order-3 md:order-none md:col-span-2 bg-white rounded-xl shadow-lg p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Saved for later</h3>
+                        <div className="text-sm text-gray-500">
+                            {savedLoading
+                                ? "Loading…"
+                                : `${savedItems.length} item${savedItems.length !== 1 ? "s" : ""}`}
+                        </div>
+                    </div>
+
+                    {savedLoading ? (
+                        <div className="text-sm text-gray-500">Loading saved items…</div>
+                    ) : savedItems.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8">
+                            You don’t have any saved items.
+                        </div>
+                    ) : (
+                        <ul className="space-y-3">
+                            {savedItems.map((s) => (
+                                <li
+                                    key={s._savedId ?? s.id}
+                                    className="flex flex-col sm:flex-row sm:items-center gap-4 p-3"
+                                >
+                                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-white border">
+                                        <Link
+                                            href={
+                                                s.productId
+                                                    ? `/products/${s.productId}`
+                                                    : "/products"
+                                            }
+                                            className="block w-full h-full"
+                                        >
+                                            <Image
+                                                src={s.img ?? "/placeholder-80x80.png"}
+                                                alt={s.title}
+                                                width={80}
+                                                height={80}
+                                                className="object-cover"
+                                            />
+                                        </Link>
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-medium truncate">
+                                            {s.title}
+                                        </div>
+                                        <div className="text-sm text-gray-500 mt-1">
+                                            {typeof s.price === "number"
+                                                ? formatCurrency(s.price)
+                                                : ""}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => moveSavedToCart(s)}
+                                            disabled={saving}
+                                            className="px-3 py-1 rounded bg-white border hover:shadow-sm"
+                                        >
+                                            Move to cart
+                                        </button>
+                                        <button
+                                            onClick={() => openSavedConfirm(s)}
+                                            disabled={saving || deletingSaved}
+                                            className="px-3 py-1 rounded border text-rose-600 hover:bg-rose-50"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
             </div>
 
             <ConfirmModal
