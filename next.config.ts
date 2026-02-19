@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
             // Local development
             {
                 protocol: "http",
-                hostname: "127.0.0.1",
+                hostname: "localhost",
                 port: "3000",
                 pathname: "/uploads/**",
             },
@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
                 pathname: "/uploads/**",
             },
         ],
+
+        // REQUIRED for localhost images
+        dangerouslyAllowLocalIP: true,
     },
 };
 
