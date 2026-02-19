@@ -141,32 +141,25 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
             e.stopPropagation();
             if (loadingWish) return;
 
-            const token = typeof window !== 'undefined'
-                ? localStorage.getItem('accessToken')
-                : null;
-
-            if (!token) {
-                setShowLoginModal(true);
-                return;
-            }
-
-            // If already wishlisted → ask confirmation
+            // If already wishlisted → confirm removal
             if (wish) {
                 setShowRemoveFavModal(true);
                 return;
             }
 
-            // Add to favourites
             try {
                 setLoadingWish(true);
-                setWish(true); // optimistic
+                setWish(true); // optimistic UI
 
                 const res = await favouritesClient.toggle(String(product._id));
 
                 if (!res.success) {
-                    setWish(false); // rollback
+                    setWish(false);
 
-                    if (res.message === 'not_authenticated' || String(res.message).includes('401')) {
+                    if (
+                        res.message === 'not_authenticated' ||
+                        String(res.message).includes('401')
+                    ) {
                         setShowLoginModal(true);
                     } else {
                         setErrorModal({
@@ -175,13 +168,18 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                         });
                     }
                 }
-            } catch (err) {
-                console.error('Favourite toggle error', err);
+
+            } catch (err: any) {
                 setWish(false);
-                setErrorModal({
-                    open: true,
-                    message: 'Something went wrong while updating favourites.',
-                });
+
+                if (err?.status === 401) {
+                    setShowLoginModal(true);
+                } else {
+                    setErrorModal({
+                        open: true,
+                        message: 'Something went wrong while updating favourites.',
+                    });
+                }
             } finally {
                 setLoadingWish(false);
             }
@@ -303,7 +301,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                                             <Check size={14} /> Added
                                         </button>
                                     ) : (
-                                        <div aria-hidden className="w-[68px] h-8" />
+                                        <div aria-hidden className="w-17 h-8" />
                                     )
                                 )}
                             </div>

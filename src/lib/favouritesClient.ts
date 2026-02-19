@@ -63,7 +63,8 @@ class FavouritesClient {
     async refreshFromServerIfAuthorized(): Promise<void> {
         if (typeof window === 'undefined') return
         const token = localStorage.getItem('accessToken')
-        const customerId = localStorage.getItem('customerId')
+        const authRaw = localStorage.getItem('auth')
+        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null
         if (!token || !customerId) return
         await this.refreshFromServer(customerId, token)
     }
@@ -73,7 +74,10 @@ class FavouritesClient {
      */
     async refreshFromServer(customerId?: string, token?: string | null): Promise<void> {
         if (typeof window === 'undefined') return
-        if (!customerId) customerId = localStorage.getItem('customerId') ?? undefined
+        if (!customerId) {
+            const authRaw = localStorage.getItem('auth')
+            customerId = authRaw ? JSON.parse(authRaw)?.customerId : undefined
+        }
         if (!token) token = localStorage.getItem('accessToken')
 
         if (!customerId || !token) {
@@ -131,7 +135,8 @@ class FavouritesClient {
     async add(productId: string): Promise<{ success: boolean; message?: string }> {
         if (typeof window === 'undefined') return { success: false, message: 'no window' }
         const token = localStorage.getItem('accessToken')
-        const customerId = localStorage.getItem('customerId')
+        const authRaw = localStorage.getItem('auth')
+        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null
         if (!token || !customerId) {
             return { success: false, message: 'not_authenticated' }
         }
@@ -155,7 +160,8 @@ class FavouritesClient {
     async remove(productId: string): Promise<{ success: boolean; message?: string }> {
         if (typeof window === 'undefined') return { success: false, message: 'no window' }
         const token = localStorage.getItem('accessToken')
-        const customerId = localStorage.getItem('customerId')
+        const authRaw = localStorage.getItem('auth')
+        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null
         if (!token || !customerId) {
             return { success: false, message: 'not_authenticated' }
         }
