@@ -303,7 +303,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                                             <Check size={14} /> Added
                                         </button>
                                     ) : (
-                                        <div aria-hidden className="w-[68px] h-8" />
+                                        <div aria-hidden className="w-17 h-8" />
                                     )
                                 )}
                             </div>

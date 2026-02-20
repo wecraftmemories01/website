@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { User, Edit2, Lock, MapPin, Box } from "lucide-react";
 import type { Address as SharedAddress } from "../../types/address";
 import api from "@/services/api";
@@ -310,7 +310,7 @@ export default function ProfilePageAlt(): React.ReactElement {
 
     /* ---------- RENDER ---------- */
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#fbfdff] to-white p-6 md:p-8 font-sans text-slate-900">
+        <div className="min-h-screen bg-linear-to-b from-[#fbfdff] to-white p-6 md:p-8 font-sans text-slate-900">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* LEFT SIDEBAR */}
                 <aside className="lg:col-span-4 col-span-1">
@@ -318,7 +318,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                         <div className="flex items-center gap-4">
                             <div
                                 style={{ width: 84, height: 84 }}
-                                className="rounded-3xl bg-gradient-to-br from-[#065975] to-[#0ea5a0] text-white grid place-items-center font-extrabold text-xl shadow-2xl"
+                                className="rounded-3xl bg-linear-to-br from-[#065975] to-[#0ea5a0] text-white grid place-items-center font-extrabold text-xl shadow-2xl"
                             >
                                 {(user?.name ?? "?")
                                     .split(" ")
@@ -389,7 +389,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                 {/* MAIN CONTENT */}
                 <main className="lg:col-span-8 col-span-1 space-y-8">
                     {activeTab === "overview" && (
-                        <section className="bg-gradient-to-r from-[#e8fbfa] to-white rounded-3xl p-6 lg:p-8 shadow-lg border">
+                        <section className="bg-linear-to-r from-[#e8fbfa] to-white rounded-3xl p-6 lg:p-8 shadow-lg border">
                             <h3 className="text-2xl font-bold">
                                 Welcome back, {user?.name?.split(" ")[0] ?? "there"} 👋
                             </h3>
