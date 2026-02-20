@@ -141,25 +141,32 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
             e.stopPropagation();
             if (loadingWish) return;
 
-            // If already wishlisted → confirm removal
+            const token = typeof window !== 'undefined'
+                ? localStorage.getItem('accessToken')
+                : null;
+
+            if (!token) {
+                setShowLoginModal(true);
+                return;
+            }
+
+            // If already wishlisted → ask confirmation
             if (wish) {
                 setShowRemoveFavModal(true);
                 return;
             }
 
+            // Add to favourites
             try {
                 setLoadingWish(true);
-                setWish(true); // optimistic UI
+                setWish(true); // optimistic
 
                 const res = await favouritesClient.toggle(String(product._id));
 
                 if (!res.success) {
-                    setWish(false);
+                    setWish(false); // rollback
 
-                    if (
-                        res.message === 'not_authenticated' ||
-                        String(res.message).includes('401')
-                    ) {
+                    if (res.message === 'not_authenticated' || String(res.message).includes('401')) {
                         setShowLoginModal(true);
                     } else {
                         setErrorModal({
@@ -168,18 +175,13 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                         });
                     }
                 }
-
-            } catch (err: any) {
+            } catch (err) {
+                console.error('Favourite toggle error', err);
                 setWish(false);
-
-                if (err?.status === 401) {
-                    setShowLoginModal(true);
-                } else {
-                    setErrorModal({
-                        open: true,
-                        message: 'Something went wrong while updating favourites.',
-                    });
-                }
+                setErrorModal({
+                    open: true,
+                    message: 'Something went wrong while updating favourites.',
+                });
             } finally {
                 setLoadingWish(false);
             }
@@ -301,7 +303,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                                             <Check size={14} /> Added
                                         </button>
                                     ) : (
-                                        <div aria-hidden className="w-17 h-8" />
+                                        <div aria-hidden className="w-[68px] h-8" />
                                     )
                                 )}
                             </div>
@@ -354,12 +356,15 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
             <ConfirmModal
                 open={errorModal.open}
-                title="Something went wrong"
-                description={errorModal.message}
-                confirmLabel="Okay"
+                title="Login required"
+                description="Please log in to add products to your cart."
+                confirmLabel="Go to Login"
                 cancelLabel="Cancel"
-                onConfirm={() => setErrorModal({ open: false, message: '' })}
-                onCancel={() => setErrorModal({ open: false, message: '' })}
+                onConfirm={() => {
+                    setShowLoginModal(false);
+                    window.location.href = '/login';
+                }}
+                onCancel={() => setShowLoginModal(false)}
             />
         </>
     )
