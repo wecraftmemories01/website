@@ -903,7 +903,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         if (!selectedAddressId) {
             placeOrderLockRef.current = false;
-            return alert("Please select or add a delivery address");
+            return window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
         const addr = addresses.find((a) => a.id === selectedAddressId);
@@ -1167,7 +1167,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     return (
-        <div className="min-h-screen from-[#f8fbfb] to-white p-4 md:p-8 font-sans pb-28 md:pb-10">
+        <div className="min-h-screen from-[#f8fbfb] to-white p-4 md:p-8 font-sans pb-32 md:pb-10">
             <div className="max-w-6xl mx-auto">
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                     <div>
@@ -1176,17 +1176,25 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     </div>
                 </header>
 
-                <main className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+                <main className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
                     {/* Left panel: addresses + billing checkbox (cart removed from here) */}
-                    <section className="bg-white rounded-2xl shadow p-4 md:p-6">
-                        <div className="flex items-center justify-between mb-4">
+                    <section className="bg-white rounded-2xl shadow-sm p-5 md:p-6 space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                             <div>
                                 <h2 className="text-lg font-semibold">Delivery address</h2>
                                 <p className="text-sm text-slate-500">Select where you'd like us to deliver</p>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={openAdd} className="inline-flex items-center gap-2 bg-[#065975] text-white text-sm px-3 py-2 rounded-lg shadow-sm hover:brightness-95">
-                                    <Plus className="w-4 h-4" /> Add Address
+                                <button
+                                    onClick={openAdd}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl 
+                                        bg-linear-to-r from-[#065975] to-[#0ea5a0] 
+                                        text-white text-sm font-medium
+                                        shadow-md hover:shadow-lg hover:brightness-105
+                                        transition-all duration-200 active:scale-[0.97]"
+                                    >
+                                    <Plus className="w-4 h-4" />
+                                    Add address
                                 </button>
                             </div>
                         </div>
@@ -1210,75 +1218,57 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 return (
                                     <label
                                         key={String(a.id)}
-                                        htmlFor={`addr-${String(a.id)}`}
-                                        onClick={(e) => {
-                                            if (isDisabled) {
-                                                e.preventDefault();
-                                                const el = document.getElementById(`addr-${String(a.id)}`) as HTMLInputElement | null;
-                                                el?.blur();
-                                                return;
-                                            }
-                                        }}
-                                        className={`flex flex-col gap-2 p-4 rounded-lg border hover:shadow-md transition-shadow cursor-pointer ${selectedAddressId === a.id ? "border-[#065975] bg-[#f6fbfb]" : "border-slate-100"
-                                            }`}
+                                        className={`relative flex flex-col gap-4 p-5 rounded-2xl border transition-all duration-200 cursor-pointer
+                                            ${selectedAddressId === a.id
+                                                ? "border-[#065975] bg-[#f8fcfc] shadow-md"
+                                                : "border-slate-200 bg-white hover:shadow-sm"}
+                                            ${isDisabled ? "opacity-60 cursor-not-allowed" : ""}
+                                        `}
                                     >
-                                        <div className="flex items-start justify-between">
+                                        {/* Top Row */}
+                                        <div className="flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-[#065975] text-white grid place-items-center font-medium">
+                                                <div className="w-9 h-9 rounded-full bg-[#065975]/90 text-white text-sm grid place-items-center font-semibold">
                                                     {a.recipientName
                                                         .split(" ")
-                                                        .map((s) => (s && s[0] ? s[0] : ""))
+                                                        .map((s) => s?.[0] ?? "")
                                                         .slice(0, 2)
                                                         .join("")}
                                                 </div>
+
                                                 <div>
-                                                    <div className="font-semibold">{a.recipientName}</div>
-                                                    <div className="text-sm text-slate-500">{a.recipientContact}</div>
+                                                    <div className="font-semibold text-slate-800">
+                                                        {a.recipientName}
+                                                    </div>
+                                                    <div className="text-sm text-slate-500">
+                                                        {a.recipientContact}
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    id={`addr-${String(a.id)}`}
-                                                    type="radio"
-                                                    name="selectedAddr"
-                                                    checked={selectedAddressId === a.id}
-                                                    onChange={() => {
-                                                        if (isDisabled) return;
-                                                        setSelectedAddressId(a.id);
-                                                    }}
-                                                    disabled={isDisabled || creating}
-                                                    className="w-4 h-4 text-[#065975]"
-                                                    aria-label={`Select address for ${a.recipientName}`}
-                                                    aria-disabled={isDisabled}
-                                                    title={isDisabled ? "This address is not serviceable for prepaid orders" : undefined}
-                                                />
-                                            </div>
+                                            <input
+                                                type="radio"
+                                                checked={selectedAddressId === a.id}
+                                                onChange={() => !isDisabled && setSelectedAddressId(a.id)}
+                                                className="w-5 h-5 accent-[#065975]"
+                                            />
                                         </div>
 
-                                        <div className="text-sm text-slate-600 leading-snug">
+                                        {/* Address Text */}
+                                        <div className="text-sm text-slate-600 leading-relaxed">
                                             {a.addressLine1}
-                                            {a.addressLine2 ? `, ${a.addressLine2}` : ""}
-                                            {a.addressLine3 ? `, ${a.addressLine3}` : ""}
-                                            {a.landmark ? `, ${a.landmark}` : ""}
-                                            {a.cityName ? `, ${a.cityName}` : ""}
-                                            {a.stateName ? `, ${a.stateName}` : ""}
-                                            {a.countryName ? `, ${a.countryName}` : ""} — {a.pincode}
+                                            {a.addressLine2 && `, ${a.addressLine2}`}
+                                            {a.cityName && `, ${a.cityName}`}
+                                            {a.stateName && `, ${a.stateName}`}
+                                            {a.countryName && `, ${a.countryName}`} — {a.pincode}
                                         </div>
 
-                                        <div className="text-xs mt-1">
-                                            {isChecking ? (
-                                                <div className="text-slate-500">Checking serviceability…</div>
-                                            ) : showError ? (
-                                                <div className="text-rose-600">This pincode is not serviceable for prepaid (online) orders.</div>
-                                            ) : prepaid === true ? (
-                                                <div className="text-green-600">Serviceable for prepaid orders.</div>
-                                            ) : svc?.error ? (
-                                                <div className="text-rose-600">Service check failed: {svc.error}</div>
-                                            ) : (
-                                                <div className="text-slate-400">Serviceability unknown</div>
-                                            )}
-                                        </div>
+                                        {/* Badge */}
+                                        {prepaid === true && (
+                                            <span className="inline-flex items-center px-3 py-1 text-xs rounded-full bg-emerald-50 text-emerald-700 font-medium w-fit">
+                                                ✓ Prepaid available
+                                            </span>
+                                        )}
                                     </label>
                                 );
                             })}
@@ -1361,7 +1351,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     </section>
 
                     {/* Right panel / summary */}
-                    <aside className="bg-white rounded-2xl shadow p-5 md:p-6 lg:sticky lg:top-6">
+                    <aside className="bg-linear-to-b from-white to-[#f7fbfb] rounded-2xl shadow-lg p-5 md:p-6 xl:sticky xl:top-6">
                         <div className="flex items-center justify-between">
                             <h2 className="text-lg font-semibold">Order summary</h2>
                             <span className="text-sm text-slate-500">{cart.length} item{cart.length !== 1 ? "s" : ""}</span>
@@ -1382,7 +1372,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                             <div className="border-t pt-3 mt-3 flex justify-between items-center">
                                 <div className="text-lg font-extrabold">Total</div>
-                                <div className="text-lg font-extrabold">{formatINR(total)}</div>
+                                <div className="text-xl font-extrabold text-[#065975]">
+                                    {formatINR(total)}
+                                </div>
                             </div>
                         </div>
 
@@ -1392,7 +1384,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <div className="mt-6 hidden md:flex gap-3">
                             <button
                                 onClick={placeOrder}
-                                className={`flex-1 py-3 rounded-xl font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed" : "bg-gradient-to-r from-[#065975] to-[#0ea5a0] text-white hover:brightness-95"}`}
+                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating ? "opacity-60 cursor-not-allowed" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
                                 disabled={creating || cart.length === 0}
                                 aria-disabled={creating || cart.length === 0}
                             >
@@ -1409,39 +1401,65 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <h3 className="text-md font-medium mb-3">Your cart</h3>
 
                             {/* grid with 2 items per row */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-4">
                                 {cart.map((it) => (
-                                    <div key={it.id} className="flex flex-col p-2 rounded-xl border bg-white hover:shadow-md transition-all h-full">
-                                        <div className="relative w-full h-24 rounded-lg overflow-hidden mb-3 bg-gradient-to-br from-[#fff7f9] to-[#f3fcfb]">
-                                            <Image src={safeImg(it.img)} alt={it.title} fill className="object-cover" />
+                                    <div
+                                        key={it.id}
+                                        className="flex gap-4 p-4 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-all"
+                                    >
+                                        {/* Image */}
+                                        <div className="relative w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-slate-100">
+                                            <Image
+                                                src={safeImg(it.img)}
+                                                alt={it.title}
+                                                fill
+                                                className="object-cover"
+                                            />
                                         </div>
 
-                                        <div className="flex-1 flex flex-col justify-between">
+                                        {/* Content */}
+                                        <div className="flex flex-col flex-1 justify-between">
                                             <div>
-                                                <div className="font-semibold text-slate-800 line-clamp-2 leading-tight">{it.title}</div>
-                                                <div className="text-sm text-slate-400 mt-1">{formatINR(it.price)} each</div>
+                                                <div className="font-semibold text-slate-800 leading-snug">
+                                                    {it.title}
+                                                </div>
+
+                                                <div className="text-sm text-slate-500 mt-1">
+                                                    {formatINR(it.price)} each
+                                                </div>
                                             </div>
 
                                             <div className="flex items-center justify-between mt-3">
-                                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-[#f6fbfb] text-sm font-medium">
-                                                    <div className="text-slate-600">Qty</div>
-                                                    <div className="px-2 py-0.5 rounded-full bg-white border text-sm font-semibold">{it.qty}</div>
+                                                <div className="text-sm text-slate-600">
+                                                    Qty <span className="font-semibold">{it.qty}</span>
                                                 </div>
 
-                                                <div className="text-base font-bold text-[#065975]">{formatINR(it.price * it.qty)}</div>
+                                                <div className="text-base font-bold text-[#065975]">
+                                                    {formatINR(it.price * it.qty)}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
 
-                                {cart.length === 0 && <div className="col-span-full text-center text-slate-500 py-6 border rounded-lg">Your cart is empty</div>}
+                                {cart.length === 0 && (
+                                    <div className="col-span-full text-center py-8 border rounded-xl">
+                                        <p className="text-slate-500 mb-3">Your cart is empty</p>
+                                        <button
+                                            onClick={() => router.push("/shop")}
+                                            className="px-4 py-2 bg-[#065975] text-white rounded-lg text-sm hover:brightness-95 transition"
+                                        >
+                                            Continue shopping
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </aside>
                 </main>
 
                 {/* MOBILE FIXED BOTTOM BAR */}
-                <div className="fixed left-0 right-0 bottom-0 z-40 md:hidden bg-white border-t px-4 py-3 shadow-lg">
+                <div className="fixed left-0 right-0 bottom-0 z-50 md:hidden bg-white/95 backdrop-blur border-t px-4 py-3 shadow-2xl">
                     <div className="max-w-6xl mx-auto flex items-center gap-3">
                         <div className="flex-1">
                             <div className="text-sm text-slate-500">Total</div>
