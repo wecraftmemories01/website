@@ -230,7 +230,7 @@ export default function FooterWithInstagram({
                     <div className="lg:col-span-4">
                         <div className="bg-white rounded-xl p-5 ring-1 ring-slate-200">
                             <div className="flex items-center gap-3">
-                                <div className="relative h-12 w-12 rounded-md overflow-hidden bg-gray-50 ring-1 ring-slate-200 flex-shrink-0">
+                                <div className="relative h-12 w-12 rounded-md overflow-hidden bg-gray-50 ring-1 ring-slate-200 shrink-0">
                                     <Image src="/logo.png" alt="WeCraftMemories" fill style={{ objectFit: "contain" }} />
                                 </div>
                                 <div>
@@ -275,7 +275,7 @@ export default function FooterWithInstagram({
                         <div className="relative w-full rounded-2xl overflow-hidden">
 
                             {/* soft gradient background */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 via-transparent to-emerald-500/20" />
+                            <div className="absolute inset-0 bg-linear-to-br from-teal-500/20 via-transparent to-emerald-500/20" />
 
                             {/* glass surface */}
                             <div className="relative backdrop-blur-md bg-white/70 ring-1 ring-slate-200 rounded-2xl p-8">
@@ -336,7 +336,7 @@ export default function FooterWithInstagram({
                             </div>
                         </div>
 
-                        {/* <div className="bg-gradient-to-br from-teal-600 to-teal-500 rounded-lg p-4 text-white">
+                        {/* <div className="bg-linear-to-br from-teal-600 to-teal-500 rounded-lg p-4 text-white">
                             <h4 className="text-base font-semibold">Need a custom gift?</h4>
                             <p className="text-sm text-white/90 mt-2">We make personalized orders. Message us and we'll craft something special.</p>
                             <div className="mt-3 flex gap-2">
