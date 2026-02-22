@@ -31,7 +31,6 @@ function isValidIndianPincode(pin: string) {
 
 export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
     const router = useRouter();
-    const isRefreshingRef = useRef(false);
     const placeOrderLockRef = useRef(false);
     const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -56,26 +55,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         addressLine2: "",
         addressLine3: "",
         landmark: "",
-        countryId: "",
-        stateId: "",
-        cityId: "",
+        state: "",
+        district: "",
+        city: "",
+        country: "India",
         pincode: "",
         isDefault: false,
-        countryName: undefined,
-        stateName: undefined,
-        cityName: undefined,
     };
 
     const [loadingAddresses, setLoadingAddresses] = useState(false);
-
-    const [countries, setCountries] = useState<Array<{ _id: string; countryName: string }>>([]);
-    const [states, setStates] = useState<Array<{ _id: string; stateName: string; country?: { _id: string } }>>([]);
-    const [cities, setCities] = useState<Array<{ _id: string; cityName: string; state?: { _id: string } }>>([]);
-
-    const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false });
-    const [countrySearch, setCountrySearch] = useState("");
-    const [stateSearch, setStateSearch] = useState("");
-    const [citySearch, setCitySearch] = useState("");
 
     type ServiceEntry = { checking: boolean; prepaid: boolean | null; error?: string };
     const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>({});
@@ -207,55 +195,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return mapped;
     }
 
-    async function apiFetchCountries(): Promise<Array<{ _id: string; countryName: string }>> {
-        try {
-            const url = buildUrl(`/master/countries`);
-            const res = await fetch(url);
-            if (!res.ok) return [];
-            const json = await safeJson(res);
-            const arr = Array.isArray((json as any)?.countryData) ? (json as any).countryData : [];
-            return arr.map((c: any) => ({ _id: String(c._id), countryName: c.countryName ?? c.countryCode ?? "" }));
-        } catch {
-            return [];
-        }
-    }
-
-    async function apiFetchStates(
-        countryId?: string
-    ): Promise<Array<{ _id: string; stateName: string; country?: { _id: string } }>> {
-        try {
-            const url = countryId ? buildUrl(`/master/states?countryId=${encodeURIComponent(countryId)}`) : buildUrl(`/master/states`);
-            const res = await fetch(url);
-            if (!res.ok) return [];
-            const json = await safeJson(res);
-            const arr = Array.isArray((json as any)?.stateData) ? (json as any).stateData : [];
-            return arr.map((s: any) => ({
-                _id: String(s._id),
-                stateName: s.stateName ?? s.name ?? "",
-                country: s.country ? (typeof s.country === "object" ? { _id: String(s.country._id) } : { _id: String(s.country) }) : undefined,
-            }));
-        } catch {
-            return [];
-        }
-    }
-
-    async function apiFetchCities(stateId?: string): Promise<Array<{ _id: string; cityName: string; state?: { _id: string } }>> {
-        try {
-            const url = stateId ? buildUrl(`/master/cities?stateId=${encodeURIComponent(stateId)}`) : buildUrl(`/master/cities`);
-            const res = await fetch(url);
-            if (!res.ok) return [];
-            const json = await safeJson(res);
-            const arr = Array.isArray((json as any).cityData) ? (json as any).cityData : [];
-            return arr.map((c: any) => ({
-                _id: String(c._id),
-                cityName: c.cityName ?? c.name ?? "",
-                state: c.state ? (typeof c.state === "object" ? { _id: String(c.state._id) } : { _id: String(c.state) }) : undefined,
-            }));
-        } catch {
-            return [];
-        }
-    }
-
     function mapServerAddressToLocal(serverRec: any): Address {
         const serverId = serverRec._id ? String(serverRec._id) : null;
         const localId = serverId ? `srv_${serverId}` : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
@@ -269,12 +208,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             addressLine2: serverRec.addressLine2 ?? "",
             addressLine3: serverRec.addressLine3 ?? "",
             landmark: serverRec.landmark ?? "",
-            countryId: serverRec.countryId ?? "",
-            stateId: serverRec.stateId ?? "",
-            cityId: serverRec.cityId ?? "",
-            countryName: serverRec.countryName ?? "",
-            stateName: serverRec.stateName ?? "",
-            cityName: serverRec.cityName ?? "",
+            state: serverRec.state ?? "",
+            district: serverRec.district ?? "",
+            city: serverRec.city ?? "",
+            country: serverRec.country ?? "India",
             pincode: serverRec.pincode ?? "",
             isDefault: !!serverRec.isDefault,
         };
@@ -333,15 +270,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (token) headers.set("Authorization", `Bearer ${token}`);
 
         const payload = {
-            recipientName: addr.recipientName,
-            recipientContact: addr.recipientContact,
-            addressLine1: addr.addressLine1,
+            recipientName: addr.recipientName?.trim(),
+            recipientContact: addr.recipientContact?.trim(),
+            addressLine1: addr.addressLine1?.trim(),
             addressLine2: addr.addressLine2,
             addressLine3: addr.addressLine3,
             landmark: addr.landmark,
-            countryId: addr.countryId,
-            stateId: addr.stateId,
-            cityId: addr.cityId,
+            state: addr.state?.trim(),
+            district: addr.district?.trim(),
+            city: addr.city?.trim(),
+            country: addr.country,
             pincode: addr.pincode,
             isDefault: !!addr.isDefault,
         };
@@ -649,23 +587,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     // --- End Razorpay helpers ---
 
     // openAdd (restored)
-    async function openAdd() {
+    function openAdd() {
         setShowModal(true);
-
-        (async () => {
-            try {
-                if (!countries.length) {
-                    setGeoLoading((g) => ({ ...g, countries: true }));
-                    const list = await apiFetchCountries();
-                    if (!mountedRef.current) return;
-                    setCountries(list);
-                }
-            } catch {
-                // ignore
-            } finally {
-                if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
-            }
-        })();
     }
 
     useEffect(() => {
@@ -689,19 +612,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             }
 
             (async () => {
-                try {
-                    setGeoLoading((g) => ({ ...g, countries: true }));
-                    const list = await apiFetchCountries();
-                    if (!mountedRef.current) return;
-                    setCountries(list);
-                } catch {
-                    // ignore
-                } finally {
-                    if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
-                }
-            })();
-
-            (async () => {
                 const cust = getStoredCustomerId();
                 if (!cust) {
                     router.replace("/login");
@@ -717,27 +627,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         if (selectedAddressId === null && mapped.length > 0) setSelectedAddressId(mapped[0].id);
 
                         const first = mapped[0];
-                        if (first?.countryId) {
-                            try {
-                                setGeoLoading((g) => ({ ...g, states: true }));
-                                const st = await apiFetchStates(first.countryId);
-                                if (!mountedRef.current) return;
-                                setStates(st);
-                            } finally {
-                                if (mountedRef.current) setGeoLoading((g) => ({ ...g, states: false }));
-                            }
-
-                            if (first?.stateId) {
-                                try {
-                                    setGeoLoading((g) => ({ ...g, cities: true }));
-                                    const ct = await apiFetchCities(first.stateId);
-                                    if (!mountedRef.current) return;
-                                    setCities(ct);
-                                } finally {
-                                    if (mountedRef.current) setGeoLoading((g) => ({ ...g, cities: false }));
-                                }
-                            }
-                        }
                     }
                 } catch (err) {
                     // ignore
@@ -928,6 +817,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 await createOrderAndRedirect(cust, addr);
             } catch {
                 placeOrderLockRef.current = false;
+            } finally {
+                placeOrderLockRef.current = false;
+                if (!mountedRef.current) return;
+                setCreating(false);
             }
         })();
     }
@@ -1121,10 +1014,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const total = subtotal + (Number(currentDeliveryCharge) || 0);
 
-    const filteredCountries = countries.filter((c) => c.countryName.toLowerCase().includes(countrySearch.trim().toLowerCase()));
-    const filteredStates = states.filter((s) => s.stateName.toLowerCase().includes(stateSearch.trim().toLowerCase()));
-    const filteredCities = (cities ?? []).filter((c) => c.cityName.toLowerCase().includes(citySearch.trim().toLowerCase()));
-
     useEffect(() => {
         if (!selectedAddressId) return;
 
@@ -1192,7 +1081,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         text-white text-sm font-medium
                                         shadow-md hover:shadow-lg hover:brightness-105
                                         transition-all duration-200 active:scale-[0.97]"
-                                    >
+                                >
                                     <Plus className="w-4 h-4" />
                                     Add address
                                 </button>
@@ -1258,9 +1147,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <div className="text-sm text-slate-600 leading-relaxed">
                                             {a.addressLine1}
                                             {a.addressLine2 && `, ${a.addressLine2}`}
-                                            {a.cityName && `, ${a.cityName}`}
-                                            {a.stateName && `, ${a.stateName}`}
-                                            {a.countryName && `, ${a.countryName}`} — {a.pincode}
+                                            {a.city && `, ${a.city}`}
+                                            {a.district && `, ${a.district}`}
+                                            {a.state && `, ${a.state}`}
+                                            {a.country && `, ${a.country}`} — {a.pincode}
                                         </div>
 
                                         {/* Badge */}
@@ -1318,9 +1208,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                         {b.addressLine2 ? `, ${b.addressLine2}` : ""}
                                                         {b.addressLine3 ? `, ${b.addressLine3}` : ""}
                                                         {b.landmark ? `, ${b.landmark}` : ""}
-                                                        {b.cityName ? `, ${b.cityName}` : ""}
-                                                        {b.stateName ? `, ${b.stateName}` : ""}
-                                                        {b.countryName ? `, ${b.countryName}` : ""} — {b.pincode}
+                                                        {b.city ? `, ${b.city}` : ""}
+                                                        {b.district ? `, ${b.district}` : ""}
+                                                        {b.state ? `, ${b.state}` : ""}
+                                                        {b.country ? `, ${b.country}` : ""} — {b.pincode}
                                                     </div>
                                                 </div>
 

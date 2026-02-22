@@ -4,30 +4,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import Pagination from "../components/ui/Pagination";
 import ConfirmModal from "./ui/ConfirmModal";
+import type { Address } from "../types/address";
 import AddressModalEdit, { Address as EditAddressType } from "./AddressModalEdit";
 
 const TOKEN_KEY = "accessToken";
 const PER_PAGE = 25;
-
-/* ---- Types ---- */
-export type Address = {
-    id: string;
-    serverId?: string | null;
-    recipientName: string;
-    recipientContact: string;
-    addressLine1?: string;
-    addressLine2?: string | null;
-    addressLine3?: string | null;
-    landmark?: string | null;
-    cityName?: string | null;
-    stateName?: string | null;
-    countryName?: string | null;
-    pincode?: string;
-    isDefault?: boolean;
-    countryId?: string | null;
-    stateId?: string | null;
-    cityId?: string | null;
-};
 
 export interface ProfileAddressesProps {
     addresses?: Address[] | null;
@@ -69,11 +50,12 @@ function getStoredCustomerId(): string | null {
 }
 
 /* Map server response to local model
-   NOTE: include countryId/stateId/cityId so the edit modal can pre-fill selects */
+   NOTE: include country/state/city so the edit modal can pre-fill selects */
 function mapServerAddressToLocal(serverRec: any): Address {
     const serverId = serverRec._id ? String(serverRec._id) : null;
+
     return {
-        id: serverId ? `srv_${serverId}` : `local_${Date.now()}`,
+        id: serverId ?? `local_${Date.now()}`,
         serverId,
         recipientName: serverRec.recipientName ?? "",
         recipientContact: serverRec.recipientContact ?? "",
@@ -81,14 +63,12 @@ function mapServerAddressToLocal(serverRec: any): Address {
         addressLine2: serverRec.addressLine2 ?? null,
         addressLine3: serverRec.addressLine3 ?? null,
         landmark: serverRec.landmark ?? null,
-        cityName: serverRec.cityName ?? (serverRec.city?.cityName ?? null),
-        stateName: serverRec.stateName ?? (serverRec.state?.stateName ?? null),
-        countryName: serverRec.countryName ?? (serverRec.country?.countryName ?? null),
+        state: serverRec.state ?? "",
+        district: serverRec.district ?? "",
+        city: serverRec.city ?? "",
+        country: serverRec.country ?? "India",
         pincode: serverRec.pincode ?? "",
         isDefault: !!serverRec.isDefault,
-        countryId: serverRec.countryId ? String(serverRec.countryId) : (serverRec.country ? String(serverRec.country) : null),
-        stateId: serverRec.stateId ? String(serverRec.stateId) : (serverRec.state ? (serverRec.state._id ? String(serverRec.state._id) : String(serverRec.state)) : null),
-        cityId: serverRec.cityId ? String(serverRec.cityId) : (serverRec.city ? (serverRec.city._id ? String(serverRec.city._id) : String(serverRec.city)) : null),
     };
 }
 
@@ -213,12 +193,10 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             addressLine2: a.addressLine2 ?? null,
             addressLine3: a.addressLine3 ?? null,
             landmark: a.landmark ?? null,
-            countryId: a.countryId ?? null,
-            stateId: a.stateId ?? null,
-            cityId: a.cityId ?? null,
-            countryName: a.countryName ?? null,
-            stateName: a.stateName ?? null,
-            cityName: a.cityName ?? null,
+            state: a.state,
+            district: a.district,
+            city: a.city,
+            country: a.country ?? "India",
             pincode: a.pincode ?? "",
             isDefault: !!a.isDefault,
         };
@@ -453,12 +431,11 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             addressLine2: localAddr.addressLine2,
             addressLine3: localAddr.addressLine3,
             landmark: localAddr.landmark,
-            cityName: localAddr.cityName ?? "",
-            stateName: localAddr.stateName ?? "",
+            city: localAddr.city,
+            state: localAddr.state,
+            district: localAddr.district,
+            country: localAddr.country ?? "India",
             pincode: localAddr.pincode,
-            countryId: localAddr.countryId ?? null,
-            stateId: localAddr.stateId ?? null,
-            cityId: localAddr.cityId ?? null,
             isDefault: !!localAddr.isDefault,
         };
 
@@ -488,14 +465,13 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                     addressLine2: updated.addressLine2,
                     addressLine3: updated.addressLine3,
                     landmark: updated.landmark,
-                    cityName: updated.cityName,
-                    stateName: updated.stateName,
+                    city: updated.city,
+                    state: updated.state,
+                    district: updated.district,
+                    country: updated.country ?? "India",
                     pincode: updated.pincode,
                     isDefault: !!updated.isDefault,
                     serverId: updated.serverId ?? a.serverId,
-                    countryId: updated.countryId ?? a.countryId,
-                    stateId: updated.stateId ?? a.stateId,
-                    cityId: updated.cityId ?? a.cityId,
                 };
             })
         );
@@ -511,68 +487,133 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
 
     /* ---- UI ---- */
     return (
-        <section id="addresses-area" className="bg-white rounded-3xl p-6 lg:p-8 shadow-lg border">
-            <div className="flex items-center justify-between">
+        <section
+            id="addresses-area"
+            className="bg-white rounded-2xl md:rounded-3xl p-4 sm:p-6 lg:p-8 shadow-md md:shadow-lg border"
+        >
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h3 className="text-xl font-bold">Addresses</h3>
-                    <p className="text-sm text-slate-500">Manage your delivery addresses.</p>
+                    <h3 className="text-lg sm:text-xl font-bold">Addresses</h3>
+                    <p className="text-sm text-slate-500">
+                        Manage your delivery addresses.
+                    </p>
                 </div>
-                <div>
-                    <button onClick={() => handleAdd()} className="px-4 py-2 rounded-lg bg-[#065975] text-white shadow inline-flex items-center">
-                        <Plus className="w-4 h-4 inline-block mr-2" /> Add address
-                    </button>
-                </div>
+
+                <button
+                    onClick={() => handleAdd()}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-[#065975] text-white shadow inline-flex items-center justify-center text-sm font-medium"
+                >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Address
+                </button>
             </div>
 
-            {loading && <div className="mt-6 text-sm text-slate-500 p-4 border rounded-xl">Loading addresses...</div>}
-            {error && !loading && <div className="mt-6 text-sm text-rose-600 p-4 border rounded-xl">{error}</div>}
-            {!loading && !error && addresses.length === 0 && <div className="mt-6 text-sm text-slate-500 p-4 border rounded-xl">No addresses yet.</div>}
+            {/* States */}
+            {loading && (
+                <div className="mt-6 text-sm text-slate-500 p-4 border rounded-xl">
+                    Loading addresses...
+                </div>
+            )}
 
+            {error && !loading && (
+                <div className="mt-6 text-sm text-rose-600 p-4 border rounded-xl">
+                    {error}
+                </div>
+            )}
+
+            {!loading && !error && addresses.length === 0 && (
+                <div className="mt-6 text-sm text-slate-500 p-4 border rounded-xl">
+                    No addresses yet.
+                </div>
+            )}
+
+            {/* Address List */}
             {!loading && !error && addresses.length > 0 && (
-                <div className="mt-6 grid gap-4">
+                <div className="mt-6 space-y-4">
                     {addresses.map((a) => (
-                        <div key={a.id} className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 p-5 border rounded-2xl hover:shadow-md transition bg-white">
-                            <div className="w-full md:w-auto break-words">
-                                <div className="flex items-center gap-3">
-                                    <div className="font-semibold text-lg">{a.recipientName} {a.recipientContact ? `- ${a.recipientContact}` : ""}</div>
-                                    {a.isDefault && <div className="text-xs bg-[#ecfdf5] text-[#065975] px-3 py-0.5 rounded-full">Default</div>}
+                        <div
+                            key={a.id}
+                            className="p-4 sm:p-5 border rounded-2xl hover:shadow-md transition bg-white"
+                        >
+                            {/* Name + Badge */}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-semibold text-base sm:text-lg wrap-break-word">
+                                    {a.recipientName}
+                                    {a.recipientContact
+                                        ? ` - ${a.recipientContact}`
+                                        : ""}
                                 </div>
 
-                                <div className="text-sm text-slate-600 mt-2">
-                                    {a.addressLine1}
-                                    {a.addressLine2 ? `, ${a.addressLine2}` : ""}
-                                    {a.addressLine3 ? `, ${a.addressLine3}` : ""}
-                                </div>
-
-                                {a.landmark ? (
-                                    <div className="text-sm text-slate-500 mt-1">Landmark: {a.landmark}</div>
-                                ) : null}
-
-                                <div className="text-xs text-slate-400 mt-2">
-                                    {a.cityName ? `${a.cityName} ` : ""}{a.stateName ? `${a.stateName} ` : ""}• {a.pincode}
-                                </div>
+                                {a.isDefault && (
+                                    <span className="text-xs bg-[#ecfdf5] text-[#065975] px-3 py-0.5 rounded-full">
+                                        Default
+                                    </span>
+                                )}
                             </div>
-                            <div className="flex flex-col items-end gap-3">
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEdit(a)} className="px-4 py-2 rounded-md border shadow-sm">
+
+                            {/* Address */}
+                            <div className="text-sm text-slate-600 mt-2 wrap-break-word">
+                                {a.addressLine1}
+                                {a.addressLine2 ? `, ${a.addressLine2}` : ""}
+                                {a.addressLine3 ? `, ${a.addressLine3}` : ""}
+                            </div>
+
+                            {a.landmark && (
+                                <div className="text-sm text-slate-500 mt-1 wrap-break-word">
+                                    Landmark: {a.landmark}
+                                </div>
+                            )}
+
+                            <div className="text-xs text-slate-400 mt-2">
+                                {a.city}, {a.state} • {a.pincode}
+                            </div>
+
+                            {/* Buttons */}
+                            <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                                    <button
+                                        onClick={() => handleEdit(a)}
+                                        className="w-full sm:w-auto px-4 py-2 rounded-md border shadow-sm text-sm"
+                                    >
                                         Edit
                                     </button>
+
                                     <button
-                                        onClick={() => openConfirm('delete', a.id)}           // pass local id
-                                        className="px-4 py-2 rounded-md border text-rose-600 flex items-center gap-2 shadow-sm"
-                                        disabled={deletingId === String(a.id) || deletingId === String(a.serverId)}
+                                        onClick={() =>
+                                            openConfirm("delete", a.id)
+                                        }
+                                        className="w-full sm:w-auto px-4 py-2 rounded-md border text-rose-600 flex items-center justify-center gap-2 shadow-sm text-sm"
+                                        disabled={
+                                            deletingId === String(a.id) ||
+                                            deletingId === String(a.serverId)
+                                        }
                                     >
                                         <Trash2 className="w-4 h-4" />
-                                        {deletingId === String(a.id) || deletingId === String(a.serverId) ? "Removing..." : "Remove"}
+                                        {deletingId === String(a.id) ||
+                                            deletingId === String(a.serverId)
+                                            ? "Removing..."
+                                            : "Remove"}
                                     </button>
                                 </div>
+
                                 {!a.isDefault && (
                                     <button
-                                        onClick={() => openConfirm('setDefault', a.id)}       // pass local id
-                                        className="text-sm text-slate-500 underline"
-                                        disabled={settingDefaultId === String(a.id) || settingDefaultId === String(a.serverId)}
+                                        onClick={() =>
+                                            openConfirm("setDefault", a.id)
+                                        }
+                                        className="text-sm text-slate-500 underline text-left sm:text-right"
+                                        disabled={
+                                            settingDefaultId === String(a.id) ||
+                                            settingDefaultId ===
+                                            String(a.serverId)
+                                        }
                                     >
-                                        {settingDefaultId === String(a.id) || settingDefaultId === String(a.serverId) ? "Setting..." : "Set default"}
+                                        {settingDefaultId === String(a.id) ||
+                                            settingDefaultId ===
+                                            String(a.serverId)
+                                            ? "Setting..."
+                                            : "Set as default"}
                                     </button>
                                 )}
                             </div>
@@ -581,38 +622,45 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 </div>
             )}
 
-            {/* Show pagination only when serverTotalRecords > PER_PAGE */}
+            {/* Pagination */}
             {!loading && !error && total > PER_PAGE && (
                 <div className="mt-6 flex items-center justify-center">
-                    <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        onPageChange={(p) => setPage(p)}
+                    />
                 </div>
             )}
 
-            {/* Confirmation modal */}
+            {/* Modals remain unchanged */}
             <ConfirmModal
                 open={confirmOpen}
                 title={
-                    confirmAction === 'delete'
-                        ? 'Remove address?'
-                        : confirmAction === 'setDefault'
-                            ? 'Set default address?'
-                            : 'Confirm'
+                    confirmAction === "delete"
+                        ? "Remove address?"
+                        : confirmAction === "setDefault"
+                            ? "Set default address?"
+                            : "Confirm"
                 }
                 description={
-                    confirmAction === 'delete'
-                        ? 'Are you sure you want to remove this address? This action cannot be undone.'
-                        : confirmAction === 'setDefault'
-                            ? 'Make this address your default shipping address?'
-                            : ''
+                    confirmAction === "delete"
+                        ? "Are you sure you want to remove this address? This action cannot be undone."
+                        : confirmAction === "setDefault"
+                            ? "Make this address your default shipping address?"
+                            : ""
                 }
-                confirmLabel={confirmAction === 'delete' ? 'Yes, remove' : 'Yes, set default'}
+                confirmLabel={
+                    confirmAction === "delete"
+                        ? "Yes, remove"
+                        : "Yes, set default"
+                }
                 cancelLabel="Cancel"
                 loading={confirmLoading}
                 onConfirm={onConfirmModal}
                 onCancel={onCancelModal}
             />
 
-            {/* Add / Edit modal */}
             <AddressModalEdit
                 show={editModalOpen}
                 onClose={() => setEditModalOpen(false)}

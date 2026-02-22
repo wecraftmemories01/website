@@ -1,18 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import Select from "react-select";
 import { X } from "lucide-react";
 import type { Address as SharedAddress } from "../types/address";
 
-/**
- * Re-export the shared Address type so callers that import from this component
- * (e.g. `import AddressModal, { Address as ModalAddress } from "./AddressModal"`)
- * continue to work.
- */
 export type Address = SharedAddress;
 
-/** Props */
 type Props = {
     show: boolean;
     onClose: () => void;
@@ -20,7 +13,8 @@ type Props = {
     onSuccess?: () => void;
 };
 
-/** Utilities (copied / self-contained so this component is portable) */
+/* ---------------- Utilities ---------------- */
+
 function getApiBase(): string {
     if (typeof window === "undefined") return "";
     return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
@@ -42,6 +36,11 @@ function getAuth() {
     }
 }
 
+function getAuthToken(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("accessToken");
+}
+
 function getCustomerId(): string | null {
     const auth = getAuth();
     if (auth?.customerId) return auth.customerId;
@@ -50,22 +49,17 @@ function getCustomerId(): string | null {
     if (!token) return null;
 
     try {
-        const payload = JSON.parse(atob(token.split(".")[1]));
+        const base64 = token.split(".")[1];
+        const payload = JSON.parse(atob(base64.replace(/-/g, "+").replace(/_/g, "/")));
         return payload?.customerId || payload?._id || null;
     } catch {
         return null;
     }
 }
 
-function getAuthToken(): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("accessToken");
-}
-
 async function safeJson(res: Response) {
     const ct = res.headers.get("content-type") || "";
-    const isJson = ct.includes("application/json");
-    if (isJson) {
+    if (ct.includes("application/json")) {
         try {
             return await res.json();
         } catch {
@@ -79,55 +73,45 @@ function isValidIndianPincode(pin: string) {
     return /^[1-9][0-9]{5}$/.test(pin);
 }
 
-/** API helpers used by the modal */
-async function apiFetchCountries(): Promise<Array<{ _id: string; countryName: string }>> {
+/* ---------------- Postal API ---------------- */
+
+async function fetchPostalDetails(pincode: string) {
     try {
-        const url = buildUrl(`/master/countries`);
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const json = await safeJson(res);
-        const arr = Array.isArray((json as any)?.countryData) ? (json as any).countryData : [];
-        return arr.map((c: any) => ({ _id: String(c._id), countryName: c.countryName ?? c.countryCode ?? "" }));
-    } catch {
-        return [];
+        const res = await fetch(
+            `https://api.postalpincode.in/pincode/${encodeURIComponent(pincode)}`
+        );
+
+        if (!res.ok) {
+            return { ok: false, message: `HTTP ${res.status}` };
+        }
+
+        const data = await res.json();
+
+        if (
+            !Array.isArray(data) ||
+            data.length === 0 ||
+            data[0].Status !== "Success" ||
+            !data[0].PostOffice ||
+            data[0].PostOffice.length === 0
+        ) {
+            return { ok: false, message: "Invalid pincode" };
+        }
+
+        const po = data[0].PostOffice[0];
+
+        return {
+            ok: true,
+            state: po.State,
+            district: po.District,
+            city: po.Block || po.Name,
+        };
+    } catch (err: any) {
+        return { ok: false, message: err?.message || "Failed to fetch pincode data" };
     }
 }
 
-async function apiFetchStates(countryId?: string) {
-    try {
-        const url = countryId ? buildUrl(`/master/states?countryId=${encodeURIComponent(countryId)}`) : buildUrl(`/master/states`);
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const json = await safeJson(res);
-        const arr = Array.isArray((json as any)?.stateData) ? (json as any).stateData : [];
-        return arr.map((s: any) => ({
-            _id: String(s._id),
-            stateName: s.stateName ?? s.name ?? "",
-            country: s.country ? (typeof s.country === "object" ? { _id: String(s.country._id) } : { _id: String(s.country) }) : undefined,
-        }));
-    } catch {
-        return [];
-    }
-}
+/* ---------------- Serviceability ---------------- */
 
-async function apiFetchCities(stateId?: string) {
-    try {
-        const url = stateId ? buildUrl(`/master/cities?stateId=${encodeURIComponent(stateId)}`) : buildUrl(`/master/cities`);
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const json = await safeJson(res);
-        const arr = Array.isArray((json as any)?.cityData) ? (json as any).cityData : [];
-        return arr.map((c: any) => ({
-            _id: String(c._id),
-            cityName: c.cityName ?? c.name ?? "",
-            state: c.state ? (typeof c.state === "object" ? { _id: String(c.state._id) } : { _id: String(c.state) }) : undefined,
-        }));
-    } catch {
-        return [];
-    }
-}
-
-/** serviceability endpoint used by the modal (same route you had) */
 async function fetchPincodeServiceability(pincode: string) {
     const url = buildUrl(
         `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`
@@ -152,81 +136,46 @@ async function fetchPincodeServiceability(pincode: string) {
         return {
             ok: true,
             prepaid: json?.data?.prepaid === true,
-            raw: json,
         };
     } catch (err: any) {
         return { ok: false, message: err?.message ?? String(err) };
     }
 }
 
-/** create address on server */
-async function apiCreateAddress(customerId: string, addr: Address): Promise<any> {
+/* ---------------- Create API ---------------- */
+
+async function apiCreateAddress(customerId: string, addr: Address) {
     const url = buildUrl(`/customer/${encodeURIComponent(customerId)}/address`);
     const headers = new Headers({ "Content-Type": "application/json" });
     const token = getAuthToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
     const payload = {
-        recipientName: addr.recipientName,
+        recipientName: addr.recipientName.trim(),
         recipientContact: addr.recipientContact,
-        addressLine1: addr.addressLine1,
+        addressLine1: addr.addressLine1.trim(),
         addressLine2: addr.addressLine2 || null,
         addressLine3: addr.addressLine3 || null,
         landmark: addr.landmark || null,
-        countryId: addr.countryId ?? null,
-        stateId: addr.stateId ?? null,
-        cityId: addr.cityId ?? null,
+        state: addr.state.trim(),
+        district: addr.district.trim(),
+        city: addr.city.trim(),
         pincode: addr.pincode,
         isDefault: !!addr.isDefault,
     };
 
     const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
-    if (res.status === 401) {
-        const json = await safeJson(res);
-        throw new Error(json?.message || json?.error || "Unauthorized");
-    }
+
     const json = await safeJson(res);
     if (!res.ok) {
-        if (!res.ok) {
-            const msg =
-                typeof json?.error === "string"
-                    ? json.error
-                    : json?.error?.message
-                    || json?.message
-                    || `Failed to create address (${res.status})`;
-
-            throw new Error(msg);
-        }
+        throw new Error(json?.error || "Failed to create address");
     }
+
     return json;
 }
 
-/** Map server record to local Address like your CheckoutPanel did */
-function mapServerAddressToLocal(serverRec: any): Address {
-    const serverId = serverRec._id ? String(serverRec._id) : null;
-    const localId = serverId ? `srv_${serverId}` : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
+/* ---------------- Component ---------------- */
 
-    return {
-        id: localId,
-        serverId: serverId,
-        recipientName: serverRec.recipientName ?? "",
-        recipientContact: serverRec.recipientContact ?? "",
-        addressLine1: serverRec.addressLine1 ?? "",
-        addressLine2: serverRec.addressLine2 ?? null,
-        addressLine3: serverRec.addressLine3 ?? null,
-        landmark: serverRec.landmark ?? null,
-        countryId: serverRec.countryId ?? null,
-        stateId: serverRec.stateId ?? null,
-        cityId: serverRec.cityId ?? null,
-        countryName: serverRec.countryName ?? null,
-        stateName: serverRec.stateName ?? null,
-        cityName: serverRec.cityName ?? null,
-        pincode: serverRec.pincode ?? "",
-        isDefault: !!serverRec.isDefault,
-    };
-}
-
-/** Blank template — use nulls for optional fields to match ../types/address */
 const blankAddress: Address = {
     id: `local_${Date.now()}`,
     serverId: null,
@@ -236,19 +185,29 @@ const blankAddress: Address = {
     addressLine2: null,
     addressLine3: null,
     landmark: null,
-    countryId: null,
-    stateId: null,
-    cityId: null,
-    countryName: null,
-    stateName: null,
-    cityName: null,
+    state: "",
+    district: "",
+    city: "",
+    country: "India",
     pincode: "",
     isDefault: false,
 };
 
 export default function AddressModal({ show, onClose, onCreated, onSuccess }: Props) {
     const mountedRef = useRef(true);
-    const submittingRef = useRef(false);
+    const postalDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+    const [form, setForm] = useState<Address>({ ...blankAddress });
+    const [formSvc, setFormSvc] = useState<{ checking: boolean; prepaid: boolean | null; error?: string }>({
+        checking: false,
+        prepaid: null,
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLocationLocked, setIsLocationLocked] = useState(false);
+    const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const firstInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -257,224 +216,159 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
         };
     }, []);
 
-
-    const [form, setForm] = useState<Address>({ ...blankAddress });
-
-    const [countries, setCountries] = useState<Array<{ _id: string; countryName: string }>>([]);
-    const [states, setStates] = useState<Array<{ _id: string; stateName: string }>>([]);
-    const [cities, setCities] = useState<Array<{ _id: string; cityName: string }>>([]);
-    const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false });
-
-    // local pincode serviceability indicator for form
-    const [formSvc, setFormSvc] = useState<{ checking: boolean; prepaid: boolean | null; error?: string }>({
-        checking: false,
-        prepaid: null,
-    });
-
-    // refs for backdrop + dialog + first input
-    const backdropRef = useRef<HTMLDivElement | null>(null);
-    const dialogRef = useRef<HTMLDivElement | null>(null);
-    const firstInputRef = useRef<HTMLInputElement | null>(null);
-
     useEffect(() => {
         if (!show) return;
-        setForm({ ...blankAddress, id: `local_${Date.now()}` });
 
-        // focus the first input when modal opens
+        setForm({ ...blankAddress, id: `local_${Date.now()}` });
+        setFormSvc({ checking: false, prepaid: null });
+
         setTimeout(() => {
             firstInputRef.current?.focus();
         }, 0);
-
-        (async () => {
-            try {
-                setGeoLoading((g) => ({ ...g, countries: true }));
-                const list = await apiFetchCountries();
-                if (!mountedRef.current) return;
-                setCountries(list);
-            } finally {
-                if (mountedRef.current) setGeoLoading((g) => ({ ...g, countries: false }));
-            }
-        })();
-        setStates([]);
-        setCities([]);
-        setFormSvc({ checking: false, prepaid: null });
     }, [show]);
 
-    // close on Escape
     useEffect(() => {
         if (!show) return;
         function onKey(e: KeyboardEvent) {
-            if (e.key === "Escape") {
-                e.stopPropagation();
-                onClose();
-            }
+            if (e.key === "Escape") onClose();
         }
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [show, onClose]);
 
-    async function onCountryChange(value: string | null) {
-        setForm((f) => ({ ...f, countryId: value || null, stateId: null, cityId: null }));
-        setStates([]);
-        setCities([]);
-        if (!value) return;
-        try {
-            setGeoLoading((g) => ({ ...g, states: true }));
-            const s = await apiFetchStates(value);
-            if (!mountedRef.current) return;
-            setStates(s);
-        } finally {
-            if (mountedRef.current) setGeoLoading((g) => ({ ...g, states: false }));
+    async function handlePostalAutoFill(value: string) {
+        const clean = value.replace(/\D/g, "");
+        setForm((prev) => ({
+            ...prev,
+            pincode: clean,
+            state: clean.length < 6 ? "" : prev.state,
+            district: clean.length < 6 ? "" : prev.district,
+            city: clean.length < 6 ? "" : prev.city,
+        }));
+
+        setIsLocationLocked(false);
+
+        if (postalDebounceRef.current) {
+            clearTimeout(postalDebounceRef.current);
+        }
+
+        if (clean.length === 6 && isValidIndianPincode(clean)) {
+            postalDebounceRef.current = setTimeout(async () => {
+                setIsFetchingLocation(true);
+
+                const result = await fetchPostalDetails(clean);
+
+                setIsFetchingLocation(false);
+
+                if (!mountedRef.current) return;
+
+                if (result.ok) {
+                    setForm((prev) => ({
+                        ...prev,
+                        state: result.state,
+                        district: result.district,
+                        city: result.city,
+                    }));
+
+                    setIsLocationLocked(true);
+                } else {
+                    setIsLocationLocked(false);
+                }
+            }, 500);
         }
     }
 
-    async function onStateChange(value: string | null) {
-        setForm((f) => ({ ...f, stateId: value || null, cityId: null }));
-        setCities([]);
-        if (!value) return;
-        try {
-            setGeoLoading((g) => ({ ...g, cities: true }));
-            const c = await apiFetchCities(value);
-            if (!mountedRef.current) return;
-            setCities(c);
-        } finally {
-            if (mountedRef.current) setGeoLoading((g) => ({ ...g, cities: false }));
-        }
+    function validateForm() {
+        const newErrors: Record<string, string> = {};
+
+        if (!form.recipientName.trim())
+            newErrors.recipientName = "Recipient name is required";
+
+        if (!form.recipientContact.trim())
+            newErrors.recipientContact = "Contact is required";
+
+        if (!form.addressLine1.trim())
+            newErrors.addressLine1 = "Address Line 1 is required";
+
+        if (!form.pincode.trim())
+            newErrors.pincode = "Pincode is required";
+        else if (!isValidIndianPincode(form.pincode))
+            newErrors.pincode = "Enter valid 6-digit pincode";
+
+        if (!form.state.trim())
+            newErrors.state = "State is required";
+
+        if (!form.city.trim())
+            newErrors.city = "City is required";
+
+        if (!form.district.trim())
+            newErrors.district = "District is required";
+
+        setErrors(newErrors);
+
+        return Object.keys(newErrors).length === 0;
     }
 
-    async function checkFormPincode(pincode: string) {
-        const key = String(pincode || "").trim();
-        if (!key || !isValidIndianPincode(key)) return;
-        setFormSvc({ checking: true, prepaid: null });
-        const svc = await fetchPincodeServiceability(key);
-        if (!mountedRef.current) return;
-        if (!svc.ok) {
-            setFormSvc({ checking: false, prepaid: null, error: svc.message || "Service check failed" });
-        } else {
-            setFormSvc({ checking: false, prepaid: !!svc.prepaid });
-        }
-    }
-
-    /**
-     * saveAddress
-     * - performs optimistic local add (calls onCreated with local entry)
-     * - attempts server save, and if successful, calls onCreated again with server-confirmed address (serverId + srv_<id>)
-     */
     async function saveAddress() {
-        if (submittingRef.current) return;
-        submittingRef.current = true;
+        if (isSubmitting) return;
+        setIsSubmitting(true);
 
         try {
-            // ---------- VALIDATION ----------
-            if (
-                !form.recipientName?.trim() ||
-                !form.addressLine1?.trim() ||
-                !(String(form.cityId || form.cityName || "").trim()) ||
-                !form.pincode?.trim()
-            ) {
-                alert("Please fill at least recipient name, address line 1, city and pincode");
+            if (!validateForm()) {
                 return;
             }
 
-            if (!isValidIndianPincode(form.pincode)) {
-                alert("Enter a valid 6-digit PIN code");
-                return;
-            }
-
-            // ---------- SERVICEABILITY ----------
-            setFormSvc({ checking: true, prepaid: null });
             const svc = await fetchPincodeServiceability(form.pincode);
-
-            if (!svc.ok) {
-                setFormSvc({ checking: false, prepaid: null, error: svc.message });
-                alert("Unable to verify pincode serviceability right now.");
+            if (!svc.ok || !svc.prepaid) {
+                alert("This pincode is not serviceable.");
                 return;
             }
 
-            if (!svc.prepaid) {
-                setFormSvc({ checking: false, prepaid: false });
-                alert("This pincode is not serviceable");
-                return;
-            }
-
-            // ---------- SERVER SAVE ----------
             const cust = getCustomerId();
             if (!cust) {
-                alert("Customer not logged in. Please login again.");
+                alert("Please login again.");
                 return;
             }
 
             const json = await apiCreateAddress(cust, form);
+            const created = json?.address;
 
-            const created = json?.address || json?.addressData || json?.data;
-
-            if (!created?._id) {
-                throw new Error("Address not saved on server");
-            }
-
-            // optimistic update
             onCreated?.({
                 ...form,
                 id: `srv_${created._id}`,
-                serverId: String(created._id),
+                serverId: created._id,
             });
 
-            // WAIT for server sync
-            if (onSuccess) {
-                await onSuccess();
-            }
-
-            // NOW close modal
+            if (onSuccess) await onSuccess();
             onClose();
         } catch (err: any) {
-            console.warn("Failed to save address", err);
-            const msg =
-                typeof err?.message === "string"
-                    ? err.message
-                    : typeof err === "string"
-                        ? err
-                        : "Failed to save address";
-
-            alert(msg);
+            alert(err?.message || "Failed to save address");
         } finally {
-            submittingRef.current = false;
-            if (mountedRef.current) {
-                setFormSvc((s) => ({ ...s, checking: false }));
-            }
+            setIsSubmitting(false);
         }
     }
 
     if (!show) return null;
 
     return (
-        <div
-            ref={backdropRef}
-            className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4 py-6"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                    onClose();
-                }
-            }}
-            aria-hidden={false}
-        >
-            <div
-                ref={dialogRef}
-                className="bg-white rounded-2xl shadow w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-                role="dialog"
-                aria-modal="true"
-                onClick={(e) => e.stopPropagation()} // prevent backdrop click when clicking inside dialog
-            >
-                <div className="flex items-start justify-between px-5 py-4 border-b">
-                    <div>
-                        <h3 className="text-lg font-semibold">Add address</h3>
-                    </div>
-                    <button onClick={onClose} className="text-slate-400 p-2 rounded-md hover:bg-slate-50" aria-label="Close modal">
-                        <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+            <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl shadow-lg max-h-[95vh] flex flex-col animate-slideUp">
+                <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white z-10">
+                    <h3 className="text-lg font-semibold text-[#065975]">
+                        Add Delivery Address
+                    </h3>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-full hover:bg-slate-100 transition"
+                    >
+                        <X className="w-5 h-5 text-slate-600" />
                     </button>
                 </div>
 
-                <div className="p-5 overflow-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div className="p-5 overflow-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                        {/* Recipient Name */}
                         <div>
                             <label className="block text-sm text-slate-600 mb-1">Recipient Name</label>
                             <input
@@ -482,159 +376,220 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
                                 value={form.recipientName}
                                 onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
                                 placeholder="Enter recipient name"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.recipientName ? "border-red-500" : ""
+                                    }`}
                             />
+                            {errors.recipientName && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.recipientName}
+                                </p>
+                            )}
                         </div>
 
+                        {/* Recipient Contact */}
                         <div>
                             <label className="block text-sm text-slate-600 mb-1">Recipient Contact</label>
                             <input
                                 value={form.recipientContact}
                                 onChange={(e) => setForm({ ...form, recipientContact: e.target.value })}
                                 placeholder="Enter recipient contact"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.recipientContact ? "border-red-500" : ""
+                                    }`}
                             />
+                            {errors.recipientContact && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.recipientContact}
+                                </p>
+                            )}
                         </div>
 
+                        {/* Address Line 1 */}
                         <div className="sm:col-span-2">
                             <label className="block text-sm text-slate-600 mb-1">Address Line 1</label>
                             <input
                                 value={form.addressLine1}
                                 onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
                                 placeholder="House, Building, Street"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.addressLine1 ? "border-red-500" : ""
+                                    }`}
                             />
+                            {errors.addressLine1 && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.addressLine1}
+                                </p>
+                            )}
                         </div>
 
+                        {/* Address Line 2 */}
                         <div className="sm:col-span-2">
                             <label className="block text-sm text-slate-600 mb-1">Address Line 2</label>
                             <input
                                 value={form.addressLine2 ?? ""}
                                 onChange={(e) => setForm({ ...form, addressLine2: e.target.value || null })}
                                 placeholder="Apartment, Floor, Area (optional)"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.addressLine2 ? "border-red-500" : ""
+                                    }`}
                             />
                         </div>
 
+                        {/* Address Line 3 */}
                         <div className="sm:col-span-2">
                             <label className="block text-sm text-slate-600 mb-1">Address Line 3</label>
                             <input
                                 value={form.addressLine3 ?? ""}
                                 onChange={(e) => setForm({ ...form, addressLine3: e.target.value || null })}
                                 placeholder="Additional directions (optional)"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.addressLine3 ? "border-red-500" : ""
+                                    }`}
                             />
                         </div>
 
+                        {/* Landmark */}
                         <div className="sm:col-span-2">
                             <label className="block text-sm text-slate-600 mb-1">Landmark</label>
                             <input
                                 value={form.landmark ?? ""}
                                 onChange={(e) => setForm({ ...form, landmark: e.target.value || null })}
                                 placeholder="Nearby place or landmark (optional)"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.landmark ? "border-red-500" : ""
+                                    }`}
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-sm text-slate-600 mb-1">Country</label>
-                            <Select
-                                isSearchable
-                                isLoading={geoLoading.countries}
-                                options={countries.map((c) => ({ value: c._id, label: c.countryName }))}
-                                value={
-                                    form.countryId
-                                        ? { value: form.countryId, label: countries.find((c) => c._id === form.countryId)?.countryName || form.countryName || "Selected" }
-                                        : null
-                                }
-                                onChange={(opt) => onCountryChange(opt?.value ?? null)}
-                                placeholder={geoLoading.countries ? "Loading countries..." : "Select country"}
-                                styles={{
-                                    control: (base) => ({ ...base, borderRadius: "8px", borderColor: "#d1d5db", boxShadow: "none", minHeight: "44px" }),
-                                }}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm text-slate-600 mb-1">State</label>
-                            <Select
-                                isSearchable
-                                isDisabled={!form.countryId}
-                                isLoading={geoLoading.states}
-                                options={states.map((s) => ({ value: s._id, label: s.stateName }))}
-                                value={form.stateId ? { value: form.stateId, label: states.find((s) => s._id === form.stateId)?.stateName || form.stateName || "Selected" } : null}
-                                onChange={(opt) => onStateChange(opt?.value ?? null)}
-                                placeholder={!form.countryId ? "Select country first" : geoLoading.states ? "Loading states..." : "Select state"}
-                                styles={{
-                                    control: (base) => ({ ...base, borderRadius: "8px", borderColor: "#d1d5db", boxShadow: "none", minHeight: "44px" }),
-                                }}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm text-slate-600 mb-1">City</label>
-                            <Select
-                                isSearchable
-                                isDisabled={!form.stateId}
-                                isLoading={geoLoading.cities}
-                                options={(cities ?? []).map((c) => ({ value: c._id, label: c.cityName }))}
-                                value={form.cityId ? { value: form.cityId, label: cities?.find((c) => c._id === form.cityId)?.cityName || form.cityName || "Selected" } : null}
-                                onChange={(opt) => setForm((f) => ({ ...f, cityId: opt?.value ?? null }))}
-                                placeholder={!form.stateId ? "Select state first" : geoLoading.cities ? "Loading cities..." : "Select city"}
-                                styles={{
-                                    control: (base) => ({ ...base, borderRadius: "8px", borderColor: "#d1d5db", boxShadow: "none", minHeight: "44px" }),
-                                }}
-                            />
-                        </div>
-
+                        {/* Pincode */}
                         <div>
                             <label className="block text-sm text-slate-600 mb-1">Pincode</label>
+
                             <input
                                 value={form.pincode}
-                                onChange={(e) => {
-                                    const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                                    setForm({ ...form, pincode: v });
-                                    if (v.length === 6 && isValidIndianPincode(v)) {
-                                        checkFormPincode(v).catch(() => { });
-                                    }
-                                }}
-                                placeholder="Enter postal code"
-                                className="border p-3 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-[#065975]/30"
+                                maxLength={6}
+                                onChange={(e) => handlePostalAutoFill(e.target.value)}
+                                placeholder="Enter 6-digit pincode"
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.pincode ? "border-red-500" : ""
+                                    }`}
                             />
-                            <div className="text-xs mt-1">
-                                {form.pincode && formSvc.checking ? (
-                                    <div className="text-slate-500">Checking serviceability…</div>
-                                ) : form.pincode && formSvc.prepaid === false ? (
-                                    <div className="text-rose-600">This pincode is not serviceable</div>
-                                ) : form.pincode && formSvc.prepaid === true ? (
-                                    <div className="text-green-600">Serviceable</div>
-                                ) : null}
-                            </div>
+
+                            {/* Fetching Indicator */}
+                            {isFetchingLocation && (
+                                <div className="flex items-center gap-2 text-xs text-[#065975] mt-1">
+                                    <div className="w-3 h-3 border-2 border-[#065975] border-t-transparent rounded-full animate-spin" />
+                                    <span>Fetching location...</span>
+                                </div>
+                            )}
+
+                            {/* Validation Error */}
+                            {errors.pincode && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.pincode}
+                                </p>
+                            )}
                         </div>
 
-                        <label className="sm:col-span-2 flex items-center gap-3 mt-1">
+                        {/* State */}
+                        <div>
+                            <label className="block text-sm text-slate-600 mb-1">State</label>
+                            <input
+                                value={form.state}
+                                disabled={isLocationLocked}
+                                onChange={(e) =>
+                                    setForm({ ...form, state: e.target.value })
+                                }
+                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${errors.state ? "border-red-500" : ""
+                                    } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
+                            />
+
+                            {isLocationLocked && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Auto-filled from pincode
+                                </p>
+                            )}
+
+                            {errors.state && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.state}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* District */}
+                        <div>
+                            <label className="block text-sm text-slate-600 mb-1">District</label>
+                            <input
+                                value={form.district}
+                                disabled={isLocationLocked}
+                                onChange={(e) =>
+                                    setForm({ ...form, district: e.target.value })
+                                }
+                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${errors.district ? "border-red-500" : ""
+                                    } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
+                            />
+
+                            {isLocationLocked && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Auto-filled from pincode
+                                </p>
+                            )}
+
+                            {errors.district && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.district}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* City */}
+                        <div>
+                            <label className="block text-sm text-slate-600 mb-1">City</label>
+                            <input
+                                value={form.city}
+                                disabled={isLocationLocked}
+                                onChange={(e) =>
+                                    setForm({ ...form, city: e.target.value })
+                                }
+                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${errors.city ? "border-red-500" : ""
+                                    } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
+                            />
+                            
+                            {isLocationLocked && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Auto-filled from pincode
+                                </p>
+                            )}
+
+                            {errors.city && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.city}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Default */}
+                        <label className="sm:col-span-2 flex items-center gap-3 mt-2">
                             <input
                                 type="checkbox"
                                 checked={!!form.isDefault}
                                 onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-                                className="w-4 h-4 text-[#065975]"
                             />
                             <span className="text-sm text-slate-700">Set as default address</span>
                         </label>
+
                     </div>
                 </div>
 
-                <div className="px-5 py-3 border-t flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border text-slate-600 hover:bg-slate-50">
+                <div className="px-5 py-4 border-t bg-white sticky bottom-0 flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 px-4 py-3 border border-slate-300 rounded-xl text-slate-600 font-medium"
+                    >
                         Cancel
                     </button>
+
                     <button
                         onClick={saveAddress}
-                        disabled={submittingRef.current}
-                        className={`px-4 py-2 rounded-md bg-[#065975] text-white ${submittingRef.current ? "opacity-60 cursor-not-allowed" : "hover:brightness-95"
-                            }`}
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-3 bg-[#065975] text-white rounded-xl font-medium shadow-sm active:scale-[0.98] transition"
                     >
-                        Save address
+                        {isSubmitting ? "Saving..." : "Save Address"}
                     </button>
                 </div>
             </div>

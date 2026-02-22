@@ -23,12 +23,10 @@ type LocalAddress = {
     addressLine2?: string | null;
     addressLine3?: string | null;
     landmark?: string | null;
-    countryId?: string | null;
-    stateId?: string | null;
-    cityId?: string | null;
-    countryName?: string | null;
-    stateName?: string | null;
-    cityName?: string | null;
+    state: string;
+    district: string;
+    city: string;
+    country: string;
     pincode: string;
     isDefault?: boolean;
 };
@@ -122,7 +120,7 @@ export default function ProfilePageAlt(): React.ReactElement {
 
     /* ---------- FETCH ADDRESSES ---------- */
     useEffect(() => {
-        const custId = resolveCustomerId();
+        const custId = getStoredCustomerId();
         if (!custId) return;
 
         let mounted = true;
@@ -144,13 +142,11 @@ export default function ProfilePageAlt(): React.ReactElement {
                         addressLine2: s.addressLine2 ?? null,
                         addressLine3: s.addressLine3 ?? null,
                         landmark: s.landmark ?? null,
-                        countryId: s.countryId ? String(s.countryId) : null,
-                        stateId: s.stateId ? String(s.stateId) : null,
-                        cityId: s.cityId ? String(s.cityId) : null,
-                        countryName: s.countryName ?? "",
-                        stateName: s.stateName ?? "",
-                        cityName: s.cityName ?? "",
                         pincode: s.pincode ?? "",
+                        state: s.state ?? "",
+                        district: s.district ?? "",
+                        city: s.city ?? "",
+                        country: s.country ?? "India",
                         isDefault: !!s.isDefault,
                     }))
                     : [];
@@ -165,7 +161,7 @@ export default function ProfilePageAlt(): React.ReactElement {
         return () => {
             mounted = false;
         };
-    }, [user?.id, API_BASE]);
+    }, [API_BASE]);
 
     /* ---------- FETCH ORDERS COUNT ---------- */
     useEffect(() => {
@@ -216,12 +212,10 @@ export default function ProfilePageAlt(): React.ReactElement {
             addressLine2: null,
             addressLine3: null,
             landmark: null,
-            countryId: null,
-            stateId: null,
-            cityId: null,
-            countryName: null,
-            stateName: null,
-            cityName: null,
+            state: "",
+            district: "",
+            city: "",
+            country: "India",
             pincode: "",
             isDefault: addresses.length === 0,
         });
@@ -239,12 +233,10 @@ export default function ProfilePageAlt(): React.ReactElement {
             addressLine2: local.addressLine2 ?? null,
             addressLine3: local.addressLine3 ?? null,
             landmark: local.landmark ?? null,
-            countryId: local.countryId ?? null,
-            stateId: local.stateId ?? null,
-            cityId: local.cityId ?? null,
-            countryName: local.countryName ?? null,
-            stateName: local.stateName ?? null,
-            cityName: local.cityName ?? null,
+            state: local.state ?? "",
+            district: local.district ?? "",
+            city: local.city ?? "",
+            country: local.country ?? "India",
             pincode: local.pincode ?? "",
             isDefault: !!local.isDefault,
         };
@@ -267,31 +259,32 @@ export default function ProfilePageAlt(): React.ReactElement {
             addressLine2: local.addressLine2 ?? null,
             addressLine3: local.addressLine3 ?? null,
             landmark: local.landmark ?? null,
-            countryId: local.countryId ?? null,
-            stateId: local.stateId ?? null,
-            cityId: local.cityId ?? null,
-            countryName: local.countryName ?? null,
-            stateName: local.stateName ?? null,
-            cityName: local.cityName ?? null,
+            state: local.state ?? "",
+            district: local.district ?? "",
+            city: local.city ?? "",
+            country: local.country ?? "India",
             pincode: local.pincode ?? "",
             isDefault: !!local.isDefault,
         };
 
-        setAddresses((prev) =>
-            prev.map((a) => {
+        setAddresses((prev) => {
+            return prev.map((a) => {
                 const match =
-                    (normalized.serverId && a.serverId === normalized.serverId) || a.id === normalized.id;
-                return match ? { ...a, ...normalized } : a;
-            })
-        );
+                    (normalized.serverId && a.serverId === normalized.serverId) ||
+                    a.id === normalized.id;
 
-        if (normalized.isDefault) {
-            setAddresses((prev) =>
-                prev.map((a) =>
-                    a.id === normalized.id ? { ...a, isDefault: true } : { ...a, isDefault: false }
-                )
-            );
-        }
+                if (match) {
+                    return { ...a, ...normalized };
+                }
+
+                // 🔥 reset other defaults
+                if (normalized.isDefault) {
+                    return { ...a, isDefault: false };
+                }
+
+                return a;
+            });
+        });
     }
 
     function closeAddrModal() {
@@ -357,7 +350,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                                     {defaultAddress ? defaultAddress.pincode : "Not set"}
                                 </div>
                                 <div className="text-xs text-slate-400 mt-1">
-                                    {defaultAddress ? defaultAddress.cityName : "—"}
+                                    {defaultAddress ? defaultAddress.city : "—"}
                                 </div>
                             </div>
                         </div>
@@ -462,14 +455,12 @@ export default function ProfilePageAlt(): React.ReactElement {
                                 addressLine2: a.addressLine2 ?? null,
                                 addressLine3: a.addressLine3 ?? null,
                                 landmark: a.landmark ?? null,
-                                cityName: a.cityName ?? null,
-                                stateName: a.stateName ?? null,
-                                countryName: a.countryName ?? null,
                                 pincode: a.pincode,
-                                isDefault: !!a.isDefault,
-                                countryId: a.countryId ?? null,
-                                stateId: a.stateId ?? null,
-                                cityId: a.cityId ?? null,
+                                city: a.city,
+                                state: a.state,
+                                country: a.country,
+                                district: a.district,
+                                isDefault: !!a.isDefault
                             }))}
                             onAdd={openAddAddress}
                             onEdit={(a) => {
@@ -483,12 +474,10 @@ export default function ProfilePageAlt(): React.ReactElement {
                                     addressLine2: a.addressLine2 ?? null,
                                     addressLine3: a.addressLine3 ?? null,
                                     landmark: a.landmark ?? null,
-                                    countryId: a.countryId ?? null,
-                                    stateId: a.stateId ?? null,
-                                    cityId: a.cityId ?? null,
-                                    countryName: a.countryName ?? null,
-                                    stateName: a.stateName ?? null,
-                                    cityName: a.cityName ?? null,
+                                    state: a.state ?? "",
+                                    district: a.district ?? "",
+                                    city: a.city ?? "",
+                                    country: a.country ?? "India",
                                     pincode: a.pincode ?? "",
                                     isDefault: !!a.isDefault,
                                 });

@@ -1,5 +1,5 @@
 export type Address = {
-    id: string | number;
+    id: string;
     serverId?: string | null;
     recipientName: string;
     recipientContact: string;
@@ -7,12 +7,10 @@ export type Address = {
     addressLine2?: string | null;
     addressLine3?: string | null;
     landmark?: string | null;
-    countryId?: string | null;
-    stateId?: string | null;
-    cityId?: string | null;
-    countryName?: string | null;
-    stateName?: string | null;
-    cityName?: string | null;
+    state: string;
+    district: string;
+    city: string;
+    country?: string;
     pincode: string;
     isDefault?: boolean;
 };
