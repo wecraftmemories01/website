@@ -27,6 +27,14 @@ type Props = {
     selectedAges: string[]
     selectedThemes: string[]
 
+    minPrice: number | ''
+    maxPrice: number | ''
+    onMinPriceChange: (v: number | '') => void
+    onMaxPriceChange: (v: number | '') => void
+
+    priceRangeMin: number
+    priceRangeMax: number
+
     onToggleMaster: (id: string) => void
     onToggleSuper: (id: string) => void
     onToggleCategory: (id: string) => void
@@ -127,6 +135,12 @@ export default function SidebarFilters({
     selectedSubs,
     selectedAges,
     selectedThemes,
+    minPrice,
+    maxPrice,
+    onMinPriceChange,
+    onMaxPriceChange,
+    priceRangeMin,
+    priceRangeMax,
     onToggleMaster,
     onToggleSuper,
     onToggleCategory,
@@ -207,12 +221,12 @@ export default function SidebarFilters({
                 type="button"
                 onClick={() => onToggle(option.id)}
                 className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm shadow-sm border transition transform active:scale-95 focus:outline-none
-          ${checked ? `text-white bg-gradient-to-r ${gradient} border-transparent shadow-lg` : 'bg-white text-slate-800 border-slate-100 hover:drop-shadow-md'}`}
+          ${checked ? `text-white bg-linear-to-r ${gradient} border-transparent shadow-lg` : 'bg-white text-slate-800 border-slate-100 hover:drop-shadow-md'}`}
                 aria-pressed={checked}
                 title={`${option.label} — ${option.count ?? 0} items`}
             >
                 <span className={`w-2 h-2 rounded-full ${checked ? 'bg-white/30' : 'bg-slate-200'}`} />
-                <span className="truncate max-w-[10rem]">{option.label}</span>
+                <span className="truncate max-w-40">{option.label}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked ? 'bg-white/20' : 'bg-white/50 text-slate-600'}`}>
                     {option.count ?? 0}
                 </span>
@@ -323,13 +337,22 @@ export default function SidebarFilters({
     const clearThemes = () => selectedThemes.forEach((id) => onToggleTheme(id))
 
     const hasAnyFilters = [masters, supers, cats, subs, ages, themes].some((arr) => arr.length > 0)
-    const hasAnySelection = showSelectedChips.length > 0 || inStockOnly || q.trim().length > 0
+    const hasAnySelection =
+        showSelectedChips.length > 0 ||
+        inStockOnly ||
+        q.trim().length > 0 ||
+        minPrice !== '' ||
+        maxPrice !== ''
+
+    const sliderMin = typeof minPrice === 'number' ? minPrice : priceRangeMin
+    const sliderMax = typeof maxPrice === 'number' ? maxPrice : priceRangeMax
+    const range = Math.max(priceRangeMax - priceRangeMin, 1)
 
     return (
         <div className="space-y-5">
             {/* header: gradient search + stacked controls below */}
             <div className="rounded-lg overflow-hidden shadow-md">
-                <div className="px-4 py-3 bg-gradient-to-r from-teal-50 via-sky-50 to-indigo-50 rounded-md">
+                <div className="px-4 py-3 bg-linear-to-r from-teal-50 via-sky-50 to-indigo-50 rounded-md">
                     {/* Search input */}
                     <div className="relative">
                         <label htmlFor="global-search" className="sr-only">
@@ -371,7 +394,7 @@ export default function SidebarFilters({
                 </div>
 
                 {/* decorative separator */}
-                <div className="h-1 bg-gradient-to-r from-teal-300 via-teal-200 to-white" />
+                <div className="h-1 bg-linear-to-r from-teal-300 via-teal-200 to-white" />
             </div>
 
             {/* selected chips */}
@@ -384,9 +407,9 @@ export default function SidebarFilters({
                             return (
                                 <span
                                     key={`${c.type}-${c.id}`}
-                                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium text-white bg-gradient-to-r ${gradient} shadow`}
+                                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium text-white bg-linear-to-r ${gradient} shadow`}
                                 >
-                                    <span className="truncate max-w-[12rem]">{label}</span>
+                                    <span className="truncate max-w-48">{label}</span>
                                     <button
                                         onClick={() => {
                                             if (c.type === 'master') onToggleMaster(c.id)
@@ -406,6 +429,113 @@ export default function SidebarFilters({
                         })}
                     </div>
                 ) : null}
+            </div>
+
+            {/* Price Range */}
+            <div className="border rounded-xl p-5 bg-white shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-slate-800">
+                        Price Range
+                    </h3>
+                    <div className="text-sm font-medium text-teal-600">
+                        ₹{sliderMin} – ₹{sliderMax}
+                    </div>
+                </div>
+
+                {/* SLIDER */}
+                <div className="relative h-10 flex items-center">
+                    {/* Base Track */}
+                    <div className="absolute w-full h-3 bg-slate-200 rounded-full" />
+
+                    {/* Active Range */}
+                    <div className="absolute h-3 bg-linear-to-r from-teal-400 to-teal-500 rounded-full"
+                        style={{
+                            left: `${((sliderMin - priceRangeMin) / range) * 100}%`,
+                            right: `${100 - ((sliderMax - priceRangeMin) / range) * 100}%`,
+                        }}
+                    />
+
+                    {/* Min Slider */}
+                    <input
+                        type="range"
+                        min={priceRangeMin}
+                        max={priceRangeMax}
+                        value={sliderMin}
+                        onChange={(e) => {
+                            const value = Math.min(Number(e.target.value), sliderMax)
+                            onMinPriceChange(value)
+                        }}
+                        className="absolute w-full appearance-none bg-transparent h-10 pointer-events-none
+                            [&::-webkit-slider-thumb]:pointer-events-auto
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:h-6
+                            [&::-webkit-slider-thumb]:w-6
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:bg-white
+                            [&::-webkit-slider-thumb]:border-2
+                            [&::-webkit-slider-thumb]:border-teal-500
+                            [&::-webkit-slider-thumb]:shadow-md
+                            [&::-webkit-slider-thumb]:cursor-pointer"
+                    />
+
+                    {/* Max Slider */}
+                    <input
+                        type="range"
+                        min={priceRangeMin}
+                        max={priceRangeMax}
+                        value={sliderMax}
+                        onChange={(e) => {
+                            const value = Math.max(Number(e.target.value), sliderMin)
+                            onMaxPriceChange(value)
+                        }}
+                        className="absolute w-full appearance-none bg-transparent h-10 pointer-events-none
+                            [&::-webkit-slider-thumb]:pointer-events-auto
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:h-6
+                            [&::-webkit-slider-thumb]:w-6
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:bg-white
+                            [&::-webkit-slider-thumb]:border-2
+                            [&::-webkit-slider-thumb]:border-teal-500
+                            [&::-webkit-slider-thumb]:shadow-md
+                            [&::-webkit-slider-thumb]:cursor-pointer"
+                    />
+                </div>
+
+                {/* Inputs (Mobile Friendly Stack) */}
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs text-slate-500">Min</label>
+                        <input
+                            type="number"
+                            min={priceRangeMin}
+                            max={priceRangeMax}
+                            value={minPrice}
+                            onChange={(e) =>
+                                onMinPriceChange(
+                                    e.target.value === '' ? '' : Number(e.target.value)
+                                )
+                            }
+                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-teal-100"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-500">Max</label>
+                        <input
+                            type="number"
+                            min={priceRangeMin}
+                            max={priceRangeMax}
+                            value={maxPrice}
+                            onChange={(e) =>
+                                onMaxPriceChange(
+                                    e.target.value === '' ? '' : Number(e.target.value)
+                                )
+                            }
+                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-teal-100"
+                        />
+                    </div>
+                </div>
             </div>
 
             {/* sections (only render when available) */}
@@ -497,7 +627,7 @@ export default function SidebarFilters({
                     onClick={() => {
                         if (hasAnySelection) onClearAll()
                     }}
-                    className={`w-full px-3 py-2 rounded-md text-sm font-semibold ${hasAnySelection ? 'bg-gradient-to-r from-slate-100 to-white border' : 'bg-slate-50 text-slate-400 cursor-not-allowed'}`}
+                    className={`w-full px-3 py-2 rounded-md text-sm font-semibold ${hasAnySelection ? 'bg-linear-to-r from-slate-100 to-white border' : 'bg-slate-50 text-slate-400 cursor-not-allowed'}`}
                     disabled={!hasAnySelection}
                 >
                     Reset filters

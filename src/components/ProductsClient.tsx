@@ -37,6 +37,10 @@ export default function ProductsClient() {
     const [selectedThemes, setSelectedThemes] = useState<string[]>([])
     const [inStockOnly, setInStockOnly] = useState(false)
     const [filtersOpen, setFiltersOpen] = useState(false)
+    const [minPrice, setMinPrice] = useState<number | ''>('')
+    const [maxPrice, setMaxPrice] = useState<number | ''>('')
+    const [debouncedMin, setDebouncedMin] = useState<number | ''>('')
+    const [debouncedMax, setDebouncedMax] = useState<number | ''>('')
 
     const [page, setPage] = useState(1)
     const perPageOptions = [8, 12, 16]
@@ -109,6 +113,30 @@ export default function ProductsClient() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams?.toString()]) // intentionally depend on searchParams string
+
+    const priceStats = useMemo(() => {
+        const prices = products
+            .map(p => p.latestSalePrice?.discountedPrice ?? p.latestSalePrice?.actualPrice)
+            .filter((p): p is number => typeof p === 'number')
+
+        if (!prices.length) {
+            return { min: 0, max: 10000 }
+        }
+
+        return {
+            min: 1,
+            max: Math.ceil(Math.max(...prices))
+        }
+    }, [products])
+
+    useEffect(() => {
+        const t = setTimeout(() => {
+            setDebouncedMin(minPrice)
+            setDebouncedMax(maxPrice)
+        }, 150)
+
+        return () => clearTimeout(t)
+    }, [minPrice, maxPrice])
 
     // derive available filter options from fetched products (only show options that exist in products)
     const availableFilterSets = useMemo(() => {
@@ -207,6 +235,22 @@ export default function ProductsClient() {
             })
         }
 
+        // Price filter
+        if (debouncedMin !== '' || debouncedMax !== '') {
+            list = list.filter((p) => {
+                const discounted = p.latestSalePrice?.discountedPrice
+                const actual = p.latestSalePrice?.actualPrice
+                const price = discounted ?? actual
+
+                if (price === undefined || price === null) return false
+
+                if (debouncedMin !== '' && price < debouncedMin) return false
+                if (debouncedMax !== '' && price > debouncedMax) return false
+
+                return true
+            })
+        }
+
         // sort by latest
         list.sort((a, b) => {
             const aMs = Math.max(safeDateMs(a.updatedAt), safeDateMs(a.createdAt))
@@ -226,6 +270,8 @@ export default function ProductsClient() {
         selectedAges,
         selectedThemes,
         inStockOnly,
+        debouncedMin,
+        debouncedMax
     ])
 
     const total = filtered.length
@@ -240,6 +286,8 @@ export default function ProductsClient() {
 
     const clearAll = () => {
         setQ('')
+        setMinPrice('')
+        setMaxPrice('')
         setSelectedMasters([])
         setSelectedSupers([])
         setSelectedCategories([])
@@ -291,6 +339,12 @@ export default function ProductsClient() {
                             selectedSubs={selectedSubs}
                             selectedAges={selectedAges}
                             selectedThemes={selectedThemes}
+                            minPrice={minPrice}
+                            maxPrice={maxPrice}
+                            onMinPriceChange={setMinPrice}
+                            onMaxPriceChange={setMaxPrice}
+                            priceRangeMin={priceStats.min}
+                            priceRangeMax={priceStats.max}
                             onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
                             onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
                             onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
@@ -345,6 +399,12 @@ export default function ProductsClient() {
                                         selectedSubs={selectedSubs}
                                         selectedAges={selectedAges}
                                         selectedThemes={selectedThemes}
+                                        minPrice={minPrice}
+                                        maxPrice={maxPrice}
+                                        onMinPriceChange={setMinPrice}
+                                        onMaxPriceChange={setMaxPrice}
+                                        priceRangeMin={priceStats.min}
+                                        priceRangeMax={priceStats.max}
                                         onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
                                         onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
                                         onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
