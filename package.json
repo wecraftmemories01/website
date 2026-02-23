@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",
+        "@tailwindcss/typography": "^0.5.19",
         "@tiptap/react": "^2.12.0",
         "@tiptap/starter-kit": "^2.12.0",
         "axios": "^1.8.4",
