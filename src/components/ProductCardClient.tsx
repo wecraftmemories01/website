@@ -361,10 +361,12 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                 confirmLabel="Go to Login"
                 cancelLabel="Cancel"
                 onConfirm={() => {
-                    setShowLoginModal(false);
+                    setErrorModal({ open: false, message: '' });
                     window.location.href = '/login';
                 }}
-                onCancel={() => setShowLoginModal(false)}
+                onCancel={() => {
+                    setErrorModal({ open: false, message: '' });
+                }}
             />
         </>
     )
