@@ -396,7 +396,7 @@ export default function OrdersCompact({
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
                                                                     >
-                                                                        <div className="w-12 h-12 rounded overflow-hidden relative bg-white border flex-shrink-0">
+                                                                        <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
                                                                             {p.productImage ? (
                                                                                 <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
                                                                             ) : (
@@ -425,7 +425,7 @@ export default function OrdersCompact({
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
                                                                     >
-                                                                        <div className="w-12 h-12 rounded overflow-hidden relative bg-white border flex-shrink-0">
+                                                                        <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
                                                                             {p.productImage ? (
                                                                                 <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
                                                                             ) : (

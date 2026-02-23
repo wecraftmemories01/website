@@ -393,7 +393,7 @@ export default function OrderDetails({
                                     const subtotal = Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0);
                                     return (
                                         <div key={`${p.productNameSnapshot ?? idx}-${idx}`} className="flex gap-4 p-4 bg-slate-50 border rounded-xl items-center hover:shadow-md transition">
-                                            <div className="relative w-28 h-20 rounded-lg overflow-hidden bg-white flex-shrink-0 border">
+                                            <div className="relative w-28 h-20 rounded-lg overflow-hidden bg-white shrink-0 border">
                                                 {p.productImage ? (
                                                     // next/image expects absolute hostnames allowed in next config; if local dev, this still works in many setups
                                                     <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="112px" style={{ objectFit: "cover" }} />

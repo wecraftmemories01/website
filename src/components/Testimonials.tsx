@@ -155,7 +155,7 @@ export default function TestimonialsPages({
                         }}
                     >
                         {pages.map((page, pi) => (
-                            <div key={pi} className="p-4 flex-shrink-0" style={{ width: `${pageWidth}%` }}>
+                            <div key={pi} className="p-4 shrink-0" style={{ width: `${pageWidth}%` }}>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {page.map((t) => (
                                         <blockquote

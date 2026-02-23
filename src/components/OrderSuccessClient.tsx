@@ -37,9 +37,10 @@ type AddressSnapshot = {
     addressLine2Snapshot?: string;
     addressLine3Snapshot?: string;
     landmarkSnapshot?: string;
-    countryNameSnapshot?: string;
-    stateNameSnapshot?: string;
-    cityNameSnapshot?: string;
+    countrySnapshot?: string;
+    stateSnapshot?: string;
+    districtSnapshot?: string;
+    citySnapshot?: string;
     pincodeSnapshot?: string;
 };
 
@@ -124,14 +125,14 @@ function ProductImage({ src, alt }: { src?: string | null; alt?: string }) {
 
     if (!src || failed) {
         return (
-            <div className="w-16 h-16 bg-[#fbfbfb] border rounded-md grid place-items-center text-slate-300 flex-shrink-0">
+            <div className="w-16 h-16 bg-[#fbfbfb] border rounded-md grid place-items-center text-slate-300 shrink-0">
                 <Box className="w-6 h-6 text-slate-300" />
             </div>
         );
     }
 
     return (
-        <div className="w-16 h-16 rounded-md overflow-hidden relative flex-shrink-0 border bg-white/0">
+        <div className="w-16 h-16 rounded-md overflow-hidden relative shrink-0 border bg-white/0">
             <Image
                 src={src}
                 alt={alt ?? "product image"}
@@ -355,7 +356,7 @@ export default function OrderSuccessClient(): React.ReactElement {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#fbfeff] to-white flex items-start justify-center py-10 px-4">
+        <div className="min-h-screen bg-linear-to-b from-[#fbfeff] to-white flex items-start justify-center py-10 px-4">
             <div className="w-full max-w-5xl">
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
                     {/* Header */}
@@ -385,7 +386,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                             {/* Order summary */}
                             <section className="border rounded-lg p-4">
                                 <div className="flex items-start gap-4">
-                                    <div className="flex-shrink-0 w-12 h-12 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
+                                    <div className="shrink-0 w-12 h-12 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
                                         <Hash className="w-5 h-5 text-[#065975]" />
                                     </div>
 
@@ -454,7 +455,7 @@ export default function OrderSuccessClient(): React.ReactElement {
 
                             {/* Delivery address */}
                             <section className="border rounded-lg p-4 flex gap-4 items-start">
-                                <div className="flex-shrink-0 w-10 h-10 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
+                                <div className="shrink-0 w-10 h-10 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
                                     <MapPin className="w-5 h-5 text-[#065975]" />
                                 </div>
 
@@ -470,7 +471,11 @@ export default function OrderSuccessClient(): React.ReactElement {
                                                 {order?.orderCustomerAddressDetails?.deliveryAddress?.addressLine2Snapshot ?? ""}{" "}
                                                 {order?.orderCustomerAddressDetails?.deliveryAddress?.landmarkSnapshot ? `, ${order.orderCustomerAddressDetails.deliveryAddress.landmarkSnapshot}` : ""}
                                                 <div className="text-xs text-slate-400 mt-1">
-                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.cityNameSnapshot ?? ""} • {order?.orderCustomerAddressDetails?.deliveryAddress?.stateNameSnapshot ?? ""} • {order?.orderCustomerAddressDetails?.deliveryAddress?.pincodeSnapshot ?? ""}
+                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.citySnapshot ?? ""} • &nbsp;
+                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.districtSnapshot ?? ""} • &nbsp;
+                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.stateSnapshot ?? ""} • &nbsp;
+                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.countrySnapshot ?? ""} • &nbsp;
+                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.pincodeSnapshot ?? ""}
                                                 </div>
                                                 <div className="text-xs text-slate-400">
                                                     Phone: {order?.orderCustomerAddressDetails?.deliveryAddress?.recipientContactSnapshot ?? order?.customerDetails?.customerMobileSnapshot ?? "—"}

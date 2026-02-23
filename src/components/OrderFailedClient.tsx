@@ -46,9 +46,9 @@ export default function OrderFailedClient() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#fff7f7] to-white flex items-center justify-center p-6">
+        <div className="min-h-screen bg-linear-to-b from-[#fff7f7] to-white flex items-center justify-center p-6">
             <div className="min-w-4xl w-full bg-white rounded-3xl shadow-xl p-12 md:p-12 flex flex-col md:flex-row gap-8 items-center">
-                <div className="flex-shrink-0 flex flex-col items-center gap-4">
+                <div className="shrink-0 flex flex-col items-center gap-4">
                     <div className="w-36 h-36 rounded-full bg-rose-50 grid place-items-center border border-rose-100">
                         <XCircle className="w-20 h-20 text-rose-600" />
                     </div>
