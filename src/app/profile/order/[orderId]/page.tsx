@@ -43,7 +43,7 @@ export default function ProfileOrderPage({ params }: Props) {
     if (!customerId) return null; // or show loader
 
     return (
-        <div className="min-h-screen p-6 md:p-8 bg-gradient-to-b from-[#fbfdff] to-white">
+        <div className="min-h-screen md:p-8 bg-linear-to-b from-[#fbfdff] to-white">
             <div className="max-w-6xl mx-auto">
                 <OrderDetails customerId={customerId} orderId={orderId} />
             </div>

@@ -273,235 +273,231 @@ export default function OrderDetails({
 
     /* --------------------- Render full-page layout --------------------- */
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#f7fbfd] to-slate-50">
+        <div className="min-h-screen bg-linear-to-br from-[#f4fafc] via-white to-[#eef6f9]">
             {/* Topbar */}
             <header className="sticky top-0 z-40 backdrop-blur bg-white/70 border-b border-slate-100">
-                <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => window.history.back()}
-                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 transition"
-                            aria-label="Back"
-                        >
-                            <IconBack />
-                            <span className="text-sm text-slate-700">Back</span>
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        {/* Invoice button removed as requested */}
-                    </div>
+                <div className="max-w-6xl mx-auto px-4 py-3 flex items-center">
+                    <button
+                        onClick={() => window.history.back()}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 transition"
+                    >
+                        <IconBack />
+                        <span className="text-sm text-slate-700">Back</span>
+                    </button>
                 </div>
             </header>
 
-            {/* Content */}
-            <main className="max-w-6xl mx-auto px-4 py-8">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    {/* Left: Details & summary */}
-                    <aside className="lg:col-span-4 space-y-6">
-                        <div className="bg-white border rounded-2xl p-5 shadow-sm">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-slate-500">Purchased</div>
-                                    <div className="text-lg font-semibold text-slate-900">{formatFullDate(order.purchaseDate)}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm text-slate-500">Status</div>
-                                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${balance > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-                                        {balance > 0 ? "Pending" : "Paid"}
-                                    </div>
-                                </div>
-                            </div>
+            <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
-                            <div className="mt-4 border-t pt-4">
-                                <div className="text-xs text-slate-500">Customer</div>
-                                <div className="mt-2 flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#065975] to-slate-700 grid place-items-center text-white font-bold text-lg">
-                                        {customer.customerNameSnapshot ? String(customer.customerNameSnapshot).charAt(0).toUpperCase() : "U"}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-slate-900 truncate">{customer.customerNameSnapshot ?? "—"}</div>
-                                        <div className="text-xs text-slate-500 mt-1 truncate">{customer.customerMobileSnapshot ?? "—"}</div>
-                                        <div className="text-xs text-slate-500 mt-1 truncate">{customer.customerEmailSnapshot ?? "—"}</div>
-                                    </div>
-                                </div>
+                {/* ================= HERO ================= */}
+                <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="text-xs uppercase tracking-wide text-slate-400">
+                                Order
+                            </div>
+                            <div className="text-2xl md:text-3xl font-bold text-slate-900">
+                                #{order.orderNumber}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-500">
+                                {formatFullDate(order.purchaseDate)}
                             </div>
                         </div>
 
-                        {/* Delivery address */}
-                        <div className="bg-white border rounded-2xl p-5 shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="font-bold text-slate-800">Delivery Address</div>
-                                <div className="text-xs text-slate-400">{order.orderCustomerAddressDetails?.deliveryAddress?.recipientContactSnapshot ?? ""}</div>
+                        <div className="md:text-right">
+                            <div
+                                className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${balance > 0
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-emerald-100 text-emerald-800"
+                                    }`}
+                            >
+                                {balance > 0 ? "Payment Pending" : "Fully Paid"}
                             </div>
-                            <div className="text-sm text-slate-700">{renderAddress(order.orderCustomerAddressDetails?.deliveryAddress)}</div>
-                        </div>
 
-                        {/* Billing address */}
-                        <div className="bg-white border rounded-2xl p-5 shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="font-bold text-slate-800">Billing Address</div>
-                                <div className="text-xs text-slate-400">{order.orderCustomerAddressDetails?.billingAddress?.recipientContactSnapshot ?? ""}</div>
+                            <div className="mt-3 text-slate-500 text-xs">
+                                Total
                             </div>
-                            <div className="text-sm text-slate-700">{renderAddress(order.orderCustomerAddressDetails?.billingAddress)}</div>
-                        </div>
-
-                        {/* Sticky summary */}
-                        <div className="hidden lg:block sticky top-28">
-                            <div className="bg-gradient-to-r from-white to-slate-50 border rounded-2xl p-5 shadow-lg">
-                                <div className="flex justify-between text-sm text-slate-600">
-                                    <div>Items</div>
-                                    <div className="font-medium">{currency(itemsSubtotal)}</div>
-                                </div>
-                                <div className="flex justify-between text-sm text-slate-600 mt-3">
-                                    <div>Delivery</div>
-                                    <div className="font-medium">{delivery > 0 ? currency(delivery) : "—"}</div>
-                                </div>
-
-                                <hr className="my-3 border-dashed" />
-
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm text-slate-600">Total</div>
-                                        <div className="text-xs text-slate-400">(Items + Delivery)</div>
-                                    </div>
-                                    <div className="text-2xl font-extrabold text-[#065975]">{currency(displayedTotal)}</div>
-                                </div>
-
-                                {typeof serverItemTotal !== "undefined" && serverItemTotal !== itemsSubtotal && (
-                                    <div className="mt-3 text-xs text-rose-600">Note: server item total differs from computed subtotal</div>
-                                )}
+                            <div className="text-3xl font-extrabold text-[#065975]">
+                                {currency(displayedTotal)}
                             </div>
                         </div>
-                    </aside>
+                    </div>
+                </div>
 
-                    {/* Right: Items & payments */}
-                    <section className="lg:col-span-8 space-y-6">
-                        {/* Items */}
-                        <div className="bg-white border rounded-2xl p-5 shadow-sm">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-slate-500">Items</div>
-                                    <div className="text-lg font-semibold text-slate-900">{products.length} product{products.length !== 1 ? "s" : ""}</div>
-                                </div>
-                                <div className="text-sm text-slate-500">Order #{order.orderNumber}</div>
-                            </div>
-
-                            <div className="mt-4 space-y-3">
-                                {products.length === 0 && <div className="text-sm text-slate-500">No items</div>}
-                                {products.map((p, idx) => {
-                                    const subtotal = Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0);
-                                    return (
-                                        <div key={`${p.productNameSnapshot ?? idx}-${idx}`} className="flex gap-4 p-4 bg-slate-50 border rounded-xl items-center hover:shadow-md transition">
-                                            <div className="relative w-28 h-20 rounded-lg overflow-hidden bg-white shrink-0 border">
-                                                {p.productImage ? (
-                                                    // next/image expects absolute hostnames allowed in next config; if local dev, this still works in many setups
-                                                    <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="112px" style={{ objectFit: "cover" }} />
-                                                ) : (
-                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-400">No image</div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-semibold text-slate-900 truncate">{p.productNameSnapshot}</div>
-
-                                                {/* Quantity + Price under name */}
-                                                <div className="text-xs text-slate-600 mt-2 flex items-center justify-between">
-                                                    <div className="truncate">
-                                                        <span className="mr-3">Qty: <strong className="text-slate-800">{p.quantity}</strong></span>
-                                                        <span>Price: <strong className="text-slate-800">{currency(Number(p.sellPrice ?? 0))}</strong></span>
-                                                    </div>
-
-                                                    <div className="text-right">
-                                                        <div className="text-xs text-slate-400">Subtotal</div>
-                                                        <div className="text-sm font-semibold">{currency(subtotal)}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                {/* ================= ITEMS ================= */}
+                <div className="space-y-4">
+                    <div>
+                        <div className="text-sm text-slate-500">Items</div>
+                        <div className="text-lg font-semibold text-slate-900">
+                            {products.length} product{products.length !== 1 ? "s" : ""}
                         </div>
+                    </div>
 
-                        {/* Payments - customer-friendly read-only summary that shows method */}
-                        <div className="bg-white border rounded-2xl p-5 shadow-sm">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-slate-500">Payments</div>
-                                    <div className="text-lg font-semibold text-slate-900">Summary</div>
-                                </div>
+                    {products.map((p, idx) => {
+                        const subtotal =
+                            Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0);
 
-                                <div className="text-right">
-                                    <div className="text-sm text-slate-600">Total Due</div>
-                                    <div className="text-xl font-bold text-[#065975]">{currency(displayedTotal)}</div>
-                                </div>
-                            </div>
+                        return (
+                            <div
+                                key={`${p.productNameSnapshot}-${idx}`}
+                                className="bg-white rounded-2xl shadow-sm p-5"
+                            >
+                                {/* Desktop Structured Grid */}
+                                <div className="grid grid-cols-1 lg:grid-cols-[110px_1fr_140px] gap-6 items-start">
 
-                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div className="p-3 rounded-lg bg-slate-50 border">
-                                    <div className="text-xs text-slate-500">Total Paid</div>
-                                    <div className="text-lg font-semibold">{currency(totalPaid)}</div>
-                                </div>
-
-                                {balance > 0 && (
-                                    <div className="p-3 rounded-lg bg-slate-50 border">
-                                        <div className="text-xs text-slate-500">Balance</div>
-                                        <div className="text-lg font-semibold text-rose-600">
-                                            {currency(balance)}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="p-3 rounded-lg bg-slate-50 border">
-                                    <div className="text-xs text-slate-500">Payment Method</div>
-
-                                    <div className="mt-2 space-y-2 text-sm text-slate-700">
-                                        {paymentAggregates.length === 0 ? (
-                                            <div className="text-xs text-slate-400">No payments recorded</div>
+                                    {/* IMAGE */}
+                                    <div className="relative w-full sm:max-w-md lg:w-27.5 
+                                        aspect-4/3 lg:aspect-auto lg:h-24 
+                                        rounded-xl overflow-hidden bg-slate-100 mx-auto lg:mx-0">
+                                        {p.productImage ? (
+                                            <Image
+                                                src={p.productImage}
+                                                alt={p.productNameSnapshot}
+                                                fill
+                                                sizes="(max-width:768px) 100vw, 110px"
+                                                style={{ objectFit: "cover" }}
+                                            />
                                         ) : (
-                                            paymentAggregates.map((pm) => (
-                                                <div key={pm.method} className="flex items-center justify-between">
-                                                    <div className="truncate pr-2">
-                                                        <span className="inline-flex items-center gap-2">
-                                                            <span className="capitalize">{pm.method}</span>
-                                                            {/* if there are statuses, show first status in small badge */}
-                                                            {pm.statuses.length > 0 && (
-                                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 ml-2">
-                                                                    {pm.statuses[0]}
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <div className="font-medium">{currency(pm.amount)}</div>
-                                                </div>
-                                            ))
+                                            <div className="w-full h-full grid place-items-center text-xs text-slate-400">
+                                                No image
+                                            </div>
                                         )}
                                     </div>
+
+                                    {/* PRODUCT INFO */}
+                                    <div className="space-y-3">
+                                        <div className="text-base font-semibold text-slate-900">
+                                            {p.productNameSnapshot}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-8 text-sm text-slate-600">
+                                            <div>
+                                                Qty:{" "}
+                                                <span className="font-semibold text-slate-800">
+                                                    {p.quantity}
+                                                </span>
+                                            </div>
+
+                                            <div>
+                                                Price:{" "}
+                                                <span className="font-semibold text-slate-800">
+                                                    {currency(Number(p.sellPrice ?? 0))}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* PRICE COLUMN (Aligned) */}
+                                    <div className="text-left md:text-right border-t pt-3 md:border-0 md:pt-0">
+                                        <div className="text-xs text-slate-400">
+                                            Subtotal
+                                        </div>
+                                        <div className="text-lg font-bold text-slate-900">
+                                            {currency(subtotal)}
+                                        </div>
+                                    </div>
                                 </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* ================= ADDRESS + PAYMENT ================= */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    {/* Address Section */}
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-2xl shadow-sm p-5">
+                            <div className="text-lg font-semibold mb-3">
+                                Delivery Address
+                            </div>
+                            {renderAddress(
+                                order.orderCustomerAddressDetails?.deliveryAddress
+                            )}
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm p-5">
+                            <div className="text-lg font-semibold mb-3">
+                                Billing Address
+                            </div>
+                            {renderAddress(
+                                order.orderCustomerAddressDetails?.billingAddress
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Payment Section */}
+                    <div className="bg-white rounded-2xl shadow-sm p-5 space-y-5">
+                        <div>
+                            <div className="text-sm text-slate-500">
+                                Payment Summary
+                            </div>
+                            <div className="text-xl font-bold text-slate-900">
+                                {currency(displayedTotal)}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Items</span>
+                                <span>{currency(itemsSubtotal)}</span>
+                            </div>
+
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Delivery</span>
+                                <span>
+                                    {delivery > 0 ? currency(delivery) : "—"}
+                                </span>
+                            </div>
+
+                            <div className="flex justify-between font-semibold">
+                                <span>Total Paid</span>
+                                <span>{currency(totalPaid)}</span>
                             </div>
 
                             {balance > 0 && (
-                                <div className="mt-4 text-sm text-slate-600">
-                                    If you believe there's an issue with payment status, please contact customer support.
+                                <div className="flex justify-between text-rose-600 font-semibold">
+                                    <span>Outstanding</span>
+                                    <span>{currency(balance)}</span>
                                 </div>
                             )}
                         </div>
 
-                        {/* Mobile summary */}
-                        <div className="lg:hidden">
-                            <div className="bg-white border rounded-lg p-4 shadow-sm">
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <div className="text-sm text-slate-600">Total</div>
-                                        <div className="text-xs text-slate-400">Items + Delivery</div>
-                                    </div>
-                                    <div className="text-2xl font-extrabold text-[#065975]">{currency(displayedTotal)}</div>
+                        <hr />
+
+                        <div className="space-y-3">
+                            {paymentAggregates.length === 0 ? (
+                                <div className="text-sm text-slate-400">
+                                    No payment records
                                 </div>
-                            </div>
+                            ) : (
+                                paymentAggregates.map((pm) => (
+                                    <div
+                                        key={pm.method}
+                                        className="flex justify-between text-sm"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="capitalize font-medium">
+                                                {pm.method}
+                                            </span>
+
+                                            {pm.statuses.length > 0 && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                                    {pm.statuses[0]}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <span className="font-semibold">
+                                            {currency(pm.amount)}
+                                        </span>
+                                    </div>
+                                ))
+                            )}
                         </div>
-                    </section>
+                    </div>
                 </div>
+
             </main>
         </div>
     );
