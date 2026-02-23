@@ -54,16 +54,44 @@ const SECTION_ICON: Record<string, React.ReactNode> = {
     theme: <Palette className="w-4 h-4" />,
 }
 
-const CHIP_COLOR_PALETTE = [
-    'from-rose-300 to-rose-400',
-    'from-orange-300 to-orange-400',
-    'from-amber-300 to-amber-400',
-    'from-lime-300 to-lime-400',
-    'from-emerald-300 to-emerald-400',
-    'from-sky-300 to-sky-400',
-    'from-indigo-300 to-indigo-400',
-    'from-fuchsia-300 to-fuchsia-400',
-]
+function OptionChip({
+    option,
+    checked,
+    onToggle,
+}: {
+    option: Option
+    checked: boolean
+    onToggle: (id: string) => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={() => onToggle(option.id)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border transition-all duration-200 active:scale-95
+            ${checked
+                    ? 'bg-[#1FA6B8]/15 text-[#0B5C73] border-[#1FA6B8]/40 shadow-sm'
+                    : 'bg-white text-[#0B5C73] border-[#0B5C73]/15 hover:bg-[#F6B73C]/15'
+                }`}
+            aria-pressed={checked}
+        >
+            <span
+                className={`w-2 h-2 rounded-full ${checked ? 'bg-[#E24B5B]' : 'bg-[#1FA6B8]/30'
+                    }`}
+            />
+            <span className="truncate max-w-40 font-medium">
+                {option.label}
+            </span>
+            <span
+                className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked
+                        ? 'bg-white text-[#0B5C73]'
+                        : 'bg-[#1FA6B8]/10 text-[#0B5C73]'
+                    }`}
+            >
+                {option.count ?? 0}
+            </span>
+        </button>
+    )
+}
 
 function IconClear() {
     return <X className="w-3 h-3" />
@@ -198,42 +226,6 @@ export default function SidebarFilters({
         ...selectedThemes.map((id) => ({ id, type: 'theme' as const })),
     ]
 
-    // chips color helper: deterministic color from id
-    const colorForId = (id: string) => {
-        let h = 0
-        for (let i = 0; i < id.length; i++) h = (h << 5) - h + id.charCodeAt(i)
-        const idx = Math.abs(h) % CHIP_COLOR_PALETTE.length
-        return CHIP_COLOR_PALETTE[idx]
-    }
-
-    function OptionChip({
-        option,
-        checked,
-        onToggle,
-    }: {
-        option: Option
-        checked: boolean
-        onToggle: (id: string) => void
-    }) {
-        const gradient = colorForId(option.id)
-        return (
-            <button
-                type="button"
-                onClick={() => onToggle(option.id)}
-                className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm shadow-sm border transition transform active:scale-95 focus:outline-none
-          ${checked ? `text-white bg-linear-to-r ${gradient} border-transparent shadow-lg` : 'bg-white text-slate-800 border-slate-100 hover:drop-shadow-md'}`}
-                aria-pressed={checked}
-                title={`${option.label} — ${option.count ?? 0} items`}
-            >
-                <span className={`w-2 h-2 rounded-full ${checked ? 'bg-white/30' : 'bg-slate-200'}`} />
-                <span className="truncate max-w-40">{option.label}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked ? 'bg-white/20' : 'bg-white/50 text-slate-600'}`}>
-                    {option.count ?? 0}
-                </span>
-            </button>
-        )
-    }
-
     function Section({
         title,
         options,
@@ -262,7 +254,7 @@ export default function SidebarFilters({
         return (
             <div className="relative border rounded-lg p-3 bg-white shadow-sm">
                 <div
-                    className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${selectedIds.length ? 'bg-teal-400' : 'bg-transparent'}`}
+                    className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${selectedIds.length ? 'bg-[#1FA6B8]' : 'bg-transparent'}`}
                     aria-hidden
                 />
                 <SectionHeader
@@ -291,7 +283,7 @@ export default function SidebarFilters({
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         placeholder={`Search ${title.toLowerCase()}...`}
-                                        className="w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-teal-100"
+                                        className="w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
                                     />
                                 </div>
 
@@ -351,8 +343,8 @@ export default function SidebarFilters({
     return (
         <div className="space-y-5">
             {/* header: gradient search + stacked controls below */}
-            <div className="rounded-lg overflow-hidden shadow-md">
-                <div className="px-4 py-3 bg-linear-to-r from-teal-50 via-sky-50 to-indigo-50 rounded-md">
+            <div className="rounded-2xl bg-white/80 backdrop-blur-sm border border-[#0B5C73]/10">
+                <div className="px-6 py-5 rounded-2xl bg-slate-50 border border-slate-200">
                     {/* Search input */}
                     <div className="relative">
                         <label htmlFor="global-search" className="sr-only">
@@ -366,7 +358,7 @@ export default function SidebarFilters({
                                 value={q}
                                 onChange={(e) => onQChange(e.target.value)}
                                 placeholder="Search products, tags or names..."
-                                className="w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-teal-200 text-sm bg-white"
+                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#0B5C73]/15 bg-white focus:ring-2 focus:ring-[#1FA6B8]/30 focus:border-[#1FA6B8] text-sm transition"
                             />
                         </div>
                     </div>
@@ -377,7 +369,7 @@ export default function SidebarFilters({
                             onClick={() => {
                                 if (hasAnySelection) onClearAll()
                             }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${hasAnySelection ? 'bg-white border' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${hasAnySelection ? 'bg-[#E24B5B]/10 text-[#E24B5B] border border-[#E24B5B]/30 hover:bg-[#E24B5B]/20' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                 }`}
                             disabled={!hasAnySelection}
                             title={hasAnySelection ? 'Clear search & selections' : 'Nothing to clear'}
@@ -392,9 +384,6 @@ export default function SidebarFilters({
                         </label>
                     </div>
                 </div>
-
-                {/* decorative separator */}
-                <div className="h-1 bg-linear-to-r from-teal-300 via-teal-200 to-white" />
             </div>
 
             {/* selected chips */}
@@ -403,11 +392,10 @@ export default function SidebarFilters({
                     <div className="flex items-center gap-2 flex-wrap">
                         {showSelectedChips.map((c) => {
                             const label = allOptionsById.get(c.id) ?? c.id
-                            const gradient = colorForId(c.id)
                             return (
                                 <span
                                     key={`${c.type}-${c.id}`}
-                                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium text-white bg-linear-to-r ${gradient} shadow`}
+                                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-[#1FA6B8]/20 text-[#0B5C73] border border-[#1FA6B8]/30"
                                 >
                                     <span className="truncate max-w-48">{label}</span>
                                     <button
@@ -448,7 +436,7 @@ export default function SidebarFilters({
                     <div className="absolute w-full h-3 bg-slate-200 rounded-full" />
 
                     {/* Active Range */}
-                    <div className="absolute h-3 bg-linear-to-r from-teal-400 to-teal-500 rounded-full"
+                    <div className="absolute h-3 bg-[#1FA6B8] rounded-full"
                         style={{
                             left: `${((sliderMin - priceRangeMin) / range) * 100}%`,
                             right: `${100 - ((sliderMax - priceRangeMin) / range) * 100}%`,
@@ -473,7 +461,7 @@ export default function SidebarFilters({
                             [&::-webkit-slider-thumb]:rounded-full
                             [&::-webkit-slider-thumb]:bg-white
                             [&::-webkit-slider-thumb]:border-2
-                            [&::-webkit-slider-thumb]:border-teal-500
+                            [&::-webkit-slider-thumb]:border-[#0B5C73]
                             [&::-webkit-slider-thumb]:shadow-md
                             [&::-webkit-slider-thumb]:cursor-pointer"
                     />
@@ -496,7 +484,7 @@ export default function SidebarFilters({
                             [&::-webkit-slider-thumb]:rounded-full
                             [&::-webkit-slider-thumb]:bg-white
                             [&::-webkit-slider-thumb]:border-2
-                            [&::-webkit-slider-thumb]:border-teal-500
+                            [&::-webkit-slider-thumb]:border-[#0B5C73]
                             [&::-webkit-slider-thumb]:shadow-md
                             [&::-webkit-slider-thumb]:cursor-pointer"
                     />
@@ -516,7 +504,7 @@ export default function SidebarFilters({
                                     e.target.value === '' ? '' : Number(e.target.value)
                                 )
                             }
-                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-teal-100"
+                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
                         />
                     </div>
 
@@ -532,7 +520,7 @@ export default function SidebarFilters({
                                     e.target.value === '' ? '' : Number(e.target.value)
                                 )
                             }
-                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-teal-100"
+                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
                         />
                     </div>
                 </div>
@@ -607,7 +595,7 @@ export default function SidebarFilters({
 
             {themes.length > 0 && (
                 <Section
-                    title="Theme"
+                    title="Collection"
                     options={themes}
                     search={searchTheme}
                     setSearch={setSearchTheme}
