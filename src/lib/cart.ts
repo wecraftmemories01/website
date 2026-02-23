@@ -269,3 +269,22 @@ export async function fetchCartFromApi() {
         console.error('fetchCartFromApi failed', err);
     }
 }
+
+export function clearCart() {
+    if (typeof window === 'undefined') return;
+
+    // Clear memory
+    cartProductSet.clear();
+
+    // Clear persistence
+    try {
+        localStorage.removeItem(CART_PRODUCTS_KEY);
+        localStorage.setItem('cartCount', '0');
+    } catch {}
+
+    cartFetched = false;
+
+    try {
+        window.dispatchEvent(new Event('cartChanged'));
+    } catch {}
+}

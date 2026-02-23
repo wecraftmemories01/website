@@ -45,6 +45,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [billingAddressId, setBillingAddressId] = useState<string | number | null>(null);
 
     const [creating, setCreating] = useState(false);
+    const [paymentInProgress, setPaymentInProgress] = useState(false);
 
     const blankAddress: Address = {
         id: `local_${Date.now()}`,
@@ -776,52 +777,59 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }, [cartLoaded, checkingAuth, creating, cart.length]);
 
     function placeOrder() {
-        // 🔒 HARD LOCK (instant)
-        if (placeOrderLockRef.current) return;
+        if (placeOrderLockRef.current || paymentInProgress) return;
+
         placeOrderLockRef.current = true;
+        setPaymentInProgress(true);
+
+        const unlock = () => {
+            placeOrderLockRef.current = false;
+            setPaymentInProgress(false);
+        };
 
         const cust = typeof window !== "undefined"
             ? getStoredCustomerId()
             : null;
 
         if (!cust) {
-            placeOrderLockRef.current = false;
+            unlock();
             router.replace("/login");
             return;
         }
 
         if (!selectedAddressId) {
-            placeOrderLockRef.current = false;
-            return window.scrollTo({ top: 0, behavior: "smooth" });
+            unlock();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
         }
 
         const addr = addresses.find((a) => a.id === selectedAddressId);
         if (!addr) {
-            placeOrderLockRef.current = false;
-            return alert("Selected address not found");
+            unlock();
+            alert("Selected address not found");
+            return;
         }
 
         const svc = serviceMap[addr.pincode];
         if (svc?.checking) {
-            placeOrderLockRef.current = false;
-            return alert("Checking pincode serviceability — please wait");
+            unlock();
+            alert("Checking pincode serviceability — please wait");
+            return;
         }
 
         if (svc && svc.prepaid === false) {
-            placeOrderLockRef.current = false;
-            return alert("Selected address is not serviceable for prepaid orders.");
+            unlock();
+            alert("Selected address is not serviceable for prepaid orders.");
+            return;
         }
 
         (async () => {
             try {
                 await createOrderAndRedirect(cust, addr);
             } catch {
-                placeOrderLockRef.current = false;
-            } finally {
-                placeOrderLockRef.current = false;
-                if (!mountedRef.current) return;
-                setCreating(false);
+                unlock();
             }
+            // DO NOT unlock on success — navigation will happen
         })();
     }
 
@@ -966,8 +974,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         } finally {
             if (!mountedRef.current) return;
 
-            // Stop loading spinner
-            setCreating(false);
+            // Only stop spinner if we are NOT redirecting
+            // If payment started, keep everything locked
+            if (!paymentInProgress) {
+                setCreating(false);
+                placeOrderLockRef.current = false;
+            }
         }
     }
 
@@ -1276,8 +1288,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <button
                                 onClick={placeOrder}
                                 className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating ? "opacity-60 cursor-not-allowed" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
-                                disabled={creating || cart.length === 0}
-                                aria-disabled={creating || cart.length === 0}
+                                disabled={creating || paymentInProgress || cart.length === 0}
+                                aria-disabled={creating || paymentInProgress || cart.length === 0}
                             >
                                 {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
                             </button>
@@ -1359,8 +1371,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <button
                             onClick={placeOrder}
                             className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-lg font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed bg-gray-200 text-slate-500" : "bg-[#065975] text-white"}`}
-                            disabled={creating || cart.length === 0}
-                            aria-disabled={creating || cart.length === 0}
+                            disabled={creating || paymentInProgress || cart.length === 0}
+                            aria-disabled={creating || paymentInProgress || cart.length === 0}
                         >
                             {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
                         </button>

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
+import { clearCart } from "@/lib/cart";
 import {
     CheckCircle,
     Home,
@@ -286,18 +287,10 @@ export default function OrderSuccessClient(): React.ReactElement {
     }, [fetchPath, router]);
 
     useEffect(() => {
-        if (!order) return;
-        try {
-            if (typeof window !== "undefined") {
-                try {
-                    localStorage.setItem("cartCount", "0");
-                } catch { }
-                window.dispatchEvent(new Event("cartChanged"));
-            }
-        } catch (err) {
-            console.warn("Failed to refresh cart count after order:", err);
+        if (order) {
+            clearCart();
         }
-    }, [order, customerId]);
+    }, [order]);
 
     const handleShare = async (): Promise<void> => {
         const shareText = `Order ${order?.orderNumber ?? order?.orderId ?? ""} • ₹${(
