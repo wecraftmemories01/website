@@ -11,13 +11,13 @@ export default function HeroClient() {
             transition={{ duration: 0.5 }}
             className="
                 relative overflow-hidden rounded-3xl
-                bg-gradient-to-r
+                bg-linear-to-r
                 from-[#D7EDF3]
                 via-[#E4F3F7]
                 to-[#F1F5F6]
                 text-[#0B5C73]
                 shadow-md
-                min-h-[320px] max-h-[420px]
+                min-h-80 max-h-105
             "
         >
             {/* Decorative blobs – minimal, non-distracting */}

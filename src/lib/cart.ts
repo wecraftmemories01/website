@@ -79,7 +79,7 @@ function notifyCartChange(updatedPayload?: any) {
 export async function addToCart(productId: string, quantity = 1, type: 'SELL' | 'RENT' = 'SELL', note?: string) {
     if (typeof window === 'undefined') return { success: false, message: 'not-in-browser' };
     const customerId = getStoredCustomerId();
-    if (!customerId) return { success: false, message: 'no-customer' };
+    if (!customerId) return { success: false, message: 'Please login to add item to cart' };
 
     try {
         const res = await fetchWithAuth(`${API_BASE}/cart`, {

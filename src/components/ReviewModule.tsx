@@ -43,7 +43,7 @@ function formatRelative(dateIso: string) {
 
 function StarIcon({ filled }: { filled: boolean }) {
     return (
-        <svg className={`w-4 h-4 ${filled ? "text-yellow-400" : "text-gray-300"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+        <svg className={`w-4 h-4 ${filled ? "text-[#F6B73C]" : "text-[#0B5C73]/20"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.95a1 1 0 00.95.69h4.163c.969 0 1.371 1.24.588 1.81l-3.37 2.466a1 1 0 00-.364 1.118l1.287 3.95c.3.921-.755 1.688-1.54 1.118L10 15.347l-3.399 2.272c-.785.57-1.84-.197-1.54-1.118l1.287-3.95a1 1 0 00-.364-1.118L2.615 9.377c-.783-.57-.38-1.81.588-1.81h4.163a1 1 0 00.95-.69l1.286-3.95z" />
         </svg>
     );
@@ -147,12 +147,12 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
     }, [toast]);
 
     return (
-        <div className="bg-white rounded-xl p-6 shadow-sm">
+        <div className="bg-white rounded-2xl p-8 shadow-[0_10px_40px_rgba(11,92,115,0.08)] border border-[#0B5C73]/10">
             {/* Header: average rating */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="bg-[#004F64] text-white rounded-xl px-4 py-3 flex flex-col items-center justify-center">
+                        <div className="bg-linear-to-br from-[#0B5C73] to-[#1FA6B8] text-white rounded-2xl px-6 py-5 flex flex-col items-center justify-center shadow-lg">
                             <div className="text-2xl font-extrabold leading-none">{stats.total ? stats.avg.toFixed(1) : "—"}</div>
                             <div className="text-xs">avg rating</div>
                         </div>
@@ -175,7 +175,7 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => { setShowWrite(true); }}
-                        className="px-3 py-2 bg-[#E94E4E] text-white rounded-md shadow-sm hover:brightness-95"
+                        className="px-5 py-2.5 bg-[#E24B5B] text-white rounded-full shadow-lg hover:scale-[1.02] transition font-medium"
                     >
                         Write a review
                     </button>
@@ -214,10 +214,10 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                                     }}
                                     className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 focus:outline-none ${filterRating === star ? 'bg-gray-100 ring-1 ring-[#E94E4E]' : ''}`}
                                 >
-                                    <div className="w-14 text-sm text-gray-700">{star} <span className="text-yellow-400">★</span></div>
+                                    <div className="w-14 text-sm text-gray-700">{star} <span className="text-[#F6B73C]">★</span></div>
 
-                                    <div className="flex-1 bg-gray-100 rounded h-3 overflow-hidden">
-                                        <div className="h-3 bg-[#E94E4E]" style={{ width: `${pct}%`, transition: "width .3s" }} />
+                                    <div className="flex-1 bg-[#0B5C73]/10 rounded-full h-3 overflow-hidden">
+                                        <div className="h-3 bg-linear-to-r from-[#E24B5B] to-[#F6B73C]" style={{ width: `${pct}%`, transition: "width .3s" }} />
                                     </div>
 
                                     <div className="w-10 text-right text-sm text-gray-600">{pct}%</div>
@@ -243,9 +243,9 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             {/* review list */}
             <div className="mt-6 space-y-4">
                 {pageItems.map((r) => (
-                    <article key={r.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                    <article key={r.id} className="border border-[#0B5C73]/10 rounded-2xl p-6 bg-white shadow-[0_8px_30px_rgba(11,92,115,0.06)] hover:shadow-[0_12px_40px_rgba(11,92,115,0.12)] transition">
                         <header className="flex items-start gap-4">
-                            <div aria-hidden className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-semibold">
+                            <div aria-hidden className="w-12 h-12 rounded-full bg-[#0B5C73]/10 text-[#0B5C73] font-semibold text-sm flex items-center justify-center">
                                 {r.name.split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase()}
                             </div>
                             <div className="flex-1">
@@ -278,7 +278,7 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                                 ) : null}
 
                                 <div className="mt-3 flex gap-3">
-                                    <button onClick={() => handleHelpful(r.id)} className="text-sm px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">Helpful</button>
+                                    <button onClick={() => handleHelpful(r.id)} className="text-sm px-3 py-1.5 rounded-full bg-[#0B5C73]/10 text-[#0B5C73] hover:bg-[#0B5C73]/20 transition">Helpful</button>
                                     <button onClick={() => setToast("Report submitted")} className="text-sm px-2 py-1 rounded bg-gray-50 hover:bg-gray-100">Report</button>
                                 </div>
                             </div>
@@ -301,7 +301,7 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             {showWrite && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setShowWrite(false)} />
-                    <form onSubmit={submitReview} className="relative max-w-xl w-full bg-white rounded-xl p-6 z-10 shadow-2xl">
+                    <form onSubmit={submitReview} className="relative max-w-xl w-full bg-white rounded-2xl p-8 z-10 shadow-[0_20px_60px_rgba(11,92,115,0.2)] border border-[#0B5C73]/10">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-semibold">Write a review</h3>
                             <button type="button" onClick={() => setShowWrite(false)} className="text-gray-500 px-2">✕</button>

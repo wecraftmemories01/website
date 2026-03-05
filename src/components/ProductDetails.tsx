@@ -840,9 +840,9 @@ export default function ProductClient({ product }: { product: Product }) {
                     <div className="lg:col-span-2 space-y-6">
                         <div className="relative">
                             {/* Main Image Container */}
-                            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-gray-50 to-white shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
+                            <div className="relative rounded-3xl overflow-hidden bg-linear-to-br from-gray-50 to-white shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
 
-                                <div className="relative w-full h-[420px] md:h-[520px] lg:h-[600px] flex items-center justify-center">
+                                <div className="relative w-full h-105 md:h-130 lg:h-150 flex items-center justify-center">
 
                                     {selectedImage ? (
                                         <button
@@ -1229,14 +1229,14 @@ export default function ProductClient({ product }: { product: Product }) {
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40">
 
                     {/* subtle fade */}
-                    <div className="h-6 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                    <div className="h-6 bg-linear-to-t from-white to-transparent pointer-events-none" />
 
                     <div className="bg-white border-t shadow-[0_-6px_20px_rgba(0,0,0,0.08)] px-4 py-3">
 
                         <div className="flex items-center gap-3">
 
                             {/* Price */}
-                            <div className="flex flex-col min-w-[90px]">
+                            <div className="flex flex-col min-w-22.5">
                                 <span className="text-lg font-extrabold text-[#E94E4E] leading-tight">
                                     {priceDisplay ? formatINR(priceDisplay) : "—"}
                                 </span>
