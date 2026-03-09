@@ -260,7 +260,7 @@ function ReviewModule({ productName, initialReviews = [] as Review[], maxPerPage
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setShowWrite(true)} className="px-3 py-2 bg-[#E94E4E] text-white rounded-md shadow-sm hover:brightness-95">Write a review</button>
+                    <button onClick={() => setShowWrite(true)} className="px-3 py-2 bg-[#2F9E5A] text-white rounded-md shadow-sm hover:brightness-95">Write a review</button>
                     <div className="text-sm text-gray-600">Sort:</div>
                     <select
                         onChange={(e) => {
@@ -290,11 +290,11 @@ function ReviewModule({ productName, initialReviews = [] as Review[], maxPerPage
                                 <button
                                     key={star}
                                     onClick={() => { setFilterRating((cur) => (cur === star ? null : star)); setPage(1); }}
-                                    className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 focus:outline-none ${filterRating === star ? 'bg-gray-100 ring-1 ring-[#E94E4E]' : ''}`}
+                                    className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 focus:outline-none ${filterRating === star ? 'bg-gray-100 ring-1 ring-[#2F9E5A]' : ''}`}
                                 >
                                     <div className="w-14 text-sm text-gray-700">{star} <span className="text-yellow-400">★</span></div>
                                     <div className="flex-1 bg-gray-100 rounded h-3 overflow-hidden">
-                                        <div className="h-3 bg-[#E94E4E]" style={{ width: `${pct}%`, transition: "width .3s" }} />
+                                        <div className="h-3 bg-[#2F9E5A]" style={{ width: `${pct}%`, transition: "width .3s" }} />
                                     </div>
                                     <div className="w-10 text-right text-sm text-gray-600">{pct}%</div>
                                 </button>
@@ -406,7 +406,7 @@ function ReviewModule({ productName, initialReviews = [] as Review[], maxPerPage
 
                             <div className="flex items-center justify-end gap-2 mt-2">
                                 <button type="button" onClick={() => setShowWrite(false)} className="px-3 py-2 rounded border">Cancel</button>
-                                <button type="submit" className="px-4 py-2 bg-[#E94E4E] text-white rounded">Submit review</button>
+                                <button type="submit" className="px-4 py-2 bg-[#2F9E5A] text-white rounded">Submit review</button>
                             </div>
                         </div>
                     </form>
@@ -825,7 +825,7 @@ export default function ProductClient({ product }: { product: Product }) {
                     <div className="max-w-7xl mx-auto px-6 py-3">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <span className="w-1.5 h-8 rounded-md bg-[#E94E4E] inline-block" />
+                                <span className="w-1.5 h-8 rounded-md bg-[#2F9E5A] inline-block" />
                                 <div>
                                     <div className="text-lg md:text-2xl font-extrabold text-[#004F64] leading-tight">{productName ?? "Product"}</div>
                                 </div>
@@ -876,7 +876,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                                 onClick={() => setSelectedImage(src)}
                                                 className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-300
                             ${isSelected
-                                                        ? "ring-2 ring-[#E94E4E] scale-110"
+                                                        ? "ring-2 ring-[#2F9E5A] scale-110"
                                                         : "hover:scale-110 opacity-80 hover:opacity-100"
                                                     }`}
                                             >
@@ -910,7 +910,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                 disabled={favLoading}
                                 className={`w-full py-3 rounded-xl border font-medium transition
             ${isFavourite
-                                        ? "bg-[#E94E4E]/10 text-[#E94E4E] border-[#E94E4E]"
+                                        ? "bg-[#2F9E5A]/10 text-[#2F9E5A] border-[#2F9E5A]"
                                         : "text-gray-700 bg-white"
                                     }
             ${favLoading ? "opacity-60 cursor-not-allowed" : ""}
@@ -1033,7 +1033,7 @@ export default function ProductClient({ product }: { product: Product }) {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-xs text-gray-500">Price</div>
-                                    <div className="text-3xl font-extrabold text-[#E94E4E]">{priceDisplay ? formatINR(priceDisplay) : "—"}</div>
+                                    <div className="text-3xl font-extrabold text-[#2F9E5A]">{priceDisplay ? formatINR(priceDisplay) : "—"}</div>
                                     {salePrice?.actualPrice && salePrice.actualPrice !== salePrice.discountedPrice && (
                                         <div className="text-sm text-gray-400 line-through mt-1">{formatINR(salePrice.actualPrice)}</div>
                                     )}
@@ -1084,7 +1084,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                         disabled={cartState !== "not_added" || adding || isOutOfStock}
                                         className={`flex-1 py-3 rounded-lg text-white font-semibold shadow-md transition ${isOutOfStock
                                             ? "bg-gray-300 cursor-not-allowed"
-                                            : "bg-[#E94E4E] hover:bg-[#c93b3b]"
+                                            : "bg-[#2F9E5A] hover:bg-[#25864b]"
                                             }`}
                                     >
                                         {cartState === "unknown"
@@ -1101,7 +1101,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                 disabled={favLoading}
                                 className={`mt-4 w-full py-2 rounded-lg border transition
                                     ${isFavourite
-                                        ? "bg-[#E94E4E]/10 text-[#E94E4E] border-[#E94E4E]"
+                                        ? "bg-[#2F9E5A]/10 text-[#2F9E5A] border-[#2F9E5A]"
                                         : "text-gray-700 hover:bg-gray-50"
                                     }
                                         ${favLoading ? "opacity-60 cursor-not-allowed" : ""}
@@ -1237,7 +1237,7 @@ export default function ProductClient({ product }: { product: Product }) {
 
                             {/* Price */}
                             <div className="flex flex-col min-w-22.5">
-                                <span className="text-lg font-extrabold text-[#E94E4E] leading-tight">
+                                <span className="text-lg font-extrabold text-[#2F9E5A] leading-tight">
                                     {priceDisplay ? formatINR(priceDisplay) : "—"}
                                 </span>
                                 <span className={`text-xs font-medium ${isOutOfStock ? "text-red-600" : "text-green-700"}`}>
@@ -1283,7 +1283,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                     className={`flex-1 py-3 rounded-xl text-white font-semibold shadow-md transition-all duration-200 active:scale-[0.98]
                                         ${isOutOfStock
                                             ? "bg-gray-300 cursor-not-allowed"
-                                            : "bg-[#E94E4E] hover:bg-[#c93b3b]"
+                                            : "bg-[#2F9E5A] hover:bg-[#c93b3b]"
                                         }`}
                                 >
                                     {adding ? "Adding…" : "Add to Cart"}
