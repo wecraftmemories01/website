@@ -787,6 +787,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             setPaymentInProgress(false);
         };
 
+        if (!hasAddress) {
+            unlock();
+            return;
+        }
+
         const cust = typeof window !== "undefined"
             ? getStoredCustomerId()
             : null;
@@ -1012,6 +1017,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     const subtotal = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
+    const hasAddress = addresses.length > 0 && selectedAddressId !== null;
 
     const currentDeliveryCharge = useMemo(() => {
         if (!selectedAddressId) return 0;
@@ -1268,16 +1274,29 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 <div>{formatINR(subtotal)}</div>
                             </div>
 
-                            <div className="flex justify-between">
+                            <div className="flex justify-between items-center">
                                 <div>Delivery</div>
-                                <div>{formatINR(Number(currentDeliveryCharge || 0))}</div>
+
+                                {!hasAddress ? (
+                                    <div className="text-xs text-amber-600 font-medium">
+                                        Add address to calculate delivery
+                                    </div>
+                                ) : (
+                                    <div>{formatINR(Number(currentDeliveryCharge || 0))}</div>
+                                )}
                             </div>
 
                             <div className="border-t pt-3 mt-3 flex justify-between items-center">
                                 <div className="text-lg font-extrabold">Total</div>
-                                <div className="text-xl font-extrabold text-[#065975]">
-                                    {formatINR(total)}
-                                </div>
+                                {!hasAddress ? (
+                                    <div className="text-xs text-amber-600">
+                                        Add address to see final total
+                                    </div>
+                                ) : (
+                                    <div className="text-xl font-extrabold text-[#065975]">
+                                        {formatINR(total)}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1287,9 +1306,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <div className="mt-6 hidden md:flex gap-3">
                             <button
                                 onClick={placeOrder}
-                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating ? "opacity-60 cursor-not-allowed" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
-                                disabled={creating || paymentInProgress || cart.length === 0}
-                                aria-disabled={creating || paymentInProgress || cart.length === 0}
+                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating || !hasAddress ? "opacity-60 cursor-not-allowed bg-gray-200 text-gray-500" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
+                                disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
+                                aria-disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
                             >
                                 {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
                             </button>
@@ -1371,8 +1390,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <button
                             onClick={placeOrder}
                             className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-lg font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed bg-gray-200 text-slate-500" : "bg-[#065975] text-white"}`}
-                            disabled={creating || paymentInProgress || cart.length === 0}
-                            aria-disabled={creating || paymentInProgress || cart.length === 0}
+                            disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
+                            aria-disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
                         >
                             {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
                         </button>
