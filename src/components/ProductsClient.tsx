@@ -43,8 +43,8 @@ export default function ProductsClient() {
     const [debouncedMax, setDebouncedMax] = useState<number | ''>('')
 
     const [page, setPage] = useState(1)
-    const perPageOptions = [8, 12, 16]
-    const [perPage, setPerPage] = useState<number>(8)
+    const perPageOptions = [16, 32, 64]
+    const [perPage, setPerPage] = useState<number>(16)
 
     const safeDateMs = (s?: string | null) => {
         if (!s) return 0
