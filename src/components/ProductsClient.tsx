@@ -256,8 +256,12 @@ export default function ProductsClient() {
     ])
 
     const total = filtered.length
-    const totalPages = Math.max(1, Math.ceil(total / perPage))
-    const pageItems = filtered
+    const totalPages = Math.ceil(total / perPage)
+
+    const pageItems = useMemo(() => {
+        const start = (page - 1) * perPage
+        return filtered.slice(start, start + perPage)
+    }, [filtered, page, perPage])
 
     // helpers to toggle selection arrays
     const toggle = (arr: string[], set: (v: string[]) => void, id: string) => {
@@ -483,11 +487,17 @@ export default function ProductsClient() {
                             </div>
                         ) : (
                             <>
-                                <ProductGrid products={filtered.slice((page - 1) * perPage, page * perPage)} />
+                                <ProductGrid products={pageItems} />
 
                                 {total > 0 && (
                                     <div className="mt-8 flex items-center justify-center">
-                                        <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
+                                        {totalPages > 1 && (
+                                            <Pagination
+                                                page={page}
+                                                totalPages={totalPages}
+                                                onPageChange={(p) => setPage(p)}
+                                            />
+                                        )}
                                     </div>
                                 )}
                             </>
