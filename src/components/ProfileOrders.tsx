@@ -15,6 +15,11 @@ type ApiOrderProduct = {
     productImage?: string | null;
 };
 
+type ApiOrderStatus = {
+    status: string;
+    date?: string;
+};
+
 type ApiOrder = {
     _id: string;
     orderNumber: number | string;
@@ -22,6 +27,7 @@ type ApiOrder = {
     orderTotal: number;
     purchaseDate: string;
     orderId?: string;
+    orderStatus?: ApiOrderStatus;
     orderProductsDetails: ApiOrderProduct[];
 };
 
@@ -39,6 +45,11 @@ function formatShortDate(iso?: string) {
     if (!iso) return "-";
     const d = new Date(iso);
     return d.toLocaleString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+}
+
+function formatStatus(status?: string) {
+    if (!status) return "Unknown";
+    return status;
 }
 
 function aggregateProducts(products: ApiOrderProduct[] = []) {
@@ -89,21 +100,6 @@ export default function OrdersCompact({
             setError(null);
 
             try {
-                const base = apiBase.replace(/\/$/, "");
-                const params = new URLSearchParams();
-
-                params.set("page", String(page));
-                params.set("limit", String(perPage));
-
-                // pass search + filters as query params — backend may or may not honor them
-                if (query && query.trim() !== "") params.set("q", query.trim());
-                if (dateFrom) params.set("dateFrom", dateFrom);
-                if (dateTo) params.set("dateTo", dateTo);
-                if (minItems !== "") params.set("minItems", String(minItems));
-                if (minTotal !== "") params.set("minTotal", String(minTotal));
-
-                const url = `${base}/sell_order/orders?${params.toString()}`;
-
                 const res = await api.get(`/sell_order/orders`, {
                     params: {
                         page,
@@ -210,7 +206,7 @@ export default function OrdersCompact({
                     <button
                         onClick={() => setFiltersOpen((s) => !s)}
                         title="Filters"
-                        className="flex items-center gap-2 rounded-full px-3 py-2 bg-gradient-to-r from-[#08607b] to-[#045a66] text-white shadow-sm hover:opacity-95 transition text-sm"
+                        className="flex items-center gap-2 rounded-full px-3 py-2 bg-linear-to-r from-[#08607b] to-[#045a66] text-white shadow-sm hover:opacity-95 transition text-sm"
                     >
                         <Sliders className="w-4 h-4" />
                         <span className="hidden md:inline">Filters</span>
@@ -318,7 +314,7 @@ export default function OrdersCompact({
                 {!loading && error && <div className="text-sm text-rose-600">Error: {error}</div>}
 
                 {!loading && !error && pageItems.length === 0 && (
-                    <div className="p-6 border rounded-lg bg-gradient-to-br from-slate-50 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="p-6 border rounded-lg bg-linear-to-br from-slate-50 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <div className="text-lg font-semibold">No orders found</div>
                             <div className="text-sm text-slate-500 mt-1">Try adjusting filters or search.</div>
@@ -372,75 +368,96 @@ export default function OrdersCompact({
                                             >
                                                 <div className="min-w-0">
                                                     <div className="flex items-center justify-between gap-3">
-                                                        <div className="text-sm font-semibold">
-                                                            {/* Order number clickable (navigates to details) */}
-                                                            <Link
-                                                                href={`/profile/order/${encodeURIComponent(String(id))}`}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className="hover:underline"
-                                                            >
-                                                                Order #{o.orderNumber}
-                                                            </Link>
+                                                        <div className="flex flex-col">
+                                                            <div className="text-sm font-semibold">
+                                                                <Link
+                                                                    href={`/profile/order/${encodeURIComponent(String(id))}`}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="hover:underline"
+                                                                >
+                                                                    Order #{o.orderNumber}
+                                                                </Link>
+                                                            </div>
+
+                                                            {/* ORDER STATUS */}
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <span className="px-2 py-0.5 text-[11px] rounded-full bg-green-100 text-green-700 font-medium">
+                                                                    {formatStatus(o.orderStatus?.status)}
+                                                                </span>
+
+                                                                {o.orderStatus?.date && (
+                                                                    <span className="text-xs text-slate-500">
+                                                                        {formatShortDate(o.orderStatus.date)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div className="text-xs text-slate-500">{formatShortDate(o.purchaseDate)}</div>
+
+                                                        <div className="text-xs text-slate-500">
+                                                            {formatShortDate(o.purchaseDate)}
+                                                        </div>
                                                     </div>
 
-                                                    {!isExpanded && (
-                                                        <div className="mt-3 space-y-2">
-                                                            {collapsedPreview.map((p, i) => {
-                                                                const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
-                                                                return (
-                                                                    <Link
-                                                                        href={href}
-                                                                        key={`${p.productId ?? p.productNameSnapshot}-${i}`}
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                        className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
-                                                                    >
-                                                                        <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
-                                                                            {p.productImage ? (
-                                                                                <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
-                                                                            ) : (
-                                                                                <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="min-w-0">
-                                                                            <div className="text-sm font-medium break-words leading-tight">{p.productNameSnapshot}</div>
-                                                                            <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
-                                                                        </div>
-                                                                    </Link>
-                                                                );
-                                                            })}
-                                                            {extra > 0 && <div className="flex items-center justify-center text-sm text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border">+{extra} more</div>}
-                                                        </div>
-                                                    )}
+                                                    {
+                                                        !isExpanded && (
+                                                            <div className="mt-3 space-y-2">
+                                                                {collapsedPreview.map((p, i) => {
+                                                                    const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
+                                                                    return (
+                                                                        <Link
+                                                                            href={href}
+                                                                            key={`${p.productId ?? p.productNameSnapshot}-${i}`}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
+                                                                        >
+                                                                            <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
+                                                                                {p.productImage ? (
+                                                                                    <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
+                                                                                ) : (
+                                                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="min-w-0">
+                                                                                <div className="text-sm font-medium wrap-break-word leading-tight">{p.productNameSnapshot}</div>
+                                                                                <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
+                                                                            </div>
+                                                                        </Link>
+                                                                    );
+                                                                })}
+                                                                {extra > 0 && <div className="flex items-center justify-center text-sm text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border">+{extra} more</div>}
+                                                            </div>
+                                                        )
+                                                    }
 
-                                                    {isExpanded && (
-                                                        <div className="mt-3 text-sm text-slate-700 space-y-2">
-                                                            {aggregated.map((p, i) => {
-                                                                const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
-                                                                return (
-                                                                    <Link
-                                                                        href={href}
-                                                                        key={`${p.productId ?? p.productNameSnapshot}-expanded-${i}`}
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                        className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
-                                                                    >
-                                                                        <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
-                                                                            {p.productImage ? (
-                                                                                <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
-                                                                            ) : (
-                                                                                <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="min-w-0">
-                                                                            <div className="text-sm font-medium break-words leading-tight">{p.productNameSnapshot}</div>
-                                                                            <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
-                                                                        </div>
-                                                                    </Link>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
+                                                    {
+                                                        isExpanded && (
+                                                            <div className="mt-3 text-sm text-slate-700 space-y-2">
+                                                                {aggregated.map((p, i) => {
+                                                                    const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
+                                                                    return (
+                                                                        <Link
+                                                                            href={href}
+                                                                            key={`${p.productId ?? p.productNameSnapshot}-expanded-${i}`}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
+                                                                        >
+                                                                            <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
+                                                                                {p.productImage ? (
+                                                                                    <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
+                                                                                ) : (
+                                                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="min-w-0">
+                                                                                <div className="text-sm font-medium wrap-break-word leading-tight">{p.productNameSnapshot}</div>
+                                                                                <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
+                                                                            </div>
+                                                                        </Link>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )
+                                                    }
                                                 </div>
 
                                                 <aside className="flex flex-col items-end justify-between gap-3 md:gap-4">
@@ -498,15 +515,18 @@ export default function OrdersCompact({
                                     })}
                             </div>
                         </div>
-                    ))}
+                    ))
+                }
 
                 {/* Pagination controls */}
-                {!loading && !error && total > 0 && (
-                    <div className="mt-6 flex items-center justify-center">
-                        <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
-                    </div>
-                )}
-            </div>
-        </section>
+                {
+                    !loading && !error && total > 0 && (
+                        <div className="mt-6 flex items-center justify-center">
+                            <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
+                        </div>
+                    )
+                }
+            </div >
+        </section >
     );
 }

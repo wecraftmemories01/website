@@ -13,6 +13,7 @@ function getStoredAccessToken(): string | null {
         return null;
     }
 }
+
 async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
     const token = getStoredAccessToken();
     const headers = new Headers(init?.headers ?? {});
@@ -20,11 +21,13 @@ async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Respon
     if (init?.body && !headers.get("Content-Type")) headers.set("Content-Type", "application/json");
     return fetch(input, { ...init, headers });
 }
+
 function currency(n?: number) {
     let v = Number(n ?? 0);
     if (isNaN(v)) v = 0;
     return `₹${v.toLocaleString("en-IN")}`;
 }
+
 function formatFullDate(iso?: string) {
     if (!iso) return "-";
     const d = new Date(iso);
@@ -35,6 +38,16 @@ function formatFullDate(iso?: string) {
         hour: "numeric",
         minute: "2-digit",
         timeZone: "Asia/Kolkata",
+    });
+}
+
+function formatShortDate(iso?: string) {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
     });
 }
 
@@ -53,7 +66,9 @@ type ApiOrderProduct = {
     sellPrice: number;
     productImage?: string | null;
 };
+
 type PaymentField = { key: string; value: string };
+
 type PaymentMethod = {
     paymentMethodNameSnapshot: string;
     amount: number;
@@ -61,6 +76,7 @@ type PaymentMethod = {
     paymentNotes?: string | null;
     fields?: PaymentField[] | null;
 };
+
 type AddressSnapshot = {
     recipientNameSnapshot?: string | null;
     recipientContactSnapshot?: string | null;
@@ -73,19 +89,35 @@ type AddressSnapshot = {
     cityNameSnapshot?: string | null;
     pincodeSnapshot?: string | null;
 };
+
+type OrderStatusEntry = {
+    status: string;
+    date?: string;
+    notes?: string;
+};
+
 type ApiOrder = {
     _id: string;
     orderNumber: number | string;
     quotedDeliveryCharge?: number;
     orderTotal?: number;
     purchaseDate?: string;
+
+    orderStatusTimeline?: OrderStatusEntry[];
+
     orderCustomerAddressDetails?: {
         deliveryAddress?: AddressSnapshot;
         billingAddress?: AddressSnapshot;
     };
+
     orderProductsDetails?: ApiOrderProduct[];
     paymentMethods?: PaymentMethod[] | null;
-    customerSnapshot?: { customerNameSnapshot?: string; customerMobileSnapshot?: string; customerEmailSnapshot?: string };
+
+    customerSnapshot?: {
+        customerNameSnapshot?: string;
+        customerMobileSnapshot?: string;
+        customerEmailSnapshot?: string;
+    };
 };
 
 /* --------------------- Component --------------------- */
@@ -163,7 +195,6 @@ export default function OrderDetails({
 
     const delivery = Number(order?.quotedDeliveryCharge ?? 0);
     const displayedTotal = itemsSubtotal + delivery;
-    const serverItemTotal = typeof order?.orderTotal !== "undefined" ? Number(order!.orderTotal) : undefined;
 
     const renderAddress = (a?: AddressSnapshot | null) => {
         if (!a) return <div className="text-sm text-slate-500">—</div>;
@@ -231,12 +262,14 @@ export default function OrderDetails({
         for (const [method, obj] of map.entries()) {
             arr.push({ method, amount: obj.amount, statuses: Array.from(obj.statuses), sources: obj.sources });
         }
+
         return arr;
     }, [paymentMethodsRaw]);
 
     // totals
     const totalPaid = paymentMethodsRaw.reduce((s, p) => s + Number(p.amount ?? 0), 0);
     const balance = Math.max(0, displayedTotal - totalPaid);
+    const latestStatus = order?.orderStatusTimeline?.[0];
 
     /* ----- loading / error / empty states ----- */
     if (loading) {
@@ -252,6 +285,7 @@ export default function OrderDetails({
             </div>
         );
     }
+
     if (error) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -261,6 +295,7 @@ export default function OrderDetails({
             </div>
         );
     }
+
     if (!order) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -305,16 +340,22 @@ export default function OrderDetails({
                         </div>
 
                         <div className="md:text-right">
+                            {latestStatus && (
+                                <div className="inline-flex px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold mb-2">
+                                    {latestStatus.status}
+                                </div>
+                            )}
+
                             <div
                                 className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${balance > 0
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-emerald-100 text-emerald-800"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-100 text-emerald-800"
                                     }`}
                             >
                                 {balance > 0 ? "Payment Pending" : "Fully Paid"}
                             </div>
 
-                            <div className="mt-3 text-slate-500 text-xs">
+                            <div className="mt-1 text-slate-500 text-xs">
                                 Total
                             </div>
                             <div className="text-3xl font-extrabold text-[#065975]">
@@ -496,6 +537,50 @@ export default function OrderDetails({
                             )}
                         </div>
                     </div>
+                </div>
+
+                {/* ================= ORDER HISTORY ================= */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="text-lg font-semibold mb-4">
+                        Order History
+                    </div>
+
+                    {order.orderStatusTimeline && order.orderStatusTimeline.length > 0 ? (
+                        <div className="space-y-4">
+                            {order.orderStatusTimeline.map((s, idx) => (
+                                <div key={idx} className="flex items-start gap-4">
+
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-3 h-3 bg-[#065975] rounded-full mt-1"></div>
+                                        {idx !== (order.orderStatusTimeline?.length ?? 0) - 1 && (
+                                            <div className="w-0.5 flex-1 bg-slate-200"></div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-slate-900">
+                                            {s.status}
+                                        </div>
+
+                                        <div className="text-xs text-slate-500">
+                                            {formatShortDate(s.date)}
+                                        </div>
+
+                                        {s.notes && (
+                                            <div className="text-xs text-slate-400 mt-1">
+                                                {s.notes}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-slate-400">
+                            No order history available
+                        </div>
+                    )}
                 </div>
 
             </main>
