@@ -140,58 +140,6 @@ export default function ProductsClient() {
         return () => clearTimeout(t)
     }, [minPrice, maxPrice])
 
-    // derive available filter options from fetched products (only show options that exist in products)
-    const availableFilterSets = useMemo(() => {
-        const masterSet = new Map<string, { label: string; count: number }>()
-        const superSet = new Map<string, { label: string; count: number }>()
-        const catSet = new Map<string, { label: string; count: number }>()
-        const subSet = new Map<string, { label: string; count: number }>()
-        const ageSet = new Map<string, { label: string; count: number }>()
-        const themeSet = new Map<string, { label: string; count: number }>()
-
-        products.forEach((p) => {
-            if (p.masterCategoryId) {
-                const id = String(p.masterCategoryId)
-                masterSet.set(id, { label: p.masterCategoryPublicName ?? p.masterCategoryName ?? id, count: (masterSet.get(id)?.count ?? 0) + 1 })
-            }
-            if (p.superCategoryId) {
-                const id = String(p.superCategoryId)
-                superSet.set(id, { label: p.superCategoryPublicName ?? p.superCategoryName ?? id, count: (superSet.get(id)?.count ?? 0) + 1 })
-            }
-            if (p.categoryId) {
-                const id = String(p.categoryId)
-                catSet.set(id, { label: p.categoryPublicName ?? p.categoryName ?? id, count: (catSet.get(id)?.count ?? 0) + 1 })
-            }
-            if (p.subCategoryId) {
-                const id = String(p.subCategoryId)
-                subSet.set(id, { label: p.subCategoryPublicName ?? p.subCategoryName ?? id, count: (subSet.get(id)?.count ?? 0) + 1 })
-            }
-            // ageGroupId or themeId might not exist on product — attempt by name fields too
-            if ((p as any).ageGroupId) {
-                const id = String((p as any).ageGroupId)
-                ageSet.set(id, { label: String((p as any).ageGroupPublicName ?? (p as any).ageGroupName ?? id), count: (ageSet.get(id)?.count ?? 0) + 1 })
-            }
-            if ((p as any).themeId) {
-                const id = String((p as any).themeId)
-                themeSet.set(id, { label: String((p as any).themePublicName ?? (p as any).themeName ?? id), count: (themeSet.get(id)?.count ?? 0) + 1 })
-            }
-            // fallback: if product has theme string
-            if ((p as any).theme && typeof (p as any).theme === 'string') {
-                const id = String((p as any).theme).toLowerCase()
-                themeSet.set(id, { label: String((p as any).theme), count: (themeSet.get(id)?.count ?? 0) + 1 })
-            }
-        })
-
-        return {
-            masters: masterSet,
-            supers: superSet,
-            cats: catSet,
-            subs: subSet,
-            ages: ageSet,
-            themes: themeSet,
-        }
-    }, [products])
-
     // apply filters (multi-select)
     useEffect(() => {
         const term = q.trim().toLowerCase()
@@ -516,7 +464,7 @@ export default function ProductsClient() {
                             </div>
                         ) : (
                             <>
-                                <ProductGrid products={filtered} />
+                                <ProductGrid products={products} />
 
                                 <div className="mt-8 flex items-center justify-center">
                                     <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />

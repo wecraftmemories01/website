@@ -195,7 +195,7 @@ export default function SidebarFilters({
     } as Record<string, boolean>)
 
     // show only available (count > 0)
-    const onlyAvailable = (opts: Option[]) => opts.filter((o) => (o.count ?? 0) > 0)
+    const onlyAvailable = (opts: Option[]) => opts.filter((o) => o.count === undefined || o.count > 0)
 
     const filterOptions = (opts: Option[], q: string) =>
         opts
