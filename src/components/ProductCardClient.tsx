@@ -204,7 +204,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                             priority={false}
                         />
 
-                        <div className="absolute top-2 left-2 flex gap-1 items-center">
+                        {/* <div className="absolute top-2 left-2 flex gap-1 items-center">
                             {isOnSale && (
                                 <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-600 text-[10px] font-medium px-2 py-0.5 rounded-md shadow-sm">
                                     <Tag size={12} /> Sale
@@ -215,7 +215,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                                     Limited
                                 </span>
                             )}
-                        </div>
+                        </div> */}
 
                         <button
                             aria-pressed={wish}
