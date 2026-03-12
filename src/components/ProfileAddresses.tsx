@@ -555,8 +555,8 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                             {/* Address */}
                             <div className="text-sm text-slate-600 mt-2 wrap-break-word">
                                 {a.addressLine1}
-                                {a.addressLine2 ? `, ${a.addressLine2}` : ""}
-                                {a.addressLine3 ? `, ${a.addressLine3}` : ""}
+                                {a.addressLine2 ? ` ${a.addressLine2}` : ""}
+                                {a.addressLine3 ? ` ${a.addressLine3}` : ""}
                             </div>
 
                             {a.landmark && (
