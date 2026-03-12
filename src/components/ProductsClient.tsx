@@ -131,6 +131,19 @@ export default function ProductsClient() {
         }
     }, [products])
 
+    const themeCounts = useMemo(() => {
+        const map = new Map<string, number>()
+
+        products.forEach((p: any) => {
+            const id = String(p.themeId ?? '')
+            if (!id) return
+
+            map.set(id, (map.get(id) ?? 0) + 1)
+        })
+
+        return map
+    }, [products])
+
     useEffect(() => {
         const t = setTimeout(() => {
             setDebouncedMin(minPrice)
@@ -318,7 +331,8 @@ export default function ProductsClient() {
 
                             themeOptions={themes.map(t => ({
                                 id: t._id,
-                                label: t.publicName ?? t.name ?? ''
+                                label: t.publicName ?? t.name ?? '',
+                                count: themeCounts.get(t._id) ?? 0
                             }))}
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
@@ -401,7 +415,8 @@ export default function ProductsClient() {
 
                                         themeOptions={themes.map(t => ({
                                             id: t._id,
-                                            label: t.publicName ?? t.name ?? ''
+                                            label: t.publicName ?? t.name ?? '',
+                                            count: themeCounts.get(t._id) ?? 0
                                         }))}
                                         selectedMasters={selectedMasters}
                                         selectedSupers={selectedSupers}
