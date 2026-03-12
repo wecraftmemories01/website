@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import ProductGrid from './ProductGrid'
 import Pagination from './ui/Pagination'
@@ -14,7 +15,21 @@ type IdLabel = { _id: string; publicName?: string; name?: string }
 
 export default function ProductsClient() {
     const searchParams = useSearchParams() // read query params
-    const [products, setProducts] = useState<Product[]>([])
+    const router = useRouter()
+    const q = searchParams.get('q') ?? ''
+    const page = Number(searchParams.get('page') ?? 1)
+    const perPage = Number(searchParams.get('limit') ?? 16)
+    const paramsString = searchParams.toString()
+
+    const selectedThemes = searchParams.get('theme')
+        ? searchParams.get('theme')!.split(',')
+        : []
+    const [qState, setQState] = useState(q)
+
+    useEffect(() => {
+        setQState(q)
+    }, [q])
+
     const [allProducts, setAllProducts] = useState<Product[]>([])
     const [filtered, setFiltered] = useState<Product[]>([])
     const [totalRecords, setTotalRecords] = useState(0)
@@ -30,13 +45,11 @@ export default function ProductsClient() {
     const [themes, setThemes] = useState<IdLabel[]>([])
 
     // multi-select filter state (arrays)
-    const [q, setQ] = useState('')
     const [selectedMasters, setSelectedMasters] = useState<string[]>([])
     const [selectedSupers, setSelectedSupers] = useState<string[]>([])
     const [selectedCategories, setSelectedCategories] = useState<string[]>([])
     const [selectedSubs, setSelectedSubs] = useState<string[]>([])
     const [selectedAges, setSelectedAges] = useState<string[]>([])
-    const [selectedThemes, setSelectedThemes] = useState<string[]>([])
     const [inStockOnly, setInStockOnly] = useState(false)
     const [filtersOpen, setFiltersOpen] = useState(false)
     const [minPrice, setMinPrice] = useState<number | ''>('')
@@ -44,9 +57,7 @@ export default function ProductsClient() {
     const [debouncedMin, setDebouncedMin] = useState<number | ''>('')
     const [debouncedMax, setDebouncedMax] = useState<number | ''>('')
 
-    const [page, setPage] = useState(1)
     const perPageOptions = [16, 32, 64]
-    const [perPage, setPerPage] = useState<number>(16)
 
     const safeDateMs = (s?: string | null) => {
         if (!s) return 0
@@ -62,7 +73,7 @@ export default function ProductsClient() {
             setError(null)
             try {
                 const [pRes, allRes, mRes, sRes, cRes, subRes, ageRes, themeRes] = await Promise.all([
-                    fetch(`${API_BASE}/product/sell?page=${page}&limit=${perPage}`),
+                    fetch(`${API_BASE}/product/sell?${searchParams.toString()}`),
                     fetch(`${API_BASE}/product/sell?page=1&limit=1000`),
                     fetch(`${API_BASE}/master_category`),
                     fetch(`${API_BASE}/super_category`),
@@ -85,7 +96,6 @@ export default function ProductsClient() {
 
                 if (!mounted) return
 
-                setProducts(Array.isArray(pJson?.productData) ? pJson.productData : [])
                 setAllProducts(Array.isArray(allJson?.productData) ? allJson.productData : [])
                 setTotalRecords(pJson?.totalRecords ?? 0)
 
@@ -107,21 +117,10 @@ export default function ProductsClient() {
         return () => {
             mounted = false
         }
-    }, [page, perPage])
-
-    // If URL contains ?q=..., set the page search field to that value.
-    // useSearchParams returns a reactive object — include its string representation to trigger effect when params change.
-    useEffect(() => {
-        const urlQ = searchParams?.get('q') ?? ''
-        // only update if different to avoid stomping user typing
-        if (urlQ !== (q ?? '')) {
-            setQ(urlQ)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams?.toString()]) // intentionally depend on searchParams string
+    }, [paramsString])
 
     const priceStats = useMemo(() => {
-        const prices = products
+        const prices = allProducts
             .map(p => p.latestSalePrice?.discountedPrice ?? p.latestSalePrice?.actualPrice)
             .filter((p): p is number => typeof p === 'number')
 
@@ -133,7 +132,7 @@ export default function ProductsClient() {
             min: 1,
             max: Math.ceil(Math.max(...prices))
         }
-    }, [products])
+    }, [allProducts])
 
     const themeCounts = useMemo(() => {
         const map = new Map<string, number>()
@@ -159,8 +158,8 @@ export default function ProductsClient() {
 
     // apply filters (multi-select)
     useEffect(() => {
-        const term = q.trim().toLowerCase()
-        let list = allProducts.slice()
+        const term = qState.trim().toLowerCase()
+        let list = [...allProducts]
 
         if (selectedMasters.length) {
             list = list.filter((p) => selectedMasters.includes(String(p.masterCategoryId)))
@@ -227,7 +226,7 @@ export default function ProductsClient() {
 
         setFiltered(list)
     }, [
-        q,
+        qState,
         selectedMasters,
         selectedSupers,
         selectedCategories,
@@ -240,21 +239,6 @@ export default function ProductsClient() {
         allProducts
     ]);
 
-    useEffect(() => {
-        setPage(1)
-    }, [
-        q,
-        selectedMasters,
-        selectedSupers,
-        selectedCategories,
-        selectedSubs,
-        selectedAges,
-        selectedThemes,
-        inStockOnly,
-        debouncedMin,
-        debouncedMax
-    ])
-
     const total = filtered.length
     const totalPages = Math.ceil(total / perPage)
 
@@ -263,23 +247,43 @@ export default function ProductsClient() {
         return filtered.slice(start, start + perPage)
     }, [filtered, page, perPage])
 
-    // helpers to toggle selection arrays
     const toggle = (arr: string[], set: (v: string[]) => void, id: string) => {
         if (!id) return
         set(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id])
     }
 
+    function toggleTheme(themeId: string) {
+
+        const params = new URLSearchParams(searchParams.toString())
+
+        const current = params.get('theme')
+            ? params.get('theme')!.split(',')
+            : []
+
+        let next
+
+        if (current.includes(themeId)) {
+            next = current.filter(x => x !== themeId)
+        } else {
+            next = [...current, themeId]
+        }
+
+        if (next.length === 0) {
+            params.delete('theme')
+        } else {
+            params.set('theme', next.join(','))
+        }
+
+        params.set('page', '1')
+
+        router.push(`/products?${params.toString()}`)
+    }
+
     const clearAll = () => {
-        setQ('')
-        setMinPrice('')
-        setMaxPrice('')
-        setSelectedMasters([])
-        setSelectedSupers([])
-        setSelectedCategories([])
-        setSelectedSubs([])
-        setSelectedAges([])
-        setSelectedThemes([])
-        setInStockOnly(false)
+
+        const params = new URLSearchParams()
+
+        router.push(`/products?${params.toString()}`)
     }
 
     // UI: show which filters are available (only those with counts)
@@ -308,8 +312,19 @@ export default function ProductsClient() {
                     {/* Desktop sidebar */}
                     <aside className="hidden md:block bg-white rounded-lg shadow-sm p-4">
                         <SidebarFilters
-                            q={q}
-                            onQChange={setQ}
+                            q={qState}
+                            onQChange={(value) => {
+                                setQState(value)
+
+                                const params = new URLSearchParams(searchParams.toString())
+
+                                if (value) params.set('q', value)
+                                else params.delete('q')
+
+                                params.set('page', '1')
+
+                                router.push(`/products?${params.toString()}`)
+                            }}
                             inStockOnly={inStockOnly}
                             onToggleInStock={() => setInStockOnly((s) => !s)}
                             masterOptions={masterCategories.map(m => ({
@@ -359,7 +374,7 @@ export default function ProductsClient() {
                             onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
                             onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
                             onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
-                            onToggleTheme={(id) => toggle(selectedThemes, setSelectedThemes, id)}
+                            onToggleTheme={toggleTheme}
                             onClearAll={clearAll}
                         />
                     </aside>
@@ -392,8 +407,19 @@ export default function ProductsClient() {
                                     </div>
 
                                     <SidebarFilters
-                                        q={q}
-                                        onQChange={setQ}
+                                        q={qState}
+                                        onQChange={(value) => {
+                                            setQState(value)
+
+                                            const params = new URLSearchParams(searchParams.toString())
+
+                                            if (value) params.set('q', value)
+                                            else params.delete('q')
+
+                                            params.set('page', '1')
+
+                                            router.push(`/products?${params.toString()}`)
+                                        }}
                                         inStockOnly={inStockOnly}
                                         onToggleInStock={() => setInStockOnly((s) => !s)}
                                         masterOptions={masterCategories.map(m => ({
@@ -443,7 +469,7 @@ export default function ProductsClient() {
                                         onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
                                         onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
                                         onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
-                                        onToggleTheme={(id) => toggle(selectedThemes, setSelectedThemes, id)}
+                                        onToggleTheme={toggleTheme}
                                         onClearAll={clearAll}
                                     />
                                 </motion.div>
@@ -454,14 +480,22 @@ export default function ProductsClient() {
                     <main>
                         <div className="mb-4 flex items-center justify-between">
                             <div className="text-sm text-slate-600">
-                                Showing <span className="font-medium">{products.length}</span> of <span className="font-medium">{totalRecords}</span> products
+                                Showing <span className="font-medium">{pageItems.length}</span> of <span className="font-medium">{totalRecords}</span> products
                             </div>
 
                             <div className="flex items-center gap-3">
                                 <label className="text-xs text-slate-500 hidden sm:inline">Per page</label>
                                 <select
                                     value={perPage}
-                                    onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1) }}
+                                    onChange={(e) => {
+
+                                        const params = new URLSearchParams(searchParams.toString())
+
+                                        params.set('limit', e.target.value)
+                                        params.set('page', '1')
+
+                                        router.push(`/products?${params.toString()}`)
+                                    }}
                                     className="text-sm px-2 py-1 border rounded-md bg-white"
                                 >
                                     {perPageOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
@@ -495,7 +529,14 @@ export default function ProductsClient() {
                                             <Pagination
                                                 page={page}
                                                 totalPages={totalPages}
-                                                onPageChange={(p) => setPage(p)}
+                                                onPageChange={(p) => {
+
+                                                    const params = new URLSearchParams(searchParams.toString())
+                                                    params.set('page', String(p))
+
+                                                    router.push(`/products?${params.toString()}`)
+
+                                                }}
                                             />
                                         )}
                                     </div>

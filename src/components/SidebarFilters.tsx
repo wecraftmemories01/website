@@ -338,7 +338,13 @@ export default function SidebarFilters({
     const clearAges = () => selectedAges.forEach((id) => onToggleAge(id))
     const clearThemes = () => selectedThemes.forEach((id) => onToggleTheme(id))
 
-    const hasAnyFilters = [masters, supers, cats, subs, ages, themes].some((arr) => arr.length > 0)
+    const hasAnyFilters =
+    (themes.length > 0)
+    // || masters.length > 0
+    // || supers.length > 0
+    // || cats.length > 0
+    // || subs.length > 0
+    // || ages.length > 0
     const hasAnySelection =
         showSelectedChips.length > 0 ||
         inStockOnly ||
