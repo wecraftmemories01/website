@@ -15,6 +15,7 @@ type IdLabel = { _id: string; publicName?: string; name?: string }
 export default function ProductsClient() {
     const searchParams = useSearchParams() // read query params
     const [products, setProducts] = useState<Product[]>([])
+    const [allProducts, setAllProducts] = useState<Product[]>([])
     const [filtered, setFiltered] = useState<Product[]>([])
     const [totalRecords, setTotalRecords] = useState(0)
     const [loading, setLoading] = useState(true)
@@ -60,8 +61,9 @@ export default function ProductsClient() {
             setLoading(true)
             setError(null)
             try {
-                const [pRes, mRes, sRes, cRes, subRes, ageRes, themeRes] = await Promise.all([
+                const [pRes, allRes, mRes, sRes, cRes, subRes, ageRes, themeRes] = await Promise.all([
                     fetch(`${API_BASE}/product/sell?page=${page}&limit=${perPage}`),
+                    fetch(`${API_BASE}/product/sell?page=1&limit=1000`),
                     fetch(`${API_BASE}/master_category`),
                     fetch(`${API_BASE}/super_category`),
                     fetch(`${API_BASE}/category`),
@@ -70,8 +72,9 @@ export default function ProductsClient() {
                     fetch(`${API_BASE}/theme`),
                 ])
 
-                const [pJson, mJson, sJson, cJson, subJson, ageJson, themeJson] = await Promise.all([
+                const [pJson, allJson, mJson, sJson, cJson, subJson, ageJson, themeJson] = await Promise.all([
                     pRes.json().catch(() => ({})),
+                    allRes.json().catch(() => ({})),
                     mRes.json().catch(() => ({})),
                     sRes.json().catch(() => ({})),
                     cRes.json().catch(() => ({})),
@@ -83,6 +86,7 @@ export default function ProductsClient() {
                 if (!mounted) return
 
                 setProducts(Array.isArray(pJson?.productData) ? pJson.productData : [])
+                setAllProducts(Array.isArray(allJson?.productData) ? allJson.productData : [])
                 setTotalRecords(pJson?.totalRecords ?? 0)
 
                 setMasterCategories(Array.isArray(mJson?.masterCategoryData) ? mJson.masterCategoryData : [])
@@ -134,7 +138,7 @@ export default function ProductsClient() {
     const themeCounts = useMemo(() => {
         const map = new Map<string, number>()
 
-        products.forEach((p: any) => {
+        allProducts.forEach((p: any) => {
             const id = String(p.themeId ?? '')
             if (!id) return
 
@@ -142,7 +146,7 @@ export default function ProductsClient() {
         })
 
         return map
-    }, [products])
+    }, [allProducts])
 
     useEffect(() => {
         const t = setTimeout(() => {
