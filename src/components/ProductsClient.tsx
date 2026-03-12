@@ -16,6 +16,7 @@ export default function ProductsClient() {
     const searchParams = useSearchParams() // read query params
     const [products, setProducts] = useState<Product[]>([])
     const [filtered, setFiltered] = useState<Product[]>([])
+    const [totalRecords, setTotalRecords] = useState(0)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -60,7 +61,7 @@ export default function ProductsClient() {
             setError(null)
             try {
                 const [pRes, mRes, sRes, cRes, subRes, ageRes, themeRes] = await Promise.all([
-                    fetch(`${API_BASE}/product/sell`),
+                    fetch(`${API_BASE}/product/sell?page=${page}&limit=${perPage}`),
                     fetch(`${API_BASE}/master_category`),
                     fetch(`${API_BASE}/super_category`),
                     fetch(`${API_BASE}/category`),
@@ -82,6 +83,7 @@ export default function ProductsClient() {
                 if (!mounted) return
 
                 setProducts(Array.isArray(pJson?.productData) ? pJson.productData : [])
+                setTotalRecords(pJson?.totalRecords ?? 0)
 
                 setMasterCategories(Array.isArray(mJson?.masterCategoryData) ? mJson.masterCategoryData : [])
                 setSuperCategories(Array.isArray(sJson?.superCategoryData) ? sJson.superCategoryData : [])
@@ -101,7 +103,7 @@ export default function ProductsClient() {
         return () => {
             mounted = false
         }
-    }, [])
+    }, [page, perPage])
 
     // If URL contains ?q=..., set the page search field to that value.
     // useSearchParams returns a reactive object — include its string representation to trigger effect when params change.
@@ -274,9 +276,9 @@ export default function ProductsClient() {
         debouncedMax
     ])
 
-    const total = filtered.length
-    const totalPages = Math.max(1, Math.ceil(total / perPage))
-    const pageItems = filtered.slice((page - 1) * perPage, page * perPage)
+    const total = totalRecords
+    const totalPages = Math.max(1, Math.ceil(totalRecords / perPage))
+    const pageItems = filtered
 
     // helpers to toggle selection arrays
     const toggle = (arr: string[], set: (v: string[]) => void, id: string) => {
@@ -421,7 +423,7 @@ export default function ProductsClient() {
                     <main>
                         <div className="mb-4 flex items-center justify-between">
                             <div className="text-sm text-slate-600">
-                                Showing <span className="font-medium">{pageItems.length}</span> of <span className="font-medium">{total}</span> products
+                                Showing <span className="font-medium">{products.length}</span> of <span className="font-medium">{totalRecords}</span> products
                             </div>
 
                             <div className="flex items-center gap-3">
@@ -454,7 +456,7 @@ export default function ProductsClient() {
                             </div>
                         ) : (
                             <>
-                                <ProductGrid products={pageItems} />
+                                <ProductGrid products={filtered} />
 
                                 <div className="mt-8 flex items-center justify-center">
                                     <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
