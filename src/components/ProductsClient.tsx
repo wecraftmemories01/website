@@ -261,9 +261,23 @@ export default function ProductsClient() {
         })
 
         setFiltered(list)
+    }, [
+        q,
+        selectedMasters,
+        selectedSupers,
+        selectedCategories,
+        selectedSubs,
+        selectedAges,
+        selectedThemes,
+        inStockOnly,
+        debouncedMin,
+        debouncedMax,
+        products
+    ]);
+
+    useEffect(() => {
         setPage(1)
     }, [
-        products,
         q,
         selectedMasters,
         selectedSupers,
