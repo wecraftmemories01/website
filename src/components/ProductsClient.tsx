@@ -160,7 +160,7 @@ export default function ProductsClient() {
     // apply filters (multi-select)
     useEffect(() => {
         const term = q.trim().toLowerCase()
-        let list = products.slice()
+        let list = allProducts.slice()
 
         if (selectedMasters.length) {
             list = list.filter((p) => selectedMasters.includes(String(p.masterCategoryId)))
@@ -237,7 +237,7 @@ export default function ProductsClient() {
         inStockOnly,
         debouncedMin,
         debouncedMax,
-        products
+        allProducts
     ]);
 
     useEffect(() => {
@@ -255,7 +255,7 @@ export default function ProductsClient() {
         debouncedMax
     ])
 
-    const total = totalRecords
+    const total = filtered.length
     const totalPages = Math.max(1, Math.ceil(totalRecords / perPage))
     const pageItems = filtered
 
@@ -483,7 +483,7 @@ export default function ProductsClient() {
                             </div>
                         ) : (
                             <>
-                                <ProductGrid products={filtered} />
+                                <ProductGrid products={filtered.slice((page - 1) * perPage, page * perPage)} />
 
                                 <div className="mt-8 flex items-center justify-center">
                                     <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
