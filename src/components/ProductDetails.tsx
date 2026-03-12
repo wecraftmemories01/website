@@ -1011,9 +1011,9 @@ export default function ProductClient({ product }: { product: Product }) {
                         {/* Long Description */}
                         {longDescription && (
                             <div className="bg-white rounded-2xl shadow p-6">
-                                <h3 className="text-lg font-semibold text-[#004F64] mb-4">
+                                {/* <h3 className="text-lg font-semibold text-[#004F64] mb-4">
                                     Description
-                                </h3>
+                                </h3> */}
 
                                 <div
                                     className="prose max-w-none text-gray-700"
@@ -1118,7 +1118,7 @@ export default function ProductClient({ product }: { product: Product }) {
                             <div className="mt-4 text-xs text-gray-600 space-y-1">
                                 <div>✔ Secure checkout</div>
                                 <div>✔ Handmade in India</div>
-                                <div>✔ Easy returns</div>
+                                {/* <div>✔ Easy returns</div> */}
                             </div>
 
                             <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
