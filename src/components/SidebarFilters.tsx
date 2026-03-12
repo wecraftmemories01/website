@@ -83,8 +83,8 @@ function OptionChip({
             </span>
             <span
                 className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked
-                        ? 'bg-white text-[#0B5C73]'
-                        : 'bg-[#1FA6B8]/10 text-[#0B5C73]'
+                    ? 'bg-white text-[#0B5C73]'
+                    : 'bg-[#1FA6B8]/10 text-[#0B5C73]'
                     }`}
             >
                 {option.count ?? 0}
@@ -184,6 +184,7 @@ export default function SidebarFilters({
     const [searchSub, setSearchSub] = useState('')
     const [searchAge, setSearchAge] = useState('')
     const [searchTheme, setSearchTheme] = useState('')
+    const [showAll, setShowAll] = useState<Record<string, boolean>>({})
 
     const [expanded, setExpanded] = useState({
         master: true,
@@ -248,8 +249,8 @@ export default function SidebarFilters({
         limit?: number
     }) {
         const isExpanded = expanded[name]
-        const short = options.slice(0, limit)
-        const moreCount = Math.max(0, options.length - limit)
+        const short = showAll[name] ? options : options.slice(0, limit)
+        const moreCount = !showAll[name] ? Math.max(0, options.length - limit) : 0
 
         return (
             <div className="relative border rounded-lg p-3 bg-white shadow-sm">
@@ -303,12 +304,21 @@ export default function SidebarFilters({
                                     <OptionChip key={o.id} option={o} checked={selectedIds.includes(o.id)} onToggle={onToggle} />
                                 ))}
 
-                                {!search && moreCount > 0 && (
+                                {!search && moreCount > 0 && !showAll[name] && (
                                     <button
-                                        onClick={() => setExpanded((s) => ({ ...s, [name]: true }))}
+                                        onClick={() => setShowAll((s) => ({ ...s, [name]: true }))}
                                         className="px-3 py-1 rounded-full border text-sm text-slate-600 bg-slate-50 hover:bg-slate-100"
                                     >
                                         +{moreCount} more
+                                    </button>
+                                )}
+
+                                {showAll[name] && options.length > limit && (
+                                    <button
+                                        onClick={() => setShowAll((s) => ({ ...s, [name]: false }))}
+                                        className="px-3 py-1 rounded-full border text-sm text-slate-600 bg-slate-50 hover:bg-slate-100"
+                                    >
+                                        Show less
                                     </button>
                                 )}
 
