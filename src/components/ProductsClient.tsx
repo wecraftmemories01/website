@@ -343,12 +343,35 @@ export default function ProductsClient() {
                             onQChange={setQ}
                             inStockOnly={inStockOnly}
                             onToggleInStock={() => setInStockOnly((s) => !s)}
-                            masterOptions={toArrayWithCounts(availableFilterSets.masters)}
-                            superOptions={toArrayWithCounts(availableFilterSets.supers)}
-                            categoryOptions={toArrayWithCounts(availableFilterSets.cats)}
-                            subOptions={toArrayWithCounts(availableFilterSets.subs)}
-                            ageOptions={toArrayWithCounts(availableFilterSets.ages)}
-                            themeOptions={toArrayWithCounts(availableFilterSets.themes)}
+                            masterOptions={masterCategories.map(m => ({
+                                id: m._id,
+                                label: m.publicName ?? m.name ?? ''
+                            }))}
+
+                            superOptions={superCategories.map(s => ({
+                                id: s._id,
+                                label: s.publicName ?? s.name ?? ''
+                            }))}
+
+                            categoryOptions={categories.map(c => ({
+                                id: c._id,
+                                label: c.publicName ?? c.name ?? ''
+                            }))}
+
+                            subOptions={subCategories.map(s => ({
+                                id: s._id,
+                                label: s.publicName ?? s.name ?? ''
+                            }))}
+
+                            ageOptions={ageGroups.map(a => ({
+                                id: a._id,
+                                label: a.publicName ?? a.name ?? ''
+                            }))}
+
+                            themeOptions={themes.map(t => ({
+                                id: t._id,
+                                label: t.publicName ?? t.name ?? ''
+                            }))}
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
                             selectedCategories={selectedCategories}
@@ -403,12 +426,35 @@ export default function ProductsClient() {
                                         onQChange={setQ}
                                         inStockOnly={inStockOnly}
                                         onToggleInStock={() => setInStockOnly((s) => !s)}
-                                        masterOptions={toArrayWithCounts(availableFilterSets.masters)}
-                                        superOptions={toArrayWithCounts(availableFilterSets.supers)}
-                                        categoryOptions={toArrayWithCounts(availableFilterSets.cats)}
-                                        subOptions={toArrayWithCounts(availableFilterSets.subs)}
-                                        ageOptions={toArrayWithCounts(availableFilterSets.ages)}
-                                        themeOptions={toArrayWithCounts(availableFilterSets.themes)}
+                                        masterOptions={masterCategories.map(m => ({
+                                            id: m._id,
+                                            label: m.publicName ?? m.name ?? ''
+                                        }))}
+
+                                        superOptions={superCategories.map(s => ({
+                                            id: s._id,
+                                            label: s.publicName ?? s.name ?? ''
+                                        }))}
+
+                                        categoryOptions={categories.map(c => ({
+                                            id: c._id,
+                                            label: c.publicName ?? c.name ?? ''
+                                        }))}
+
+                                        subOptions={subCategories.map(s => ({
+                                            id: s._id,
+                                            label: s.publicName ?? s.name ?? ''
+                                        }))}
+
+                                        ageOptions={ageGroups.map(a => ({
+                                            id: a._id,
+                                            label: a.publicName ?? a.name ?? ''
+                                        }))}
+
+                                        themeOptions={themes.map(t => ({
+                                            id: t._id,
+                                            label: t.publicName ?? t.name ?? ''
+                                        }))}
                                         selectedMasters={selectedMasters}
                                         selectedSupers={selectedSupers}
                                         selectedCategories={selectedCategories}
