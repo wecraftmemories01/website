@@ -483,7 +483,7 @@ export default function ProductsClient() {
                             </div>
                         ) : (
                             <>
-                                <ProductGrid products={products} />
+                                <ProductGrid products={filtered} />
 
                                 <div className="mt-8 flex items-center justify-center">
                                     <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
