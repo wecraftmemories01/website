@@ -256,7 +256,7 @@ export default function ProductsClient() {
     ])
 
     const total = filtered.length
-    const totalPages = Math.max(1, Math.ceil(totalRecords / perPage))
+    const totalPages = Math.max(1, Math.ceil(total / perPage))
     const pageItems = filtered
 
     // helpers to toggle selection arrays
@@ -485,9 +485,11 @@ export default function ProductsClient() {
                             <>
                                 <ProductGrid products={filtered.slice((page - 1) * perPage, page * perPage)} />
 
-                                <div className="mt-8 flex items-center justify-center">
-                                    <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
-                                </div>
+                                {total > 0 && (
+                                    <div className="mt-8 flex items-center justify-center">
+                                        <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
+                                    </div>
+                                )}
                             </>
                         )}
                     </main>
