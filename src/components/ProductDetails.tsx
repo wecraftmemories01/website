@@ -1054,13 +1054,19 @@ export default function ProductClient({ product }: { product: Product }) {
                             </div>
 
                             <div className="mt-6 flex items-center gap-4">
-                                <div className={`flex items-center border rounded-lg overflow-hidden ${cartState !== "not_added" ? "opacity-50 pointer-events-none" : ""}`}>
+                                <div className={`flex items-center border rounded-lg overflow-hidden ${cartState !== "not_added" || isOutOfStock ? "opacity-50 pointer-events-none" : ""}`}>
                                     {cartState === "unknown" && (
                                         <div className="text-xs text-gray-400 mt-1">
                                             Checking cart…
                                         </div>
                                     )}
-                                    <button onClick={() => handleQuantity(-1)} disabled={quantity <= 1} className="px-3 py-2 disabled:opacity-50">−</button>
+                                    <button
+                                        onClick={() => handleQuantity(-1)}
+                                        disabled={quantity <= 1 || isOutOfStock}
+                                        className="px-3 py-2 disabled:opacity-50"
+                                    >
+                                        −
+                                    </button>
                                     <input aria-label="Quantity" value={quantity} onChange={(e) => {
                                         const v = Number(e.target.value || 1);
                                         if (Number.isNaN(v)) return;
@@ -1068,7 +1074,13 @@ export default function ProductClient({ product }: { product: Product }) {
                                         else if (stockNumber && v > stockNumber) setQuantity(stockNumber);
                                         else setQuantity(Math.floor(v));
                                     }} className="w-20 text-center py-2" />
-                                    <button onClick={() => handleQuantity(1)} disabled={Boolean(stockNumber && quantity >= stockNumber)} className="px-3 py-2 disabled:opacity-50">+</button>
+                                    <button
+                                        onClick={() => handleQuantity(1)}
+                                        disabled={isOutOfStock || Boolean(stockNumber && quantity >= stockNumber)}
+                                        className="px-3 py-2 disabled:opacity-50"
+                                    >
+                                        +
+                                    </button>
                                 </div>
 
                                 {cartState === "added" ? (
@@ -1246,10 +1258,10 @@ export default function ProductClient({ product }: { product: Product }) {
                             </div>
 
                             {/* Quantity */}
-                            <div className={`flex items-center border rounded-xl overflow-hidden ${cartState !== "not_added" ? "opacity-50 pointer-events-none" : ""}`}>
+                            <div className={`flex items-center border rounded-xl overflow-hidden ${cartState !== "not_added" || isOutOfStock ? "opacity-50 pointer-events-none" : ""}`}>
                                 <button
                                     onClick={() => handleQuantity(-1)}
-                                    disabled={quantity <= 1}
+                                    disabled={quantity <= 1 || isOutOfStock}
                                     className="px-3 py-2 text-lg disabled:opacity-40"
                                 >
                                     −
@@ -1261,7 +1273,7 @@ export default function ProductClient({ product }: { product: Product }) {
 
                                 <button
                                     onClick={() => handleQuantity(1)}
-                                    disabled={Boolean(stockNumber && quantity >= stockNumber)}
+                                    disabled={isOutOfStock || Boolean(stockNumber && quantity >= stockNumber)}
                                     className="px-3 py-2 text-lg disabled:opacity-40"
                                 >
                                     +
