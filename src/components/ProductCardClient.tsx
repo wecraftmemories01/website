@@ -235,7 +235,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
                     <div className="p-2 flex-1 flex flex-col justify-between">
                         <div>
-                            <h3 className="text-sm font-semibold text-slate-800 truncate" title={String(product.productName)}>
+                            <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-tight min-h-12" title={String(product.productName)}>
                                 {product.productName}
                             </h3>
 
