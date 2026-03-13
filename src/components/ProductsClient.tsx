@@ -142,16 +142,21 @@ export default function ProductsClient() {
     }, [allProducts])
 
     const themeCounts = useMemo(() => {
+
         const map = new Map<string, number>()
 
         allProducts.forEach((p: any) => {
-            const id = String(p.themeId ?? '')
-            if (!id) return
+
+            if (!p.themeId) return
+
+            const id = String(p.themeId)
 
             map.set(id, (map.get(id) ?? 0) + 1)
+
         })
 
         return map
+
     }, [allProducts])
 
     useEffect(() => {
@@ -184,8 +189,8 @@ export default function ProductsClient() {
             list = list.filter((p: any) => selectedAges.includes(String(p.ageGroupId ?? '')))
         }
         if (selectedThemes.length) {
-            list = list.filter((p: any) =>
-                selectedThemes.includes(String(p.themeId ?? '')) || selectedThemes.includes(String((p.theme ?? '').toLowerCase()))
+            list = list.filter((p) =>
+                selectedThemes.includes(String(p.themeId))
             )
         }
 
@@ -359,11 +364,14 @@ export default function ProductsClient() {
                                 label: a.publicName ?? a.name ?? ''
                             }))}
 
-                            themeOptions={themes.map(t => ({
-                                id: t._id,
-                                label: t.publicName ?? t.name ?? '',
-                                count: themeCounts.get(t._id) ?? 0
-                            }))}
+                            themeOptions={themes
+                                .map(t => ({
+                                    id: t._id,
+                                    label: t.publicName ?? t.name ?? '',
+                                    count: themeCounts.get(t._id) ?? 0
+                                }))
+                                .filter(t => t.count > 0)
+                            }
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
                             selectedCategories={selectedCategories}
@@ -454,11 +462,14 @@ export default function ProductsClient() {
                                             label: a.publicName ?? a.name ?? ''
                                         }))}
 
-                                        themeOptions={themes.map(t => ({
-                                            id: t._id,
-                                            label: t.publicName ?? t.name ?? '',
-                                            count: themeCounts.get(t._id) ?? 0
-                                        }))}
+                                        themeOptions={themes
+                                            .map(t => ({
+                                                id: t._id,
+                                                label: t.publicName ?? t.name ?? '',
+                                                count: themeCounts.get(t._id) ?? 0
+                                            }))
+                                            .filter(t => t.count > 0)
+                                        }
                                         selectedMasters={selectedMasters}
                                         selectedSupers={selectedSupers}
                                         selectedCategories={selectedCategories}
@@ -487,7 +498,7 @@ export default function ProductsClient() {
                     <main>
                         <div className="mb-4 flex items-center justify-between">
                             <div className="text-sm text-slate-600">
-                                Showing <span className="font-medium">{pageItems.length}</span> of <span className="font-medium">{totalRecords}</span> products
+                                Showing <span className="font-medium">{pageItems.length}</span> of <span className="font-medium">{total}</span> products
                             </div>
 
                             <div className="flex items-center gap-3">

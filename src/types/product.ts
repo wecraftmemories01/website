@@ -4,6 +4,7 @@ export interface Product {
     superCategoryId: string;
     categoryId: string;
     subCategoryId: string;
+    themeId?: string; 
     ageGroupId: string;
     genderId: string;
     productThemeId: string;
