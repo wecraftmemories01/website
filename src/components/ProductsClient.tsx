@@ -209,12 +209,24 @@ export default function ProductsClient() {
         }
 
         if (term) {
-            list = list.filter((p) => {
+            list = list.filter((p: any) => {
+
                 const name = (p.productName ?? '').toLowerCase()
                 const sub = (p.subCategoryPublicName ?? '').toLowerCase()
                 const cat = (p.categoryPublicName ?? '').toLowerCase()
                 const sup = (p.superCategoryPublicName ?? '').toLowerCase()
-                return name.includes(term) || sub.includes(term) || cat.includes(term) || sup.includes(term)
+
+                const tags = Array.isArray(p.tags)
+                    ? p.tags.join(' ').toLowerCase()
+                    : ''
+
+                return (
+                    name.includes(term) ||
+                    sub.includes(term) ||
+                    cat.includes(term) ||
+                    sup.includes(term) ||
+                    tags.includes(term)
+                )
             })
         }
 
