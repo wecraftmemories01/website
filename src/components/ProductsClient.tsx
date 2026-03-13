@@ -145,7 +145,7 @@ export default function ProductsClient() {
 
         const map = new Map<string, number>()
 
-        allProducts.forEach((p: any) => {
+        filtered.forEach((p: any) => {
 
             if (!p.themeId) return
 
@@ -157,7 +157,7 @@ export default function ProductsClient() {
 
         return map
 
-    }, [allProducts])
+    }, [filtered])
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -176,21 +176,26 @@ export default function ProductsClient() {
         if (selectedMasters.length) {
             list = list.filter((p) => selectedMasters.includes(String(p.masterCategoryId)))
         }
+
         if (selectedSupers.length) {
             list = list.filter((p) => selectedSupers.includes(String(p.superCategoryId)))
         }
+
         if (selectedCategories.length) {
             list = list.filter((p) => selectedCategories.includes(String(p.categoryId)))
         }
+
         if (selectedSubs.length) {
             list = list.filter((p) => selectedSubs.includes(String(p.subCategoryId)))
         }
+
         if (selectedAges.length) {
             list = list.filter((p: any) => selectedAges.includes(String(p.ageGroupId ?? '')))
         }
+
         if (selectedThemes.length) {
             list = list.filter((p) =>
-                selectedThemes.includes(String(p.themeId))
+                p.themeId && selectedThemes.includes(String(p.themeId))
             )
         }
 
@@ -297,10 +302,6 @@ export default function ProductsClient() {
 
         router.push(`/products?${params.toString()}`)
     }
-
-    // UI: show which filters are available (only those with counts)
-    const toArrayWithCounts = (map: Map<string, { label: string; count: number }>) =>
-        Array.from(map.entries()).map(([id, v]) => ({ id, label: v.label, count: v.count }))
 
     return (
         <div className="min-h-screen bg-gray-50 text-slate-900">
@@ -498,7 +499,9 @@ export default function ProductsClient() {
                     <main>
                         <div className="mb-4 flex items-center justify-between">
                             <div className="text-sm text-slate-600">
-                                Showing <span className="font-medium">{pageItems.length}</span> of <span className="font-medium">{total}</span> products
+                                Showing <span className="font-medium">{Math.min((page - 1) * perPage + 1, total)}</span> –
+                                <span className="font-medium">{Math.min(page * perPage, total)}</span> of
+                                <span className="font-medium"> {total}</span> products
                             </div>
 
                             <div className="flex items-center gap-3">
