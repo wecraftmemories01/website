@@ -37,6 +37,11 @@ export default function ProductsClient() {
 
     }, [searchParams])
 
+    useEffect(() => {
+        const urlQ = searchParams.get('q') ?? ''
+        setQState(urlQ)
+    }, [searchParams])
+
     const [allProducts, setAllProducts] = useState<Product[]>([])
     const [filtered, setFiltered] = useState<Product[]>([])
     const [totalRecords, setTotalRecords] = useState(0)
