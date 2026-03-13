@@ -21,14 +21,21 @@ export default function ProductsClient() {
     const perPage = Number(searchParams.get('limit') ?? 16)
     const paramsString = searchParams.toString()
 
-    const selectedThemes = searchParams.get('theme')
-        ? searchParams.get('theme')!.split(',')
-        : []
+    const [selectedThemes, setSelectedThemes] = useState<string[]>([])
     const [qState, setQState] = useState(q)
 
     useEffect(() => {
-        setQState(q)
-    }, [q])
+
+        const themeParam = searchParams.get('theme')
+
+        if (!themeParam) {
+            setSelectedThemes([])
+            return
+        }
+
+        setSelectedThemes(themeParam.split(','))
+
+    }, [searchParams])
 
     const [allProducts, setAllProducts] = useState<Product[]>([])
     const [filtered, setFiltered] = useState<Product[]>([])
@@ -256,9 +263,7 @@ export default function ProductsClient() {
 
         const params = new URLSearchParams(searchParams.toString())
 
-        const current = params.get('theme')
-            ? params.get('theme')!.split(',')
-            : []
+        const current = selectedThemes
 
         let next
 
@@ -267,6 +272,8 @@ export default function ProductsClient() {
         } else {
             next = [...current, themeId]
         }
+
+        setSelectedThemes(next)
 
         if (next.length === 0) {
             params.delete('theme')
