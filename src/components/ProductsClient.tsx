@@ -322,41 +322,35 @@ export default function ProductsClient() {
 
     return (
         <div className="min-h-screen bg-gray-50 text-slate-900">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold">Shop</h1>
-                        <p className="text-sm text-slate-600">Handmade woolen items — interactive filters on the left.</p>
-                    </div>
-                    <div className="md:hidden">
-                        <button
-                            onClick={() => setFiltersOpen(true)}
-                            className="px-4 py-2 rounded-md border bg-white shadow-sm text-sm font-medium"
-                        >
-                            Filters
-                        </button>
-                    </div>
+            <div className="max-w-350 mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* SHOP HEADER */}
+                <div className="mb-10">
+                    <h1 className="text-3xl font-bold text-slate-900">
+                        Shop
+                    </h1>
+
+                    <p className="text-sm text-slate-500 mt-1">
+                        Handmade crochet items crafted with care.
+                    </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6">
-                    {/* Desktop sidebar */}
-                    <aside className="hidden md:block bg-white rounded-lg shadow-sm p-4">
+                {/* MAIN GRID */}
+                <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
+                    {/* FILTER SIDEBAR */}
+                    <aside className="hidden lg:block bg-white rounded-xl shadow-sm p-4 h-fit sticky top-6">
                         <SidebarFilters
                             q={qState}
                             onQChange={(value) => {
                                 setQState(value)
-
                                 const params = new URLSearchParams(searchParams.toString())
-
                                 if (value) params.set('q', value)
                                 else params.delete('q')
-
                                 params.set('page', '1')
-
                                 router.push(`/products?${params.toString()}`)
                             }}
                             inStockOnly={inStockOnly}
                             onToggleInStock={() => setInStockOnly((s) => !s)}
+
                             masterOptions={masterCategories.map(m => ({
                                 id: m._id,
                                 label: m.publicName ?? m.name ?? ''
@@ -390,6 +384,7 @@ export default function ProductsClient() {
                                 }))
                                 .filter(t => t.count > 0)
                             }
+
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
                             selectedCategories={selectedCategories}
@@ -412,171 +407,78 @@ export default function ProductsClient() {
                         />
                     </aside>
 
-                    <AnimatePresence>
-                        {filtersOpen && (
-                            <div className="fixed inset-0 z-50 md:hidden">
-                                {/* Overlay */}
-                                <div
-                                    className="absolute inset-0 bg-black/40"
-                                    onClick={() => setFiltersOpen(false)}
-                                />
-
-                                {/* Drawer */}
-                                <motion.div
-                                    initial={{ x: '-100%' }}
-                                    animate={{ x: 0 }}
-                                    exit={{ x: '-100%' }}
-                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                                    className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-white shadow-xl p-4 overflow-y-auto"
-                                >
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-lg font-semibold">Filters</h2>
-                                        <button
-                                            onClick={() => setFiltersOpen(false)}
-                                            className="p-2 rounded-md hover:bg-slate-100"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-
-                                    <SidebarFilters
-                                        q={qState}
-                                        onQChange={(value) => {
-                                            setQState(value)
-
-                                            const params = new URLSearchParams(searchParams.toString())
-
-                                            if (value) params.set('q', value)
-                                            else params.delete('q')
-
-                                            params.set('page', '1')
-
-                                            router.push(`/products?${params.toString()}`)
-                                        }}
-                                        inStockOnly={inStockOnly}
-                                        onToggleInStock={() => setInStockOnly((s) => !s)}
-                                        masterOptions={masterCategories.map(m => ({
-                                            id: m._id,
-                                            label: m.publicName ?? m.name ?? ''
-                                        }))}
-
-                                        superOptions={superCategories.map(s => ({
-                                            id: s._id,
-                                            label: s.publicName ?? s.name ?? ''
-                                        }))}
-
-                                        categoryOptions={categories.map(c => ({
-                                            id: c._id,
-                                            label: c.publicName ?? c.name ?? ''
-                                        }))}
-
-                                        subOptions={subCategories.map(s => ({
-                                            id: s._id,
-                                            label: s.publicName ?? s.name ?? ''
-                                        }))}
-
-                                        ageOptions={ageGroups.map(a => ({
-                                            id: a._id,
-                                            label: a.publicName ?? a.name ?? ''
-                                        }))}
-
-                                        themeOptions={themes
-                                            .map(t => ({
-                                                id: t._id,
-                                                label: t.publicName ?? t.name ?? '',
-                                                count: themeCounts.get(t._id) ?? 0
-                                            }))
-                                            .filter(t => t.count > 0)
-                                        }
-                                        selectedMasters={selectedMasters}
-                                        selectedSupers={selectedSupers}
-                                        selectedCategories={selectedCategories}
-                                        selectedSubs={selectedSubs}
-                                        selectedAges={selectedAges}
-                                        selectedThemes={selectedThemes}
-                                        minPrice={minPrice}
-                                        maxPrice={maxPrice}
-                                        onMinPriceChange={setMinPrice}
-                                        onMaxPriceChange={setMaxPrice}
-                                        priceRangeMin={priceStats.min}
-                                        priceRangeMax={priceStats.max}
-                                        onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
-                                        onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
-                                        onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
-                                        onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
-                                        onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
-                                        onToggleTheme={toggleTheme}
-                                        onClearAll={clearAll}
-                                    />
-                                </motion.div>
-                            </div>
-                        )}
-                    </AnimatePresence>
-
+                    {/* PRODUCT AREA */}
                     <main>
-                        <div className="mb-4 flex items-center justify-between">
-                            <div className="text-sm text-slate-600">
-                                Showing <span className="font-medium">{Math.min((page - 1) * perPage + 1, total)}</span> –
-                                <span className="font-medium">{Math.min(page * perPage, total)}</span> of
-                                <span className="font-medium"> {total}</span> products
-                            </div>
+                        {/* TOOLBAR */}
+                        <div className="flex items-center justify-between mb-6">
+                            <p className="text-sm text-slate-500">
+                                {total} products
+                            </p>
 
                             <div className="flex items-center gap-3">
-                                <label className="text-xs text-slate-500 hidden sm:inline">Per page</label>
+                                <span className="text-sm text-slate-500">
+                                    Per page
+                                </span>
+
                                 <select
                                     value={perPage}
                                     onChange={(e) => {
-
                                         const params = new URLSearchParams(searchParams.toString())
-
                                         params.set('limit', e.target.value)
                                         params.set('page', '1')
 
                                         router.push(`/products?${params.toString()}`)
                                     }}
-                                    className="text-sm px-2 py-1 border rounded-md bg-white"
+                                    className="text-sm px-3 py-1 border rounded-md bg-white"
                                 >
-                                    {perPageOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                                    {perPageOptions.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                            {opt}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
 
+                        {/* PRODUCT GRID */}
                         {loading ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {Array.from({ length: perPage }).map((_, i) => (
-                                    <div key={i} className="animate-pulse bg-white rounded-xl p-4 h-64" />
+                                    <div
+                                        key={i}
+                                        className="animate-pulse bg-white rounded-xl p-4 h-64"
+                                    />
+
                                 ))}
                             </div>
                         ) : error ? (
                             <div className="text-center py-12">
-                                <p className="text-rose-600 font-medium">Unable to load products</p>
-                                <p className="text-sm text-slate-600 mt-2">{error}</p>
-                            </div>
-                        ) : total === 0 ? (
-                            <div className="text-center py-16">
-                                <h3 className="text-xl font-semibold">No products found</h3>
-                                <p className="text-sm text-slate-500 mt-2">Change filters or clear all to see more products.</p>
+                                <p className="text-rose-600 font-medium">
+                                    Unable to load products
+                                </p>
+
+                                <p className="text-sm text-slate-600 mt-2">
+                                    {error}
+                                </p>
                             </div>
                         ) : (
                             <>
                                 <ProductGrid products={pageItems} />
 
-                                {total > 0 && (
-                                    <div className="mt-8 flex items-center justify-center">
-                                        {totalPages > 1 && (
-                                            <Pagination
-                                                page={page}
-                                                totalPages={totalPages}
-                                                onPageChange={(p) => {
+                                {totalPages > 1 && (
+                                    <div className="mt-10 flex justify-center">
+                                        <Pagination
+                                            page={page}
+                                            totalPages={totalPages}
+                                            onPageChange={(p) => {
 
-                                                    const params = new URLSearchParams(searchParams.toString())
-                                                    params.set('page', String(p))
+                                                const params = new URLSearchParams(searchParams.toString())
+                                                params.set('page', String(p))
 
-                                                    router.push(`/products?${params.toString()}`)
+                                                router.push(`/products?${params.toString()}`)
 
-                                                }}
-                                            />
-                                        )}
+                                            }}
+                                        />
                                     </div>
                                 )}
                             </>
@@ -584,6 +486,6 @@ export default function ProductsClient() {
                     </main>
                 </div>
             </div>
-        </div >
+        </div>
     )
 }

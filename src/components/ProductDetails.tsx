@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { addToCart } from "../lib/cart";
+import { addToCart, isInCart } from "../lib/cart";
 import { authFetch } from "@/lib/auth";
 import {
     addFavouriteAPI,
@@ -607,28 +607,64 @@ export default function ProductClient({ product }: { product: Product }) {
 
     /* ------------------ NEW: check if product present in cart once, and on cartUpdated ------------------ */
     useEffect(() => {
-        let active = true;
 
-        async function checkCartPresence() {
+        if (typeof window === "undefined") return;
+
+        const syncFromCart = async () => {
+
             try {
-                const customerId = getStoredCustomerId();
-                if (!customerId) {
-                    if (active) setCartState("not_added");
+
+                // 1️⃣ Check browser cart first (guest cart)
+                const inCart = isInCart(String(_id));
+
+                if (inCart) {
+                    setCartState("added");
                     return;
                 }
-                const res = await authFetch(`/cart?customerId=${customerId}`, { method: "GET" });
-                const payload = await res.json();
-                if (!active) return;
-                const cartData = Array.isArray(payload?.cartData) ? payload.cartData : [];
-                let foundAny = false;
-                for (const c of cartData) {
-                    const sellItems = Array.isArray(c?.sellItems) ? c.sellItems : [];
-                    const found = sellItems.find((s: any) => String(s.productId) === String(_id) || String(s.product?.productId) === String(_id));
-                    if (found) {
-                        foundAny = true;
 
-                        // sync quantity from cart
-                        const q = Number(found.quantity ?? found.qty ?? 1);
+                // 2️⃣ If not found locally, check server cart (logged in users)
+                const customerId = getStoredCustomerId();
+
+                if (!customerId) {
+                    setCartState("not_added");
+                    return;
+                }
+
+                const res = await authFetch(`/cart?customerId=${customerId}`, {
+                    method: "GET"
+                });
+
+                const payload = await res.json();
+
+                const cartData = Array.isArray(payload?.cartData)
+                    ? payload.cartData
+                    : payload?.cartData
+                        ? [payload.cartData]
+                        : [];
+
+                let found = false;
+
+                for (const c of cartData) {
+
+                    const sellItems = Array.isArray(c?.sellItems) ? c.sellItems : [];
+
+                    const match = sellItems.find((s: any) => {
+
+                        const pid =
+                            s.productId?._id ||
+                            s.productId ||
+                            s.product?._id ||
+                            s.product;
+
+                        return String(pid) === String(_id);
+
+                    });
+
+                    if (match) {
+                        found = true;
+
+                        const q = Number(match.quantity ?? match.qty ?? 1);
+
                         if (Number.isFinite(q) && q > 0) {
                             setQuantity(q);
                         }
@@ -636,26 +672,25 @@ export default function ProductClient({ product }: { product: Product }) {
                         break;
                     }
                 }
-                if (active) {
-                    setCartState(foundAny ? "added" : "not_added");
-                }
+
+                setCartState(found ? "added" : "not_added");
+
             } catch (err) {
-                console.warn('Could not fetch cart to check presence', err);
-                if (active) setCartState("not_added");
+                console.warn("Could not check cart", err);
+                setCartState("not_added");
             }
-        }
-
-        checkCartPresence();
-
-        const onCartUpdated = () => {
-            checkCartPresence().catch(() => { });
         };
-        window.addEventListener('cartUpdated', onCartUpdated as EventListener);
+
+        // initial check
+        syncFromCart();
+
+        // listen for cart changes
+        window.addEventListener("cartChanged", syncFromCart);
 
         return () => {
-            active = false;
-            window.removeEventListener('cartUpdated', onCartUpdated as EventListener);
+            window.removeEventListener("cartChanged", syncFromCart);
         };
+
     }, [_id]);
 
     // ===== add to cart using shared helper OR fallback to raw fetch =====
@@ -1055,11 +1090,6 @@ export default function ProductClient({ product }: { product: Product }) {
 
                             <div className="mt-6 flex items-center gap-4">
                                 <div className={`flex items-center border rounded-lg overflow-hidden ${cartState !== "not_added" || isOutOfStock ? "opacity-50 pointer-events-none" : ""}`}>
-                                    {cartState === "unknown" && (
-                                        <div className="text-xs text-gray-400 mt-1">
-                                            Checking cart…
-                                        </div>
-                                    )}
                                     <button
                                         onClick={() => handleQuantity(-1)}
                                         disabled={quantity <= 1 || isOutOfStock}
@@ -1278,20 +1308,21 @@ export default function ProductClient({ product }: { product: Product }) {
 
                             {/* Button */}
                             {cartState === "added" ? (
+
                                 <button
                                     onClick={() => router.push("/cart")}
                                     className="flex-1 py-3 rounded-xl bg-green-600 text-white font-semibold shadow-md"
                                 >
                                     Go to Cart →
                                 </button>
+
                             ) : (
                                 <button
                                     onClick={handleAddToCart}
                                     disabled={cartState !== "not_added" || adding || isOutOfStock}
-                                    className={`flex-1 py-3 rounded-xl text-white font-semibold shadow-md transition-all duration-200 active:scale-[0.98]
-                                        ${isOutOfStock
-                                            ? "bg-gray-300 cursor-not-allowed"
-                                            : "bg-[#2F9E5A] hover:brightness-95"
+                                    className={`flex-1 py-3 rounded-xl text-white font-semibold shadow-md ${isOutOfStock
+                                        ? "bg-gray-300 cursor-not-allowed"
+                                        : "bg-[#2F9E5A] hover:brightness-95"
                                         }`}
                                 >
                                     {adding ? "Adding…" : "Add to Cart"}
