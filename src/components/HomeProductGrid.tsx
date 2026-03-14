@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from "next/navigation"
 import React, { useRef } from 'react'
 import ProductCardClient from './ProductCardClient'
 import type { Product } from '../types/product'
@@ -8,6 +9,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 type Props = { products: Product[] }
 
 export default function ProductGrid({ products }: Props) {
+
+    const router = useRouter()
 
     const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -34,9 +37,12 @@ export default function ProductGrid({ products }: Props) {
                     Popular Products
                 </h2>
 
-                <span className="text-xs text-slate-500">
-                    {products.length} items
-                </span>
+                <button
+                    onClick={() => router.push("/products")}
+                    className="inline-flex items-center text-sm font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                >
+                    View All Products →
+                </button>
             </div>
 
 
@@ -52,16 +58,7 @@ export default function ProductGrid({ products }: Props) {
                         {/* LEFT BUTTON */}
                         <button
                             onClick={() => scroll("left")}
-                            className="
-                                absolute left-0 top-1/2 -translate-y-1/2
-                                z-20
-                                bg-white/90 backdrop-blur
-                                shadow-md border
-                                rounded-full
-                                w-9 h-9
-                                flex items-center justify-center
-                                active:scale-95
-                            "
+                            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-md border rounded-full w-9 h-9 flex items-center justify-center active:scale-95"
                         >
                             <ChevronLeft size={18} />
                         </button>
@@ -69,16 +66,7 @@ export default function ProductGrid({ products }: Props) {
                         {/* RIGHT BUTTON */}
                         <button
                             onClick={() => scroll("right")}
-                            className="
-                                absolute right-0 top-1/2 -translate-y-1/2
-                                z-20
-                                bg-white/90 backdrop-blur
-                                shadow-md border
-                                rounded-full
-                                w-9 h-9
-                                flex items-center justify-center
-                                active:scale-95
-                            "
+                            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-md border rounded-full w-9 h-9 flex items-center justify-center active:scale-95"
                         >
                             <ChevronRight size={18} />
                         </button>
@@ -87,25 +75,12 @@ export default function ProductGrid({ products }: Props) {
                         {/* SCROLL AREA */}
                         <div
                             ref={scrollRef}
-                            className="
-                                flex
-                                gap-4
-                                overflow-x-auto
-                                scroll-smooth
-                                snap-x snap-mandatory
-                                px-6
-                                pb-4
-                            "
+                            className=" flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory px-6 pb-4 "
                         >
                             {products.map((p) => (
                                 <div
                                     key={p._id}
-                                    className="
-                                        snap-center
-                                        shrink-0
-                                        w-[80%]
-                                        max-w-65
-                                    "
+                                    className="snap-center shrink-0 w-[80%] max-w-65"
                                 >
                                     <ProductCardClient product={p} />
                                 </div>
@@ -117,14 +92,7 @@ export default function ProductGrid({ products }: Props) {
 
                     {/* DESKTOP GRID */}
                     <div
-                        className="
-                            hidden
-                            sm:grid
-                            grid-cols-3
-                            md:grid-cols-4
-                            lg:grid-cols-5
-                            gap-5
-                        "
+                        className="hidden sm:grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"
                     >
                         {products.map((p) => (
                             <ProductCardClient
