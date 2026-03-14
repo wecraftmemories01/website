@@ -1239,14 +1239,10 @@ export default function ProductClient({ product }: { product: Product }) {
 
                 {/* ================= STICKY MOBILE BUY BAR ================= */}
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40">
-
                     {/* subtle fade */}
                     <div className="h-6 bg-linear-to-t from-white to-transparent pointer-events-none" />
-
-                    <div className="bg-white border-t shadow-[0_-6px_20px_rgba(0,0,0,0.08)] px-4 py-3">
-
+                    <div className="bg-[#004F64]/5 border-t border-[#004F64]/10 shadow-[0_-10px_30px_rgba(0,0,0,0.12)] px-4 py-3 backdrop-blur-md">
                         <div className="flex items-center gap-3">
-
                             {/* Price */}
                             <div className="flex flex-col min-w-22.5">
                                 <span className="text-lg font-extrabold text-[#2F9E5A] leading-tight">
@@ -1295,7 +1291,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                     className={`flex-1 py-3 rounded-xl text-white font-semibold shadow-md transition-all duration-200 active:scale-[0.98]
                                         ${isOutOfStock
                                             ? "bg-gray-300 cursor-not-allowed"
-                                            : "bg-[#2F9E5A] hover:bg-[#c93b3b]"
+                                            : "bg-[#2F9E5A] hover:brightness-95"
                                         }`}
                                 >
                                     {adding ? "Adding…" : "Add to Cart"}
