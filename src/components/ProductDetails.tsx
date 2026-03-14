@@ -870,7 +870,7 @@ export default function ProductClient({ product }: { product: Product }) {
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-6 py-10 pb-28 lg:pb-10">
+            <div className="max-w-7xl mx-auto px-6 pt-4 pb-28 lg:pt-10 lg:pb-10">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                     <div className="lg:col-span-2 space-y-6">
                         <div className="relative">
@@ -911,10 +911,10 @@ export default function ProductClient({ product }: { product: Product }) {
                                                 onClick={() => setSelectedImage(src)}
                                                 className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden transition-all duration-300
                                                     ${isSelected
-                                                            ? "ring-2 ring-[#2F9E5A] scale-110"
-                                                            : "hover:scale-110 opacity-80 hover:opacity-100"
-                                                        }`}
-                                                >
+                                                        ? "ring-2 ring-[#2F9E5A] scale-110"
+                                                        : "hover:scale-110 opacity-80 hover:opacity-100"
+                                                    }`}
+                                            >
                                                 <Image
                                                     src={src}
                                                     alt={`${productName ?? "Product"} ${idx + 1}`}
