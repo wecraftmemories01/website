@@ -891,7 +891,7 @@ export default function ClientCart() {
             ) : null}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start">
-                <section className="order-1 md:order-none md:col-span-2 space-y-6">
+                <section className="order-1 md:order-0 md:col-span-2 space-y-6">
                     <div className="bg-white rounded-xl shadow-lg p-5">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold">Items in your cart</h3>
@@ -957,7 +957,7 @@ export default function ClientCart() {
                     </div>
                 </section>
 
-                <aside className="order-2 md:order-none bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
+                <aside className="order-2 md:order-0 bg-linear-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
                     <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-lg">Summary</h4>
                         <div className="text-sm text-gray-500">Ready when you are</div>
@@ -1003,7 +1003,7 @@ export default function ClientCart() {
                 </aside>
 
                 {/* Saved for later */}
-                <div className="order-3 md:order-none md:col-span-2 bg-white rounded-xl shadow-lg p-5">
+                <div className="order-3 md:order-0 md:col-span-2 bg-white rounded-xl shadow-lg p-5">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-semibold">Saved for later</h3>
                         <div className="text-sm text-gray-500">

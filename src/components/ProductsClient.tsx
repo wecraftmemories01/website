@@ -150,7 +150,7 @@ export default function ProductsClient() {
 
         const map = new Map<string, number>()
 
-        filtered.forEach((p: any) => {
+        allProducts.forEach((p: any) => {
 
             if (!p.themeId) return
 
@@ -162,7 +162,7 @@ export default function ProductsClient() {
 
         return map
 
-    }, [filtered])
+    }, [allProducts])
 
     useEffect(() => {
         const t = setTimeout(() => {
