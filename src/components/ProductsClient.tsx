@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import ProductGrid from './ProductGrid'
@@ -16,6 +16,7 @@ type IdLabel = { _id: string; publicName?: string; name?: string }
 export default function ProductsClient() {
     const searchParams = useSearchParams() // read query params
     const router = useRouter()
+    const productsTopRef = useRef<HTMLDivElement | null>(null)
     const q = searchParams.get('q') ?? ''
     const page = Number(searchParams.get('page') ?? 1)
     const perPage = Number(searchParams.get('limit') ?? 16)
@@ -36,6 +37,15 @@ export default function ProductsClient() {
         setSelectedThemes(themeParam.split(','))
 
     }, [searchParams])
+
+    useEffect(() => {
+        if (productsTopRef.current) {
+            productsTopRef.current.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            })
+        }
+    }, [page])
 
     useEffect(() => {
         const urlQ = searchParams.get('q') ?? ''
@@ -408,7 +418,7 @@ export default function ProductsClient() {
                     </aside>
 
                     {/* PRODUCT AREA */}
-                    <main>
+                    <main ref={productsTopRef}>
                         {/* TOOLBAR */}
                         <div className="flex items-center justify-between mb-6">
                             <p className="text-sm text-slate-500">
