@@ -17,7 +17,7 @@ export default function HeroClient() {
                 to-[#F1F5F6]
                 text-[#0B5C73]
                 shadow-md
-                min-h-[320px] md:min-h-[420px]
+                min-h-80 md:min-h-105
             "
         >
 
