@@ -901,7 +901,7 @@ export default function ProductClient({ product }: { product: Product }) {
 
                             {/* Floating Thumbnail Strip */}
                             {images.length > 1 && (
-                                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-4 bg-white px-6 py-3 rounded-2xl shadow-xl border border-gray-100">
+                                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-4 bg-white px-6 py-3 rounded-2xl shadow-xl border border-gray-100 overflow-x-auto max-w-[90vw]">
                                     {images.map((src, idx) => {
                                         const isSelected = selectedImage === src;
 
@@ -909,12 +909,12 @@ export default function ProductClient({ product }: { product: Product }) {
                                             <button
                                                 key={idx}
                                                 onClick={() => setSelectedImage(src)}
-                                                className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-300
-                            ${isSelected
-                                                        ? "ring-2 ring-[#2F9E5A] scale-110"
-                                                        : "hover:scale-110 opacity-80 hover:opacity-100"
-                                                    }`}
-                                            >
+                                                className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden transition-all duration-300
+                                                    ${isSelected
+                                                            ? "ring-2 ring-[#2F9E5A] scale-110"
+                                                            : "hover:scale-110 opacity-80 hover:opacity-100"
+                                                        }`}
+                                                >
                                                 <Image
                                                     src={src}
                                                     alt={`${productName ?? "Product"} ${idx + 1}`}
