@@ -335,7 +335,7 @@ export default function LoginPage() {
                             </div>
 
                             <div className="mt-3 text-xs text-center text-gray-400">
-                                By signing in you agree to our <a className="underline">Terms</a> and <a className="underline">Privacy</a>.
+                                By signing in you agree to our <a href="/terms" className="underline">Terms</a> and <a href="/privacy" className="underline">Privacy</a>.
                             </div>
                         </form>
                     )}
