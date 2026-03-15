@@ -74,6 +74,8 @@ export default function ProductsClient() {
     const [selectedAges, setSelectedAges] = useState<string[]>([])
     const [inStockOnly, setInStockOnly] = useState(false)
     const [filtersOpen, setFiltersOpen] = useState(false)
+    const [sortOpen, setSortOpen] = useState(false)
+    const [sortBy, setSortBy] = useState("latest")
     const [minPrice, setMinPrice] = useState<number | ''>('')
     const [maxPrice, setMaxPrice] = useState<number | ''>('')
     const [debouncedMin, setDebouncedMin] = useState<number | ''>('')
@@ -261,12 +263,24 @@ export default function ProductsClient() {
             })
         }
 
-        // sort by latest
-        list.sort((a, b) => {
-            const aMs = Math.max(safeDateMs(a.updatedAt), safeDateMs(a.createdAt))
-            const bMs = Math.max(safeDateMs(b.updatedAt), safeDateMs(b.createdAt))
-            return bMs - aMs
-        })
+        // SORT PRODUCTS
+        if (sortBy === "price-low") {
+            list.sort((a, b) =>
+                (a.latestSalePrice?.discountedPrice ?? a.latestSalePrice?.actualPrice ?? 0) -
+                (b.latestSalePrice?.discountedPrice ?? b.latestSalePrice?.actualPrice ?? 0)
+            )
+        } else if (sortBy === "price-high") {
+            list.sort((a, b) =>
+                (b.latestSalePrice?.discountedPrice ?? b.latestSalePrice?.actualPrice ?? 0) -
+                (a.latestSalePrice?.discountedPrice ?? a.latestSalePrice?.actualPrice ?? 0)
+            )
+        } else {
+            list.sort((a, b) => {
+                const aMs = Math.max(safeDateMs(a.updatedAt), safeDateMs(a.createdAt))
+                const bMs = Math.max(safeDateMs(b.updatedAt), safeDateMs(b.createdAt))
+                return bMs - aMs
+            })
+        }
 
         setFiltered(list)
     }, [
@@ -280,7 +294,8 @@ export default function ProductsClient() {
         inStockOnly,
         debouncedMin,
         debouncedMax,
-        allProducts
+        allProducts,
+        sortBy
     ]);
 
     const total = filtered.length
@@ -422,18 +437,28 @@ export default function ProductsClient() {
                         {/* TOOLBAR */}
                         <div className="flex items-center justify-between mb-6">
 
-                            {/* LEFT SIDE BUTTONS */}
+                            {/* LEFT CONTROLS */}
                             <div className="flex items-center gap-2">
 
                                 {/* FILTER BUTTON */}
                                 <button
                                     onClick={() => setFiltersOpen(true)}
-                                    className="lg:hidden flex items-center gap-2 px-4 py-2 rounded-full border bg-white shadow-sm text-sm font-medium"
+                                    className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
                                 >
-                                    🔎 Filters
+                                    Filters
                                 </button>
 
-                                {/* CLEAR FILTER BUTTON */}
+                                {/* SORT BUTTON */}
+                                <button
+                                    onClick={() => setSortOpen(true)}
+                                    className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
+                                >
+                                    Sort: {sortBy === "latest" ? "Newest" :
+                                        sortBy === "price-low" ? "Low → High" :
+                                            "High → Low"}
+                                </button>
+
+                                {/* CLEAR FILTERS */}
                                 {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
                                     <button
                                         onClick={clearAll}
@@ -446,22 +471,8 @@ export default function ProductsClient() {
                             </div>
 
                             {/* PRODUCT COUNT */}
-                            <div className="flex items-center gap-2 text-sm">
-
-                                <span className="px-3 py-1 rounded-full bg-[#0B5C73]/10 text-[#0B5C73] font-semibold">
-                                    {total}
-                                </span>
-
-                                <span className="text-slate-600">
-                                    products
-                                </span>
-
-                                {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#F6B73C]/20 text-[#0B5C73] font-medium">
-                                        Filtered
-                                    </span>
-                                )}
-
+                            <div className="text-sm text-slate-600 font-medium">
+                                {total} items
                             </div>
 
                             {/* DESKTOP PER PAGE */}
@@ -621,6 +632,65 @@ export default function ProductsClient() {
 
                             onClearAll={clearAll}
                         />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* MOBILE SORT PANEL */}
+            <AnimatePresence>
+                {sortOpen && (
+                    <motion.div
+                        className="fixed inset-0 bg-black/40 z-50 lg:hidden"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            className="absolute bottom-0 w-full bg-white rounded-t-2xl p-6"
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                        >
+
+                            <h3 className="text-lg font-semibold mb-4">
+                                Sort products
+                            </h3>
+
+                            <div className="flex flex-col gap-3">
+
+                                <button
+                                    onClick={() => {
+                                        setSortBy("latest")
+                                        setSortOpen(false)
+                                    }}
+                                    className="text-left py-2"
+                                >
+                                    Newest
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setSortBy("price-low")
+                                        setSortOpen(false)
+                                    }}
+                                    className="text-left py-2"
+                                >
+                                    Price: Low to High
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setSortBy("price-high")
+                                        setSortOpen(false)
+                                    }}
+                                    className="text-left py-2"
+                                >
+                                    Price: High to Low
+                                </button>
+
+                            </div>
+
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>

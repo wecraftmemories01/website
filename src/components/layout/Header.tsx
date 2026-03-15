@@ -494,12 +494,26 @@ export default function Header({
                                 placeholder="Search products..."
                                 className="bg-transparent outline-none text-sm flex-1"
                             />
-                            <button
-                                onClick={() => doHeaderSearch(query)}
-                                className="text-sm px-3 py-1 rounded-full bg-white"
-                            >
-                                Search
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => doHeaderSearch(query)}
+                                    className="px-3 py-1 text-sm rounded-md bg-white border border-slate-200 hover:bg-slate-200 transition"
+                                >
+                                    Search
+                                </button>
+
+                                {query.trim().length > 0 && (
+                                    <button
+                                        onClick={() => {
+                                            setQuery("")
+                                            router.push("/products")
+                                        }}
+                                        className="px-3 py-1 text-sm rounded-md bg-white border border-slate-200 hover:bg-slate-200 transition"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* RIGHT */}
@@ -614,6 +628,25 @@ export default function Header({
                                     placeholder="Search products..."
                                     className="bg-transparent outline-none text-sm w-full"
                                 />
+
+                                <button
+                                    onClick={() => doHeaderSearch(query)}
+                                    className="px-2 py-1 text-xs rounded bg-white border border-slate-200"
+                                >
+                                    Search
+                                </button>
+
+                                {query.trim().length > 0 && (
+                                    <button
+                                        onClick={() => {
+                                            setQuery("")
+                                            router.push("/products")
+                                        }}
+                                        className="px-2 py-1 text-xs rounded bg-white border border-slate-200"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
