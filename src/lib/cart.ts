@@ -191,6 +191,8 @@ export async function removeFromCart(cartId: string, itemId: string | undefined,
                 cartProductSet.delete(String(itemId));
             }
 
+            await fetchCartFromApi();
+
             // update exact total if server returned it
             if (payload) {
                 if (typeof payload.totalItems === 'number') {
