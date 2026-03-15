@@ -217,7 +217,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                                     ? "bg-rose-500 text-white"
                                     : "bg-white hover:bg-gray-100 text-slate-600"}
                                 `}
-                            >
+                        >
                             <Heart size={16} fill={wish ? "currentColor" : "none"} />
                         </button>
                     </div>
@@ -263,18 +263,40 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
                                         if (added || loadingAdd) return
 
+                                        const token =
+                                            typeof window !== "undefined"
+                                                ? localStorage.getItem("accessToken")
+                                                : null
+
+                                        if (!token) {
+                                            setErrorModal({
+                                                open: true,
+                                                message: "Please log in to add products to your cart."
+                                            })
+                                            return
+                                        }
+
                                         setLoadingAdd(true)
 
                                         try {
                                             const result = await addToCart(String(product._id), 1, inferredType)
+
                                             if (result?.success) {
                                                 setAdded(true)
                                                 window.dispatchEvent(new Event("cartChanged"))
+                                            } else {
+                                                setErrorModal({
+                                                    open: true,
+                                                    message: "Please log in to add products to your cart."
+                                                })
                                             }
                                         } catch (err) {
                                             console.error(err)
-                                        }
-                                        finally {
+                                            setErrorModal({
+                                                open: true,
+                                                message: "Something went wrong."
+                                            })
+                                        } finally {
                                             setLoadingAdd(false)
                                         }
                                     }}
