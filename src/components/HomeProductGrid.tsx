@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from "next/navigation"
-import React, { useRef } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import ProductCardClient from './ProductCardClient'
 import type { Product } from '../types/product'
 import { ChevronLeft, ChevronRight } from "lucide-react"
@@ -14,6 +14,9 @@ export default function ProductGrid({ products }: Props) {
 
     const scrollRef = useRef<HTMLDivElement>(null)
 
+    const [canScrollLeft, setCanScrollLeft] = useState(false)
+    const [canScrollRight, setCanScrollRight] = useState(true)
+
     const scroll = (direction: "left" | "right") => {
         if (!scrollRef.current) return
 
@@ -24,6 +27,31 @@ export default function ProductGrid({ products }: Props) {
             behavior: "smooth"
         })
     }
+
+    const updateScrollButtons = () => {
+        const el = scrollRef.current
+        if (!el) return
+
+        const { scrollLeft, scrollWidth, clientWidth } = el
+
+        setCanScrollLeft(scrollLeft > 5)
+        setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5)
+    }
+
+    useEffect(() => {
+        const el = scrollRef.current
+        if (!el) return
+
+        updateScrollButtons()
+
+        el.addEventListener("scroll", updateScrollButtons)
+        window.addEventListener("resize", updateScrollButtons)
+
+        return () => {
+            el.removeEventListener("scroll", updateScrollButtons)
+            window.removeEventListener("resize", updateScrollButtons)
+        }
+    }, [])
 
     return (
         <section
@@ -58,7 +86,9 @@ export default function ProductGrid({ products }: Props) {
                         {/* LEFT BUTTON */}
                         <button
                             onClick={() => scroll("left")}
-                            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-md border rounded-full w-9 h-9 flex items-center justify-center active:scale-95"
+                            disabled={!canScrollLeft}
+                            className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 border rounded-full w-9 h-9 flex items-center justify-center
+                            ${canScrollLeft ? "bg-white/90 backdrop-blur shadow-md active:scale-95" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
                         >
                             <ChevronLeft size={18} />
                         </button>
@@ -66,7 +96,9 @@ export default function ProductGrid({ products }: Props) {
                         {/* RIGHT BUTTON */}
                         <button
                             onClick={() => scroll("right")}
-                            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-md border rounded-full w-9 h-9 flex items-center justify-center active:scale-95"
+                            disabled={!canScrollRight}
+                            className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 border rounded-full w-9 h-9 flex items-center justify-center
+                            ${canScrollRight ? "bg-white/90 backdrop-blur shadow-md active:scale-95" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
                         >
                             <ChevronRight size={18} />
                         </button>
