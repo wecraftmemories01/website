@@ -6,18 +6,24 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt"
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
     title: "Welcome to :: We Craft Memories ::",
-    description: "",
+    description: "Cute handmade crochet gifts and handcrafted decor.",
+    manifest: "/manifest.json",
     icons: {
         icon: "/favicon.png",
         shortcut: "/favicon.png",
         apple: "/apple-touch-icon.png",
     },
+};
+
+export const viewport = {
+    themeColor: "#0B5C73",
 };
 
 /**
@@ -31,6 +37,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en">
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}>
+                
+                <PWAInstallPrompt />
+
                 {/* accessibility skip link */}
                 <a
                     href="#content"
@@ -63,6 +72,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 />
 
                 <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID as string} />
+
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+                        if ('serviceWorker' in navigator) {
+                            window.addEventListener('load', function () {
+                            navigator.serviceWorker.register('/sw.js');
+                            });
+                        }
+                        `,
+                    }}
+                />
 
             </body>
         </html>

@@ -10,7 +10,7 @@ export default function HeroClient() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#D7EDF3] via-[#EAF6FA] to-[#F5FAFB] shadow-md"
+            className="relative overflow-hidden rounded-3xl bg-linear-to-r from-[#D7EDF3] via-[#EAF6FA] to-[#F5FAFB] shadow-md"
         >
             {/* soft glow background */}
             <div className="absolute -top-20 -left-20 w-44 h-44 bg-[#1FA6B8]/15 rounded-full blur-3xl" />
