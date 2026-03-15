@@ -349,23 +349,23 @@ export default function OrderSuccessClient(): React.ReactElement {
     };
 
     return (
-        <div className="min-h-screen bg-linear-to-b from-[#fbfeff] to-white flex items-start justify-center py-10 px-4">
+        <div className="min-h-screen bg-linear-to-b from-[#fbfeff] to-white flex items-start justify-center py-6 sm:py-10 px-3 sm:px-4">
             <div className="w-full max-w-5xl">
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
                     {/* Header */}
-                    <div className="flex items-center gap-4 px-6 py-5 bg-[#f7fbfb] border-b border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-4 sm:px-6 py-5 bg-[#f7fbfb] border-b border-slate-100">
                         <div className="w-14 h-14 rounded-md bg-white grid place-items-center border border-[#e6f7f6]">
                             <CheckCircle className="w-8 h-8 text-[#065975]" />
                         </div>
 
-                        <div>
+                        <div className="flex-1">
                             <h1 className="text-xl font-semibold text-[#065975]">Order placed successfully</h1>
-                            <p className="text-sm text-slate-500">
-                                Thank you — your order is confirmed and will be prepared for shipping.
+                            <p className="text-xs text-slate-400 mt-1">
+                                Estimated delivery: 3–5 working days
                             </p>
                         </div>
 
-                        <div className="ml-auto text-right">
+                        <div className="sm:ml-auto sm:text-right flex items-start sm:block justify-between w-full sm:w-auto">
                             <div className="text-xs text-slate-400">Order total</div>
                             <div className="text-lg font-semibold text-[#065975]">
                                 {currency((order?.orderTotal ?? 0) + (order?.quotedDeliveryCharge ?? 0))}
@@ -374,17 +374,17 @@ export default function OrderSuccessClient(): React.ReactElement {
                     </div>
 
                     {/* Body */}
-                    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
                         <div className="lg:col-span-2 flex flex-col gap-5">
                             {/* Order summary */}
                             <section className="border rounded-lg p-4">
-                                <div className="flex items-start gap-4">
+                                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
                                     <div className="shrink-0 w-12 h-12 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
                                         <Hash className="w-5 h-5 text-[#065975]" />
                                     </div>
 
                                     <div className="flex-1">
-                                        <div className="flex items-start gap-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
                                             <div className="flex-1">
                                                 <div className="text-xs text-slate-400">Order Number</div>
                                                 <div className="text-sm font-medium break-all">
@@ -392,7 +392,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                                 </div>
                                             </div>
 
-                                            <div className="text-right">
+                                            <div className="sm:text-right">
                                                 <div className="text-xs text-slate-400">Placed</div>
                                                 <div className="text-sm text-slate-500">{order ? formattedDate(order.purchaseDate) : "—"}</div>
                                             </div>
@@ -427,7 +427,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                     {(order?.orderProductsDetails ?? []).map((p, idx) => {
                                         const imageSrc = resolveProductImage(p.productImage);
                                         return (
-                                            <li key={p.productId ?? idx} className="flex items-center gap-4 p-3 rounded-md border border-slate-100">
+                                            <li key={p.productId ?? idx} className="flex items-start gap-3 p-3 rounded-md border border-slate-100">
                                                 <ProductImage src={imageSrc} alt={p.productNameSnapshot} />
 
                                                 <div className="flex-1 min-w-0">
@@ -435,7 +435,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                                     <div className="text-xs text-slate-500">Qty: {p.quantity ?? 1}</div>
                                                 </div>
 
-                                                <div className="text-sm font-semibold text-slate-700">{currency(p.sellPrice)}</div>
+                                                <div className="text-sm font-semibold text-slate-700 shrink-0">{currency(p.sellPrice)}</div>
                                             </li>
                                         );
                                     })}
@@ -459,7 +459,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                             <div className="text-sm font-medium text-slate-800">
                                                 {order?.orderCustomerAddressDetails?.deliveryAddress?.recipientNameSnapshot ?? "—"}
                                             </div>
-                                            <div className="text-sm text-slate-600 mt-1">
+                                            <div className="text-sm text-slate-600 mt-1 break-words">
                                                 {order?.orderCustomerAddressDetails?.deliveryAddress?.addressLine1Snapshot ?? ""}{" "}
                                                 {order?.orderCustomerAddressDetails?.deliveryAddress?.addressLine2Snapshot ?? ""}{" "}
                                                 {order?.orderCustomerAddressDetails?.deliveryAddress?.landmarkSnapshot ? `, ${order.orderCustomerAddressDetails.deliveryAddress.landmarkSnapshot}` : ""}
@@ -482,9 +482,9 @@ export default function OrderSuccessClient(): React.ReactElement {
 
                         {/* Right column */}
                         <aside className="space-y-4">
-                            <div className="sticky top-6">
+                            <div className="lg:sticky lg:top-6">
                                 <div className="flex flex-col gap-3">
-                                    <button
+                                    <button type="button"
                                         onClick={() => router.push("/")}
                                         className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-[#065975] font-medium hover:shadow-sm transition"
                                         aria-label="Continue shopping"
@@ -493,7 +493,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                         <span className="text-sm">Continue shopping</span>
                                     </button>
 
-                                    <button
+                                    <button type="button"
                                         onClick={() => {
                                             if (order?.orderId || order?._id) router.push(`/profile/order/${encodeURIComponent(String(order.orderId ?? order._id))}`);
                                             else router.push("/orders");
@@ -506,7 +506,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                     </button>
 
                                     <div className="flex gap-2 mt-1">
-                                        <button
+                                        <button type="button"
                                             onClick={() => typeof window !== "undefined" && window.print()}
                                             className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-sm hover:shadow-sm transition"
                                         >
@@ -514,7 +514,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                             Print
                                         </button>
 
-                                        <button
+                                        <button type="button"
                                             onClick={() => handleShare()}
                                             className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-sm hover:shadow-sm transition"
                                         >
@@ -557,7 +557,7 @@ export default function OrderSuccessClient(): React.ReactElement {
 
                     {/* Footer */}
                     <div className="px-6 py-4 border-t border-slate-100 bg-white/50 flex items-center justify-between gap-3">
-                        <button onClick={() => router.push("/")} className="inline-flex items-center gap-2 text-sm text-[#065975] font-medium">
+                        <button type="button" onClick={() => router.push("/")} className="inline-flex items-center gap-2 text-sm text-[#065975] font-medium">
                             Continue shopping
                             <ArrowRight className="w-4 h-4" />
                         </button>
