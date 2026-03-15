@@ -31,8 +31,8 @@ export default function MobileCartItem({
                     className="rounded-lg object-cover"
                 />
 
-                <div className="flex-1">
-                    <p className="text-sm font-medium truncate">
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium leading-snug wrap-break-word">
                         {item.productPublicName}
                     </p>
                     <p className="text-xs text-gray-500">
