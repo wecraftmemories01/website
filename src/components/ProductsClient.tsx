@@ -603,10 +603,14 @@ export default function ProductsClient() {
                                 label: a.publicName ?? a.name ?? ''
                             }))}
 
-                            themeOptions={themes.map(t => ({
-                                id: t._id,
-                                label: t.publicName ?? t.name ?? ''
-                            }))}
+                            themeOptions={themes
+                                .map(t => ({
+                                    id: t._id,
+                                    label: t.publicName ?? t.name ?? '',
+                                    count: themeCounts.get(t._id) ?? 0
+                                }))
+                                .filter(t => t.count > 0)
+                            }
 
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
