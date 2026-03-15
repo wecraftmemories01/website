@@ -15,8 +15,8 @@ export default function HeroClient() {
             {/* soft glow background */}
             <div className="absolute -top-20 -left-20 w-44 h-44 bg-[#1FA6B8]/15 rounded-full blur-3xl" />
             <div className="absolute -bottom-20 -right-20 w-56 h-56 bg-[#1FA6B8]/10 rounded-full blur-3xl" />
-            <div className="relative max-w-7xl mx-auto px-6 sm:px-10 py-10">
-                <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="relative w-full px-6 sm:px-10 py-10">
+                <div className="grid md:grid-cols-[1.2fr_2fr] gap-2 items-center">
                     {/* TEXT CONTENT */}
                     <div className="text-center md:text-left">
                         <p className="text-sm font-medium text-[#0B5C73]/80 mb-2">
@@ -55,14 +55,14 @@ export default function HeroClient() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5 }}
-                        className="hidden md:flex justify-center md:justify-end"
+                        className="hidden md:flex justify-end"
                     >
-                        <div className="w-full max-w-[720px]">
+                        <div className="w-full">
                             <Image
-                                src="/wecraftmemories-hero-premium.png"
+                                src="/banner.png"
                                 alt="Cute handmade crochet gifts"
-                                width={720}
-                                height={720}
+                                width={1400}
+                                height={1400}
                                 priority
                                 className="w-full h-auto object-contain"
                             />
