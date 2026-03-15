@@ -96,9 +96,8 @@ export default function TermsAndConditions() {
             <section className="mb-8">
                 <h2 className="text-xl font-semibold mb-3">7. Cancellation Policy</h2>
                 <ul className="list-disc pl-6 space-y-2">
-                    <li>Orders may be cancelled before dispatch.</li>
-                    <li>Orders cannot be cancelled once shipped.</li>
-                    <li>Custom orders cannot be cancelled after production begins.</li>
+                    <li>Orders cannot be cancelled once placed.</li>
+                    <li>Custom orders cannot be cancelled after order is given.</li>
                 </ul>
             </section>
 
@@ -112,10 +111,7 @@ export default function TermsAndConditions() {
                     Protection Act, 2019.
                 </p>
                 <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Return requests must be raised within 7 days of delivery.</li>
-                    <li>Items must be unused and in original condition.</li>
-                    <li>Custom and personalized items are non-returnable.</li>
-                    <li>Hair accessories are non-returnable for hygiene reasons.</li>
+                    <li>All products are non-returnable for hygiene reasons.</li>
                 </ul>
             </section>
 
@@ -177,9 +173,9 @@ export default function TermsAndConditions() {
                     In accordance with the Information Technology Act, 2000:
                 </p>
                 <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Name: [Insert Name]</li>
-                    <li>Email: [Insert Email]</li>
-                    <li>Address: [Insert Address]</li>
+                    <li>Name: Chandrakala Bangera</li>
+                    <li>Email: support@wecraftmemories.com</li>
+                    {/* <li>Address: [Insert Address]</li> */}
                     <li>Response Time: Within 15 working days</li>
                 </ul>
             </section>

@@ -194,7 +194,7 @@ export default function PrivacyPolicy() {
                     In compliance with the Information Technology Act, 2000:
                 </p>
                 <ul className="list-disc pl-6 mt-2 space-y-2">
-                    {/* <li>Name: Varun Kotian</li> */}
+                    <li>Name: Chandrakala Bangera</li>
                     <li>Email: support@wecraftmemories.com</li>
                     {/* <li>Address: [Insert Address]</li> */}
                     <li>Response Time: Within 15 working days</li>
