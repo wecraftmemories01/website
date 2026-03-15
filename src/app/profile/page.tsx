@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { User, Edit2, Lock, MapPin, Box } from "lucide-react";
 import type { Address as SharedAddress } from "../../types/address";
 import api from "@/services/api";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import ProfileOrders from "../../components/ProfileOrders";
 import ProfileAddresses from "../../components/ProfileAddresses";
@@ -48,6 +49,9 @@ function getStoredCustomerId(): string | null {
 
 /* ---------- MAIN PAGE ---------- */
 export default function ProfilePageAlt(): React.ReactElement {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const contentRef = useRef<HTMLDivElement | null>(null);
     const [user, setUser] = useState<UserProfile | null>(null);
     const [addresses, setAddresses] = useState<LocalAddress[]>([]);
     const [activeTab, setActiveTab] = useState<
@@ -72,6 +76,25 @@ export default function ProfilePageAlt(): React.ReactElement {
 
     /* SAFE CUSTOMER ID RESOLVER */
     const resolveCustomerId = () => getStoredCustomerId() ?? user?.id ?? null;
+
+    /** Sync tab with URL on load */
+    useEffect(() => {
+        const tab = searchParams.get("tab");
+
+        const allowedTabs = [
+            "overview",
+            "profile",
+            "security",
+            "addresses",
+            "orders",
+        ];
+
+        if (tab && allowedTabs.includes(tab)) {
+            setActiveTab(tab as any);
+        } else {
+            setActiveTab("overview");
+        }
+    }, [searchParams]);
 
     /* ---------- FETCH USER ---------- */
     useEffect(() => {
@@ -223,6 +246,28 @@ export default function ProfilePageAlt(): React.ReactElement {
         setAddrModalOpen(true);
     }
 
+    /** Create a tab change helper */
+    function changeTab(tab: "overview" | "profile" | "security" | "addresses" | "orders") {
+        setActiveTab(tab);
+
+        router.replace(`?tab=${tab}`, { scroll: false });
+
+        // scroll to section on mobile
+        setTimeout(() => {
+            if (typeof window !== "undefined" && window.innerWidth < 1024 && contentRef.current) {
+                const headerOffset = 130;
+
+                const elementPosition = contentRef.current.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: "smooth",
+                });
+            }
+        }, 100);
+    }
+
     function handleAddressCreated(local: ModalAddress) {
         const normalized: LocalAddress = {
             id: String(local.id),
@@ -365,7 +410,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                             ].map((tab) => (
                                 <button
                                     key={tab.key}
-                                    onClick={() => setActiveTab(tab.key as any)}
+                                    onClick={() => changeTab(tab.key as any)}
                                     className={`flex items-center gap-3 px-5 py-3 rounded-lg text-sm font-medium border transition ${activeTab === tab.key
                                         ? "bg-[#065975] text-white"
                                         : "bg-white hover:bg-slate-50"
@@ -380,7 +425,10 @@ export default function ProfilePageAlt(): React.ReactElement {
                 </aside>
 
                 {/* MAIN CONTENT */}
-                <main className="lg:col-span-8 col-span-1 space-y-8">
+                <main
+                    ref={contentRef}
+                    className="lg:col-span-8 col-span-1 space-y-8"
+                >
                     {activeTab === "overview" && (
                         <section className="bg-linear-to-r from-[#e8fbfa] to-white rounded-3xl p-6 lg:p-8 shadow-lg border">
                             <h3 className="text-2xl font-bold">
@@ -393,7 +441,7 @@ export default function ProfilePageAlt(): React.ReactElement {
 
                             <div className="mt-5 flex flex-wrap gap-3">
                                 <button
-                                    onClick={() => setActiveTab("profile")}
+                                    onClick={() => changeTab("profile")}
                                     className="px-4 py-2 rounded-md bg-white border shadow-sm hover:shadow-md transition"
                                 >
                                     Edit profile
@@ -407,7 +455,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                                 </button>
 
                                 <button
-                                    onClick={() => setActiveTab("orders")}
+                                    onClick={() => changeTab("orders")}
                                     className="px-4 py-2 rounded-md bg-white border shadow-sm hover:shadow-md transition"
                                 >
                                     View orders
