@@ -23,6 +23,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
+    width: "device-width",
+    initialScale: 1,
     themeColor: "#0B5C73",
 };
 
@@ -36,8 +38,8 @@ const CONTAINER = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
-            <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}>
-                
+            <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900 overflow-x-hidden`}>
+
                 <PWAInstallPrompt />
 
                 {/* accessibility skip link */}
@@ -52,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     {/* pass the same container class so header, main and footer align */}
                     <Header containerClass={CONTAINER} headerHeight="h-14" />
 
-                    <main id="content" className="flex-1 overflow-auto">
+                    <main id="content" className="flex-1">
                         <div className={`${CONTAINER} py-4`}>{children}</div>
                     </main>
 

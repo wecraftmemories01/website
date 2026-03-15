@@ -26,6 +26,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Prevent horizontal overflow on mobile */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 /* Custom Scrollbar Styling */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
