@@ -1,109 +1,75 @@
 'use client'
 
-import React from 'react'
-import { motion } from 'framer-motion'
+import React from "react"
+import { motion } from "framer-motion"
+import Image from "next/image"
 
 export default function HeroClient() {
     return (
         <motion.section
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="
-                relative overflow-hidden rounded-3xl
-                bg-linear-to-r
-                from-[#D7EDF3]
-                via-[#E4F3F7]
-                to-[#F1F5F6]
-                text-[#0B5C73]
-                shadow-md
-                min-h-80 md:min-h-105
-            "
+            transition={{ duration: 0.4 }}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#D7EDF3] via-[#EAF6FA] to-[#F5FAFB] shadow-md"
         >
-
-            {/* Decorative blobs */}
-            <div className="absolute -top-24 -left-24 w-56 h-56 bg-[#1FA6B8]/15 rounded-full blur-3xl" />
-            <div className="absolute -bottom-28 -right-28 w-72 h-72 bg-[#1FA6B8]/08 rounded-full blur-3xl" />
-
-            <div className="relative max-w-7xl mx-auto h-full px-6 sm:px-10 py-6 md:py-10 flex items-center">
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full">
-
+            {/* soft glow background */}
+            <div className="absolute -top-20 -left-20 w-44 h-44 bg-[#1FA6B8]/15 rounded-full blur-3xl" />
+            <div className="absolute -bottom-20 -right-20 w-56 h-56 bg-[#1FA6B8]/10 rounded-full blur-3xl" />
+            <div className="relative max-w-7xl mx-auto px-6 sm:px-10 py-10">
+                <div className="grid md:grid-cols-2 gap-8 items-center">
                     {/* TEXT CONTENT */}
-                    <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.6 }}
-                        className="text-center md:text-left"
-                    >
-
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight">
-                            Handmade Treasures,
-                            <span className="block text-[#C95A66]">
-                                Cozy Memories.
-                            </span>
-                        </h1>
-
-                        <p className="mt-4 text-base sm:text-lg text-[#355F6B] max-w-md mx-auto md:mx-0">
-                            Woolen gifts, playful accessories & warm home accents — made with love.
+                    <div className="text-center md:text-left">
+                        <p className="text-sm font-medium text-[#0B5C73]/80 mb-2">
+                            ✨ Handmade with Love
                         </p>
 
-                        <div className="mt-6 flex gap-4 flex-wrap justify-center md:justify-start">
+                        <h1 className="text-3xl sm:text-4xl md:text-[42px] font-extrabold text-[#0B5C73] leading-tight">
+                            Cute Handmade Treasures
+                        </h1>
 
-                            <motion.a
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.97 }}
-                                href="/products"
-                                className="
-                                    bg-[#C95A66] text-white
-                                    font-semibold px-5 py-2.5
-                                    rounded-xl shadow-sm
-                                    hover:bg-[#B84C58]
-                                    transition
-                                "
-                            >
-                                ✨ Shop New Arrivals
-                            </motion.a>
+                        <p className="mt-3 text-[#355F6B] text-base max-w-md mx-auto md:mx-0">
+                            Adorable crochet creations crafted with love — perfect for
+                            gifting or adding joy to your day.
+                        </p>
 
-                            <motion.a
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.97 }}
-                                href="/products"
-                                className="
-                                    border border-[#0B5C73]
-                                    text-[#0B5C73]
-                                    px-5 py-2.5 rounded-xl
-                                    hover:bg-[#0B5C73]/10
-                                    transition
-                                "
-                            >
-                                Browse All →
-                            </motion.a>
+                        {/* trust badges */}
+                        <div className="mt-4 flex gap-4 flex-wrap text-sm text-[#355F6B] justify-center md:justify-start">
+                            <span>🧶 Handmade</span>
+                            <span>🎁 Perfect Gifts</span>
+                            <span>🚚 Pan-India Delivery</span>
+                        </div>
 
+                        {/* CTA */}
+                        <motion.a
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.97 }}
+                            href="/products"
+                            className="inline-block mt-6 bg-[#E24B5B] text-white font-semibold px-6 py-3 rounded-xl shadow hover:bg-[#d23f4e] transition"
+                        >
+                            🛍 Shop Cute Gifts
+                        </motion.a>
+                    </div>
+
+                    {/* HERO IMAGE (hidden on mobile) */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="hidden md:flex justify-center md:justify-end"
+                    >
+                        <div className="w-full max-w-[720px]">
+                            <Image
+                                src="/wecraftmemories-hero-premium.png"
+                                alt="Cute handmade crochet gifts"
+                                width={720}
+                                height={720}
+                                priority
+                                className="w-full h-auto object-contain"
+                            />
                         </div>
                     </motion.div>
-
-                    {/* DESKTOP IMAGE */}
-                    <motion.div
-                        initial={{ opacity: 0, x: 30 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.7 }}
-                        className="relative hidden md:block h-full"
-                    >
-                        <img
-                            src="/wecraftmemories-hero-premium.png"
-                            alt="Handmade crochet creations"
-                            className="
-                                absolute right-[-25%] top-1/2 -translate-y-1/2
-                                w-[150%] h-auto max-w-none
-                            "
-                        />
-                    </motion.div>
-
                 </div>
-
             </div>
-
         </motion.section>
     )
 }

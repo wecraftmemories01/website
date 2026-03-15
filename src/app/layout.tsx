@@ -44,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <Header containerClass={CONTAINER} headerHeight="h-14" />
 
                     <main id="content" className="flex-1 overflow-auto">
-                        <div className={`${CONTAINER} py-5`}>{children}</div>
+                        <div className={`${CONTAINER} py-4`}>{children}</div>
                     </main>
 
                     <Footer containerClass={CONTAINER} footerPadding="py-4" />
