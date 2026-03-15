@@ -421,11 +421,52 @@ export default function ProductsClient() {
                     <main ref={productsTopRef}>
                         {/* TOOLBAR */}
                         <div className="flex items-center justify-between mb-6">
-                            <p className="text-sm text-slate-500">
-                                {total} products
-                            </p>
 
-                            <div className="flex items-center gap-3">
+                            {/* LEFT SIDE BUTTONS */}
+                            <div className="flex items-center gap-2">
+
+                                {/* FILTER BUTTON */}
+                                <button
+                                    onClick={() => setFiltersOpen(true)}
+                                    className="lg:hidden flex items-center gap-2 px-4 py-2 rounded-full border bg-white shadow-sm text-sm font-medium"
+                                >
+                                    🔎 Filters
+                                </button>
+
+                                {/* CLEAR FILTER BUTTON */}
+                                {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
+                                    <button
+                                        onClick={clearAll}
+                                        className="lg:hidden px-3 py-2 rounded-full text-sm bg-red-50 text-red-600 border border-red-200"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+
+                            </div>
+
+                            {/* PRODUCT COUNT */}
+                            <div className="flex items-center gap-2 text-sm">
+
+                                <span className="px-3 py-1 rounded-full bg-[#0B5C73]/10 text-[#0B5C73] font-semibold">
+                                    {total}
+                                </span>
+
+                                <span className="text-slate-600">
+                                    products
+                                </span>
+
+                                {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#F6B73C]/20 text-[#0B5C73] font-medium">
+                                        Filtered
+                                    </span>
+                                )}
+
+                            </div>
+
+                            {/* DESKTOP PER PAGE */}
+                            <div className="hidden lg:flex items-center gap-3">
+
                                 <span className="text-sm text-slate-500">
                                     Per page
                                 </span>
@@ -447,7 +488,9 @@ export default function ProductsClient() {
                                         </option>
                                     ))}
                                 </select>
+
                             </div>
+
                         </div>
 
                         {/* PRODUCT GRID */}
@@ -496,6 +539,91 @@ export default function ProductsClient() {
                     </main>
                 </div>
             </div>
+
+            {/* MOBILE FILTER DRAWER */}
+            <AnimatePresence>
+                {filtersOpen && (
+                    <motion.div
+                        className="fixed inset-0 z-50 bg-white p-6 overflow-y-auto lg:hidden"
+                        initial={{ x: "100%" }}
+                        animate={{ x: 0 }}
+                        exit={{ x: "100%" }}
+                        transition={{ duration: 0.25 }}
+                    >
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-semibold">Filters</h2>
+
+                            <button
+                                onClick={() => setFiltersOpen(false)}
+                                className="px-3 py-1 border rounded-md text-sm"
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                        <SidebarFilters
+                            q={qState}
+                            onQChange={setQState}
+                            inStockOnly={inStockOnly}
+                            onToggleInStock={() => setInStockOnly((s) => !s)}
+
+                            masterOptions={masterCategories.map(m => ({
+                                id: m._id,
+                                label: m.publicName ?? m.name ?? ''
+                            }))}
+
+                            superOptions={superCategories.map(s => ({
+                                id: s._id,
+                                label: s.publicName ?? s.name ?? ''
+                            }))}
+
+                            categoryOptions={categories.map(c => ({
+                                id: c._id,
+                                label: c.publicName ?? c.name ?? ''
+                            }))}
+
+                            subOptions={subCategories.map(s => ({
+                                id: s._id,
+                                label: s.publicName ?? s.name ?? ''
+                            }))}
+
+                            ageOptions={ageGroups.map(a => ({
+                                id: a._id,
+                                label: a.publicName ?? a.name ?? ''
+                            }))}
+
+                            themeOptions={themes.map(t => ({
+                                id: t._id,
+                                label: t.publicName ?? t.name ?? ''
+                            }))}
+
+                            selectedMasters={selectedMasters}
+                            selectedSupers={selectedSupers}
+                            selectedCategories={selectedCategories}
+                            selectedSubs={selectedSubs}
+                            selectedAges={selectedAges}
+                            selectedThemes={selectedThemes}
+
+                            minPrice={minPrice}
+                            maxPrice={maxPrice}
+                            onMinPriceChange={setMinPrice}
+                            onMaxPriceChange={setMaxPrice}
+
+                            priceRangeMin={priceStats.min}
+                            priceRangeMax={priceStats.max}
+
+                            onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
+                            onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
+                            onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
+                            onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
+                            onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
+                            onToggleTheme={toggleTheme}
+
+                            onClearAll={clearAll}
+                        />
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
