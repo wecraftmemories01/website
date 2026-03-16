@@ -113,6 +113,11 @@ export async function logout(redirectTo = "/login") {
     localStorage.removeItem("customerId");
     localStorage.removeItem("rememberedUser");
     localStorage.removeItem("cartProductIds");
+    localStorage.removeItem("wcm_addresses");
+    localStorage.removeItem("cartCount");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("cartUpdatedAt");
+    localStorage.removeItem("wcm_guest_cart_v1");
 
     window.dispatchEvent(new Event("authChanged"));
     setTimeout(() => {
