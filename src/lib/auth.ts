@@ -115,7 +115,9 @@ export async function logout(redirectTo = "/login") {
     localStorage.removeItem("cartProductIds");
 
     window.dispatchEvent(new Event("authChanged"));
-    window.location.href = redirectTo;
+    setTimeout(() => {
+        window.location.href = redirectTo;
+    }, 50);
 }
 
 /* =========================
@@ -123,8 +125,22 @@ export async function logout(redirectTo = "/login") {
 ========================= */
 
 export async function refreshAccessToken(): Promise<boolean> {
+
+    // 🚫 Do not refresh on auth pages
+    if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+
+        if (
+            path.startsWith("/login") ||
+            path.startsWith("/register") ||
+            path.startsWith("/forgot-password")
+        ) {
+            return false;
+        }
+    }
+
     if (refreshPromise) {
-        return refreshPromise; // 🔒 Return existing promise
+        return refreshPromise;
     }
 
     refreshPromise = (async () => {

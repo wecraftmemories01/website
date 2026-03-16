@@ -22,7 +22,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
 import { fetchCartFromApi } from "../../lib/cart";
-import { logout } from "../../lib/auth";
+import { getStoredAccessToken, logout } from "../../lib/auth";
 import api from "../../services/api";
 
 /* dynamic import for client-only widget */
@@ -75,6 +75,7 @@ export default function Header({
     const [cartCount, setCartCount] = useState<number>(0);
     const [cartLoading, setCartLoading] = useState<boolean>(false);
     const [portalReady, setPortalReady] = useState(false);
+    const [localAuthed, setLocalAuthed] = useState(false);
 
     const router = useRouter();
 
@@ -125,6 +126,26 @@ export default function Header({
 
     const catsAbortRef = useRef<AbortController | null>(null);
 
+    /** auth listener */
+    useEffect(() => {
+
+        function handleAuthChange() {
+            const token = getStoredAccessToken();
+            setLocalAuthed(!!token);
+        }
+
+        handleAuthChange();
+
+        window.addEventListener("authChanged", handleAuthChange);
+        window.addEventListener("storage", handleAuthChange);
+
+        return () => {
+            window.removeEventListener("authChanged", handleAuthChange);
+            window.removeEventListener("storage", handleAuthChange);
+        };
+
+    }, []);
+
     // debounce search locally (kept for parity) - only uses window.setTimeout inside effect (safe)
     useEffect(() => {
         const t = (typeof window !== "undefined") ? window.setTimeout(() => setDebouncedQuery(query), 300) : null;
@@ -136,6 +157,7 @@ export default function Header({
     // mounted flag to avoid rendering client-only values server-side
     useEffect(() => {
         setMounted(true);
+        setLocalAuthed(!!getStoredAccessToken());
     }, []);
 
     // 🔑 Hydrate cart from server on first load (refresh-safe)
@@ -319,7 +341,7 @@ export default function Header({
 
     async function fetchCartCount() {
         // Do NOT call cart if not authenticated
-        if (!isAuthed) {
+        if (!localAuthed) {
             setCartCount(0);
             return;
         }
@@ -327,7 +349,7 @@ export default function Header({
         if (typeof window === "undefined") return;
 
         // Do NOT call cart if no access token
-        const token = localStorage.getItem("accessToken");
+        const token = getStoredAccessToken();
         if (!token) {
             setCartCount(0);
             return;
@@ -380,26 +402,27 @@ export default function Header({
     // only fetch cart after mount to avoid SSR/CSR mismatch
     useEffect(() => {
         if (!mounted) return;
-        if (!authReady || !isAuthed) return;
+        if (!localAuthed) return;
 
         fetchCartCount();
 
         function onAuthChanged() {
-            if (isAuthed) fetchCartCount();
+            if (localAuthed) fetchCartCount();
         }
 
         function onCartChanged() {
-            if (isAuthed) fetchCartCount();
+            if (localAuthed) fetchCartCount();
         }
 
         function onStorage(e: StorageEvent) {
             if (!e.key) return;
+
             if (
                 e.key === "auth" ||
                 e.key === "accessToken" ||
                 e.key === "cartCount"
             ) {
-                if (isAuthed) fetchCartCount();
+                if (localAuthed) fetchCartCount();
             }
         }
 
@@ -412,18 +435,19 @@ export default function Header({
             window.removeEventListener("cartChanged", onCartChanged);
             window.removeEventListener("storage", onStorage);
         };
-    }, [mounted, authReady, isAuthed]);
+
+    }, [mounted, localAuthed]);
 
     useEffect(() => {
         if (!mounted) return;
-        if (!authReady) return;
-        if (!isAuthed) {
+        if (!localAuthed) {
             setCartCount(0);
             return;
         }
 
         fetchCartCount();
-    }, [authReady, isAuthed, mounted]);
+
+    }, [mounted, localAuthed]);
 
     const totalSubCount = useMemo(() => Object.values(subsMap).reduce((s, arr) => s + arr.length, 0), [subsMap]);
     const selectedSubs = selectedCat ? (subsMap[selectedCat] || []) : [];
@@ -530,14 +554,18 @@ export default function Header({
                                 </span>
                             </Link>
 
-                            {!isAuthed ? (
+                            {mounted && !localAuthed ? (
                                 <>
                                     <Link href="/login">Login</Link>
-                                    <Link href="/register" className="px-3 py-1 rounded-md text-white" style={{ background: ACCENT }}>
+                                    <Link
+                                        href="/register"
+                                        className="px-3 py-1 rounded-md text-white"
+                                        style={{ background: ACCENT }}
+                                    >
                                         Register
                                     </Link>
                                 </>
-                            ) : (
+                            ) : mounted ? (
                                 <div className="relative">
                                     <button
                                         ref={accountTriggerRef}
@@ -565,6 +593,7 @@ export default function Header({
                                                 >
                                                     Profile
                                                 </Link>
+
                                                 <button
                                                     onClick={handleLogout}
                                                     className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-slate-100 rounded-b-xl"
@@ -575,7 +604,7 @@ export default function Header({
                                         )}
                                     </AnimatePresence>
                                 </div>
-                            )}
+                            ) : null}
                         </div>
                     </div>
 
@@ -611,7 +640,7 @@ export default function Header({
                                         </span>
                                     )}
                                 </Link>
-                                {!isAuthed ? (
+                                {mounted && !localAuthed ? (
                                     <div className="flex items-center gap-2">
                                         <Link
                                             href="/login"
@@ -628,11 +657,11 @@ export default function Header({
                                             Register
                                         </Link>
                                     </div>
-                                ) : (
+                                ) : mounted ? (
                                     <button onClick={() => router.push("/profile")}>
                                         <UserIcon size={18} />
                                     </button>
-                                )}
+                                ) : null}
                             </div>
                         </div>
 
@@ -755,7 +784,7 @@ export default function Header({
                                             <div className="text-center py-3 bg-slate-100 rounded-xl">
                                                 Checking…
                                             </div>
-                                        ) : !isAuthed ? (
+                                        ) : !localAuthed ? (
                                             <Link
                                                 href="/login"
                                                 onClick={() => setMobileOpen(false)}

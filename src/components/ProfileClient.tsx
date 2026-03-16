@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { User, Edit2, Lock, MapPin, Box } from "lucide-react";
+import { User, Edit2, Lock, MapPin, Box, LogOut } from "lucide-react";
 import type { Address as SharedAddress } from "../types/address";
 import api from "@/services/api";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { logout } from "@/lib/auth";
 import ProfileOrders from "./ProfileOrders";
 import ProfileAddresses from "./ProfileAddresses";
 import ProfilePasswordUpdate from "./ProfilePasswordUpdate";
@@ -420,6 +421,13 @@ export default function ProfilePageAlt(): React.ReactElement {
                                     {tab.label}
                                 </button>
                             ))}
+                            <button
+                                onClick={() => logout("/login")}
+                                className="flex items-center gap-3 px-5 py-3 rounded-lg text-sm font-medium border bg-red-50 text-red-600 hover:bg-red-100 transition mt-3"
+                            >
+                                <LogOut className="w-5 h-5" />
+                                Logout
+                            </button>
                         </div>
                     </div>
                 </aside>
