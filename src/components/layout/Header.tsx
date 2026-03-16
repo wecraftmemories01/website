@@ -611,9 +611,28 @@ export default function Header({
                                         </span>
                                     )}
                                 </Link>
-                                <button onClick={() => router.push(isAuthed ? "/profile" : "/login")}>
-                                    <UserIcon size={18} />
-                                </button>
+                                {!isAuthed ? (
+                                    <div className="flex items-center gap-2">
+                                        <Link
+                                            href="/login"
+                                            className="text-xs px-2 py-1 border rounded-md"
+                                        >
+                                            Login
+                                        </Link>
+
+                                        <Link
+                                            href="/register"
+                                            className="text-xs px-3 py-1.5 rounded-md text-white font-medium"
+                                            style={{ background: ACCENT }}
+                                        >
+                                            Register
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => router.push("/profile")}>
+                                        <UserIcon size={18} />
+                                    </button>
+                                )}
                             </div>
                         </div>
 
