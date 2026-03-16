@@ -1,16 +1,9 @@
 import React from "react";
 import ProductClient from "../../../components/ProductDetails";
-import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({
-    params,
-}: {
-    params: Promise<{ id: string }>;
-}) {
-    const { id: productId } = await params;
-
+async function fetchProduct(productId: string) {
     const apiBaseRaw = process.env.NEXT_PUBLIC_API_BASE;
     const API_BASE = apiBaseRaw ? String(apiBaseRaw).replace(/\/+$/, "") : "";
 
@@ -23,35 +16,56 @@ export default async function Page({
         ? `${API_BASE}/product/sell/${encodeURIComponent(productId)}`
         : `${fallback}/product/sell/${encodeURIComponent(productId)}`;
 
-    try {
-        const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store" });
 
-        if (!res.ok) {
-            if (res.status === 404) {
-                // notFound();
-                return <div className="p-8 text-center">Product not found ({res.status})</div>;
-            }
-            return (
-                <div className="p-8 text-center text-red-600">
-                    Failed to load product ({res.status})
-                </div>
-            );
-        }
+    if (!res.ok) return null;
 
-        const json = await res.json().catch(() => null);
-        const productData = json?.productData ?? json?.data ?? null;
+    const json = await res.json().catch(() => null);
+    return json?.productData ?? json?.data ?? null;
+}
 
-        if (!productData) {
-            return <div className="p-8 text-center">Product not found</div>;
-        }
+/* SEO metadata */
+export async function generateMetadata({
+    params,
+}: {
+    params: Promise<{ id: string }>;
+}) {
+    const { id } = await params;
 
-        return <ProductClient product={productData} />;
-    } catch (err) {
-        console.error("Product fetch error:", err);
-        return (
-            <div className="p-8 text-center text-red-600">
-                Could not load product (network error)
-            </div>
-        );
+    const product = await fetchProduct(id);
+
+    if (!product) {
+        return {
+            title: "Product | WeCraftMemories",
+        };
     }
+
+    const productName =
+        product?.name ||
+        product?.title ||
+        product?.productName ||
+        "Handmade Crochet Gift";
+
+    return {
+        title: `${productName} | Handmade Crochet Gift – WeCraftMemories`,
+        description:
+            product?.shortDescription ||
+            `Buy ${productName} from WeCraftMemories. Discover adorable handmade crochet toys and handcrafted gifts.`,
+    };
+}
+
+export default async function Page({
+    params,
+}: {
+    params: Promise<{ id: string }>;
+}) {
+    const { id: productId } = await params;
+
+    const productData = await fetchProduct(productId);
+
+    if (!productData) {
+        return <div className="p-8 text-center">Product not found</div>;
+    }
+
+    return <ProductClient product={productData} />;
 }
