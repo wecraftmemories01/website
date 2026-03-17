@@ -115,46 +115,6 @@ function normalizeCartResponse(raw: any): Cart | null {
     return out;
 }
 
-/** Logged-Out UI component */
-function LoggedOutState() {
-    return (
-        <div className="min-h-[60vh] flex items-center justify-center p-6">
-            <div className="max-w-md w-full text-center bg-white rounded-xl shadow-lg p-8">
-                <h2 className="text-xl font-semibold mb-2">
-                    You’re not logged in
-                </h2>
-                <p className="text-sm text-gray-600 mb-6">
-                    Login or create an account to view your cart, save items,
-                    and checkout faster.
-                </p>
-
-                <div className="flex flex-col gap-3">
-                    <Link
-                        href="/products"
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-md"
-                    >
-                        Browse products
-                    </Link>
-
-                    <Link
-                        href="/login"
-                        className="w-full border px-4 py-3 rounded-md"
-                    >
-                        Login
-                    </Link>
-
-                    <Link
-                        href="/register"
-                        className="w-full border px-4 py-3 rounded-md"
-                    >
-                        Create account
-                    </Link>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 /* ---------------- Error helpers & ApiError ---------------- */
 
 class ApiError extends Error {
@@ -1096,7 +1056,7 @@ export default function ClientCart() {
     }
 
     /* ---------------- UI helpers ---------------- */
-    function EmptyIllustration() {
+    function EmptyIllustration({ isAuthenticated }: { isAuthenticated: boolean }) {
         return (
             <div className="max-w-sm mx-auto text-center">
                 <svg width="180" height="120" viewBox="0 0 180 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="mx-auto mb-4">
@@ -1106,8 +1066,20 @@ export default function ClientCart() {
                     <circle cx="50" cy="60" r="6" fill="#E5E7EB" />
                     <circle cx="122" cy="60" r="6" fill="#E5E7EB" />
                 </svg>
+
                 <h3 className="text-lg font-semibold">Your cart is empty</h3>
-                <p className="text-sm text-gray-500 mt-2">When you add items, they’ll show up here. Ready to find something lovely?</p>
+
+                <p className="text-sm text-gray-500 mt-2">
+                    When you add items, they’ll show up here. Ready to find something lovely?
+                </p>
+
+                {/* 👇 SHOW ONLY FOR GUEST USERS */}
+                {!isAuthenticated && (
+                    <p className="text-xs text-gray-400 mt-3">
+                        Login to save your cart across devices
+                    </p>
+                )}
+
                 <div className="mt-4 flex justify-center gap-3">
                     <a href="/products" className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md shadow">
                         Browse products
@@ -1153,15 +1125,15 @@ export default function ClientCart() {
             </div>
         );
 
-    // NOT logged in → show login / register CTA
-    if (!loading && !isAuthenticated && !localCart) {
-        return <LoggedOutState />
-    }
-
-    if (!loading && localCart && Array.isArray(localCart.sellItems) && localCart.sellItems.length === 0) {
+    if (
+        !loading &&
+        (!localCart ||
+            !Array.isArray(localCart.sellItems) ||
+            localCart.sellItems.length === 0)
+    ) {
         return (
             <div className="p-8">
-                <EmptyIllustration />
+                <EmptyIllustration isAuthenticated={isAuthenticated} />
             </div>
         );
     }
