@@ -437,50 +437,56 @@ export default function ProductsClient() {
                         {/* TOOLBAR */}
                         <div className="flex items-center justify-between mb-6">
 
-                            {/* LEFT CONTROLS */}
-                            <div className="flex items-center gap-2">
+                            {/* LEFT SIDE */}
+                            <div className="flex items-center gap-4">
 
-                                {/* FILTER BUTTON */}
-                                <button
-                                    onClick={() => setFiltersOpen(true)}
-                                    className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
-                                >
-                                    Filters
-                                </button>
-
-                                {/* SORT BUTTON */}
-                                <button
-                                    onClick={() => setSortOpen(true)}
-                                    className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
-                                >
-                                    Sort: {sortBy === "latest" ? "Newest" :
-                                        sortBy === "price-low" ? "Low → High" :
-                                            "High → Low"}
-                                </button>
-
-                                {/* CLEAR FILTERS */}
-                                {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
+                                {/* MOBILE CONTROLS (unchanged) */}
+                                <div className="flex items-center gap-2">
                                     <button
-                                        onClick={clearAll}
-                                        className="lg:hidden px-3 py-2 rounded-full text-sm bg-red-50 text-red-600 border border-red-200"
+                                        onClick={() => setFiltersOpen(true)}
+                                        className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
                                     >
-                                        Clear
+                                        Filters
                                     </button>
-                                )}
+
+                                    <button
+                                        onClick={() => setSortOpen(true)}
+                                        className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
+                                    >
+                                        Sort: {sortBy === "latest" ? "Newest" :
+                                            sortBy === "price-low" ? "Low → High" :
+                                                "High → Low"}
+                                    </button>
+
+                                    {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
+                                        <button
+                                            onClick={clearAll}
+                                            className="lg:hidden px-3 py-2 rounded-full text-sm bg-red-50 text-red-600 border border-red-200"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* ✅ NEW PRODUCT COUNT */}
+                                <div className="text-sm text-slate-600">
+                                    Showing{" "}
+                                    <span className="font-semibold text-slate-900">
+                                        {Math.min((page - 1) * perPage + 1, total)}–
+                                        {Math.min(page * perPage, total)}
+                                    </span>{" "}
+                                    of{" "}
+                                    <span className="font-semibold text-slate-900">
+                                        {total}
+                                    </span>{" "}
+                                    products
+                                </div>
 
                             </div>
 
-                            {/* PRODUCT COUNT */}
-                            <div className="text-sm text-slate-600 font-medium">
-                                {total} items
-                            </div>
-
-                            {/* DESKTOP PER PAGE */}
+                            {/* RIGHT SIDE (unchanged) */}
                             <div className="hidden lg:flex items-center gap-3">
-
-                                <span className="text-sm text-slate-500">
-                                    Per page
-                                </span>
+                                <span className="text-sm text-slate-500">Per page</span>
 
                                 <select
                                     value={perPage}
@@ -499,7 +505,6 @@ export default function ProductsClient() {
                                         </option>
                                     ))}
                                 </select>
-
                             </div>
 
                         </div>
