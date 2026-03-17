@@ -39,6 +39,19 @@ function formatPrice(n?: number | string | null) {
     })
 }
 
+function isGuestInCart(productId: string) {
+
+    const raw = localStorage.getItem("wcm_guest_cart_v1")
+    if (!raw) return false
+
+    try {
+        const items = JSON.parse(raw)
+        return items.some((i: any) => i.productId === productId)
+    } catch {
+        return false
+    }
+}
+
 /* -------------------- Component -------------------- */
 
 export default function ProductCardClient({ product, initialAdded = false }: Props) {
@@ -64,7 +77,11 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
         const syncFromCart = () => {
             try {
-                const inCart = isInCart(String(product._id));
+                const token = localStorage.getItem("accessToken")
+
+                const inCart = token
+                    ? isInCart(String(product._id))
+                    : isGuestInCart(String(product._id))
                 setAdded(inCart);
             } catch {
                 setAdded(false);
@@ -263,35 +280,62 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
                                         if (added || loadingAdd) return
 
-                                        const token =
-                                            typeof window !== "undefined"
-                                                ? localStorage.getItem("accessToken")
-                                                : null
-
-                                        if (!token) {
-                                            setErrorModal({
-                                                open: true,
-                                                message: "Please log in to add products to your cart."
-                                            })
-                                            return
-                                        }
-
                                         setLoadingAdd(true)
 
                                         try {
-                                            const result = await addToCart(String(product._id), 1, inferredType)
 
-                                            if (result?.success) {
-                                                setAdded(true)
-                                                window.dispatchEvent(new Event("cartChanged"))
+                                            const token =
+                                                typeof window !== "undefined"
+                                                    ? localStorage.getItem("accessToken")
+                                                    : null
+
+                                            // USER LOGGED IN → SERVER CART
+                                            if (token) {
+
+                                                const result = await addToCart(String(product._id), 1, inferredType)
+
+                                                if (result?.success) {
+                                                    setAdded(true)
+                                                    window.dispatchEvent(new Event("cartChanged"))
+                                                }
+
                                             } else {
-                                                setErrorModal({
-                                                    open: true,
-                                                    message: "Please log in to add products to your cart."
-                                                })
+
+                                                // GUEST USER → LOCAL STORAGE CART
+                                                const key = "wcm_guest_cart_v1"
+
+                                                let existing: any[] = []
+
+                                                try {
+                                                    existing = JSON.parse(localStorage.getItem(key) || "[]")
+                                                } catch {
+                                                    existing = []
+                                                }
+
+                                                const existingItem = existing.find(
+                                                    (i: any) => String(i.productId) === String(product._id)
+                                                )
+
+                                                if (existingItem) {
+                                                    existingItem.quantity += 1
+                                                } else {
+                                                    existing.push({
+                                                        productId: String(product._id),
+                                                        quantity: 1,
+                                                        type: inferredType
+                                                    })
+                                                }
+
+                                                localStorage.setItem(key, JSON.stringify(existing))
+
+                                                setAdded(true)
+
+                                                window.dispatchEvent(new Event("cartChanged"))
                                             }
+
                                         } catch (err) {
                                             console.error(err)
+
                                             setErrorModal({
                                                 open: true,
                                                 message: "Something went wrong."

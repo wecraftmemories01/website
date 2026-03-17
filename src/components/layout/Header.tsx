@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
-import { fetchCartFromApi } from "../../lib/cart";
 import { fetchCartCountUtil } from "@/lib/cartCount";
 import { getStoredAccessToken, logout } from "../../lib/auth";
 import api from "../../services/api";
@@ -69,12 +68,10 @@ export default function Header({
     // split states: mobile menu vs account dropdown
     const [mobileOpen, setMobileOpen] = useState(false); // mobile menu
     const [accountOpen, setAccountOpen] = useState(false); // account dropdown
-    const [collectionsOpen, setCollectionsOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const [mounted, setMounted] = useState(false);
     const [cartCount, setCartCount] = useState<number>(0);
-    const [cartLoading, setCartLoading] = useState<boolean>(false);
     const [portalReady, setPortalReady] = useState(false);
     const [localAuthed, setLocalAuthed] = useState(false);
 
@@ -82,37 +79,18 @@ export default function Header({
 
     const { ready: authReady, isAuthed } = useAuthGuard({ verifyWithServer: true });
 
-    // separate refs: collections trigger (button) and panel (mega)
-    const triggerRef = useRef<HTMLButtonElement | null>(null);
-    const panelRef = useRef<HTMLDivElement | null>(null);
+    const isFetchingCartRef = useRef<boolean>(false);
 
     // account trigger + panel refs
     const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
     const accountPanelRef = useRef<HTMLDivElement | null>(null);
 
     // hover/leave close helpers
-    const hoverInsideRef = useRef(false);
-    const closeTimerRef = useRef<number | null>(null);
     const CLOSE_DELAY = 200; // ms
 
     useEffect(() => {
         setPortalReady(true);
     }, []);
-
-    function scheduleCloseCollections() {
-        if (closeTimerRef.current && typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
-        if (typeof window !== "undefined") {
-            closeTimerRef.current = window.setTimeout(() => {
-                if (!hoverInsideRef.current) setCollectionsOpen(false);
-            }, CLOSE_DELAY) as unknown as number;
-        }
-    }
-    function cancelCloseCollections() {
-        if (closeTimerRef.current && typeof window !== "undefined") {
-            window.clearTimeout(closeTimerRef.current);
-            closeTimerRef.current = null;
-        }
-    }
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [categoriesWithSubs, setCategoriesWithSubs] = useState<Set<string>>(new Set());
@@ -161,13 +139,6 @@ export default function Header({
         setLocalAuthed(!!getStoredAccessToken());
     }, []);
 
-    // 🔑 Hydrate cart from server on first load (refresh-safe)
-    useEffect(() => {
-        if (!mounted) return;
-
-        fetchCartFromApi();
-    }, [mounted]);
-
     const handleLogout = useCallback(async () => {
         await logout("/");
     }, []);
@@ -176,13 +147,6 @@ export default function Header({
     useEffect(() => {
         function onDocClick(e: MouseEvent) {
             const t = e.target as Node | null;
-
-            // collections: if click not on trigger nor inside panel -> close
-            const clickedCollectionsTrigger = triggerRef.current && t && triggerRef.current.contains(t);
-            const clickedCollectionsPanel = panelRef.current && t && panelRef.current.contains(t);
-            if (!clickedCollectionsTrigger && !clickedCollectionsPanel) {
-                setCollectionsOpen(false);
-            }
 
             // account: if click not on account trigger nor account panel -> close
             const clickedAccountTrigger = accountTriggerRef.current && t && accountTriggerRef.current.contains(t);
@@ -193,7 +157,7 @@ export default function Header({
         }
         function onKey(e: KeyboardEvent) {
             if (e.key === "Escape") {
-                setCollectionsOpen(false);
+
                 setAccountOpen(false);
                 setMobileOpen(false);
             }
@@ -301,63 +265,25 @@ export default function Header({
         return () => ctrl.abort();
     }, []);
 
-    // lock body scroll when mega open
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        // Save previous values so we can restore them exactly
-        const prevOverflow = document.body.style.overflow;
-        const prevPaddingRight = document.body.style.paddingRight || "";
-
-        function getScrollbarWidth() {
-            return window.innerWidth - document.documentElement.clientWidth;
-        }
-
-        if (collectionsOpen) {
-            const scrollBarWidth = getScrollbarWidth();
-            if (scrollBarWidth > 0) {
-                document.body.style.paddingRight = `${scrollBarWidth}px`;
-            }
-            document.body.style.overflow = "hidden";
-        } else {
-            document.body.style.overflow = prevOverflow || "";
-            document.body.style.paddingRight = prevPaddingRight;
-        }
-
-        return () => {
-            document.body.style.overflow = prevOverflow || "";
-            document.body.style.paddingRight = prevPaddingRight;
-        };
-    }, [collectionsOpen]);
-
-    // cleanup close timer on unmount
-    useEffect(() => {
-        return () => {
-            if (closeTimerRef.current && typeof window !== "undefined") {
-                window.clearTimeout(closeTimerRef.current);
-                closeTimerRef.current = null;
-            }
-        };
-    }, []);
-
     useEffect(() => {
         if (!mounted) return;
 
+        // instant UI from cache
+        const cached = Number(localStorage.getItem("cartCount") || 0);
+        setCartCount(cached);
+
         async function loadCart() {
-            if (!localAuthed) {
-                setCartCount(0);
-                return;
-            }
+            if (isFetchingCartRef.current) return;
+            isFetchingCartRef.current = true;
 
-            // 🔥 instant UI
-            const cached = localStorage.getItem("cartCount");
-            if (cached) {
-                setCartCount(Number(cached));
+            try {
+                const count = await fetchCartCountUtil();
+                setCartCount(count);
+            } catch (err) {
+                console.error("Header cart load failed", err);
+            } finally {
+                isFetchingCartRef.current = false;
             }
-
-            // 🔥 background sync
-            const count = await fetchCartCountUtil();
-            setCartCount(count);
         }
 
         loadCart();
@@ -366,17 +292,12 @@ export default function Header({
             loadCart();
         }
 
-        window.addEventListener("authChanged", handleCartRefresh);
         window.addEventListener("cartChanged", handleCartRefresh);
-        window.addEventListener("storage", handleCartRefresh);
 
         return () => {
-            window.removeEventListener("authChanged", handleCartRefresh);
             window.removeEventListener("cartChanged", handleCartRefresh);
-            window.removeEventListener("storage", handleCartRefresh);
         };
-
-    }, [mounted, localAuthed]);
+    }, [mounted]);
 
     const totalSubCount = useMemo(() => Object.values(subsMap).reduce((s, arr) => s + arr.length, 0), [subsMap]);
     const selectedSubs = selectedCat ? (subsMap[selectedCat] || []) : [];
@@ -385,7 +306,7 @@ export default function Header({
     const doHeaderSearch = useCallback((q: string) => {
         const trimmed = (q ?? "").trim();
         if (trimmed.length === 0) {
-            router.push("/products");
+            router.replace("/products");
         } else {
             const encoded = encodeURIComponent(trimmed);
             router.push(`/products?q=${encoded}`);

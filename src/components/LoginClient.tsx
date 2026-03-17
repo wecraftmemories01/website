@@ -136,15 +136,24 @@ export default function LoginPage() {
                 }
             });
 
-            if (remember) {
-                localStorage.setItem("rememberedUser", username.trim());
-            } else {
-                localStorage.removeItem("rememberedUser");
+            // WAIT FOR CART SYNC BEFORE REDIRECT
+            try {
+                const { fetchCartFromApi } = await import("@/lib/cart");
+                await fetchCartFromApi();
+
+                // notify UI AFTER cart is ready
+                window.dispatchEvent(new Event("cartChanged"));
+            } catch (err) {
+                console.error("Cart sync after login failed", err);
             }
 
+            // optional: auth event
             window.dispatchEvent(new Event("authChanged"));
+
             setSuccess(data?.message || "Login successful");
-            router.push("/");
+
+            // NOW redirect (after everything is ready)
+            router.push("/cart");
         } catch {
             setErrorMsg("Unable to reach server. Please check if your API is running.");
         } finally {

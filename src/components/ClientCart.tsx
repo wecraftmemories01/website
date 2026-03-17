@@ -330,13 +330,14 @@ export default function ClientCart() {
 
     const router = useRouter();
 
+    const guestCartLoading = React.useRef(false);
+
     // derived counts used for disabling checkout
-    const totalItemsCount = isAuthenticated
-        ? (localCart?.sellItems ?? []).reduce(
-            (c, it) => c + (it.inUse === false ? 0 : Number(it.quantity ?? 0)),
+    const totalItemsCount =
+        (localCart?.sellItems ?? []).reduce(
+            (sum, it) => sum + Number(it.quantity ?? 1),
             0
         )
-        : 0;
     const hasItems = totalItemsCount > 0;
 
     function redirectToLogin(): void {
@@ -376,20 +377,38 @@ export default function ClientCart() {
     }, []);
 
     useEffect(() => {
-        if (!isAuthenticated) return;
+        async function init() {
+            if (isAuthenticated) {
+                await syncGuestCartToServer()
 
-        fetchCart();
-        fetchSavedItems();
-    }, [isAuthenticated]);
+                await fetchCart()
+                fetchSavedItems()
+            } else {
+                loadGuestCart()
+            }
+        }
+
+        init()
+    }, [isAuthenticated])
 
     useEffect(() => {
-        if (!isAuthenticated) {
-            setCart(null);
-            setLocalCart(null);
-            setSavedItems([]);
-            setError("");
+        const reload = () => {
+
+            const token = getStoredAccessToken()
+
+            if (!token) {
+                loadGuestCart()
+            } else {
+                fetchCart()
+            }
         }
-    }, [isAuthenticated]);
+
+        window.addEventListener("cartChanged", reload)
+
+        return () => {
+            window.removeEventListener("cartChanged", reload)
+        }
+    }, [])
 
     async function fetchCart(): Promise<void> {
         setLoading(true);
@@ -455,11 +474,126 @@ export default function ClientCart() {
         }
     }
 
+    async function loadGuestCart() {
+
+        if (guestCartLoading.current) return;
+        guestCartLoading.current = true;
+
+        try {
+
+            const raw = localStorage.getItem("wcm_guest_cart_v1")
+            if (!raw) {
+                setLocalCart(null)
+                return
+            }
+
+            let items: any[] = []
+
+            try {
+                items = JSON.parse(raw)
+            } catch {
+                window.dispatchEvent(new Event("cartChanged"));
+                localStorage.removeItem("wcm_guest_cart_v1")
+                setLocalCart(null)
+                return
+            }
+
+            if (!Array.isArray(items) || items.length === 0) {
+                setLocalCart({ _id: "guest", sellItems: [] })
+                return
+            }
+
+            const ids = [...new Set(items.map((i: any) => i.productId))].join(",")
+
+            const res = await api.get(`/product/sell?ids=${ids}`)
+
+            const products = Array.isArray(res.data?.productData)
+                ? res.data.productData
+                : []
+
+            const sellItems = products
+                .filter((p: any) =>
+                    items.some((i: any) => String(i.productId) === String(p._id))
+                )
+                .map((p: any) => {
+
+                    const cartItem = items.find(
+                        (i: any) => String(i.productId) === String(p._id)
+                    )
+
+                    return {
+                        _id: p._id,
+                        productId: p._id,
+                        quantity: cartItem?.quantity ?? 1,
+                        inUse: true,
+                        imagePath: p.productImage,
+                        thumbnail: p.productImage,
+                        productPublicName: p.productName,
+                        sellStockQuantity: p.sellStockQuantity,
+                        price: {
+                            actualPrice: p.latestSalePrice?.actualPrice,
+                            discountedPrice: p.latestSalePrice?.discountedPrice
+                        }
+                    }
+
+                })
+
+            setLocalCart({
+                _id: "guest",
+                sellItems
+            })
+
+        } catch (err) {
+            console.error("Invalid guest cart", err)
+        } finally {
+            guestCartLoading.current = false
+        }
+    }
+
+    async function syncGuestCartToServer() {
+
+        const raw = localStorage.getItem("wcm_guest_cart_v1")
+        if (!raw) return
+
+        try {
+
+            let items: any[] = []
+
+            try {
+                items = JSON.parse(raw)
+            } catch {
+                localStorage.removeItem("wcm_guest_cart_v1")
+                closeConfirmDialog()
+                return
+            }
+
+            if (!items.length) {
+                localStorage.removeItem("wcm_guest_cart_v1")
+                return
+            }
+
+            for (const item of items) {
+                await api.post("/cart", {
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    type: "SELL"
+                })
+            }
+
+            localStorage.removeItem("wcm_guest_cart_v1")
+
+            window.dispatchEvent(new Event("cartChanged"));
+
+        } catch (err) {
+            console.error("Guest cart sync failed", err)
+        }
+    }
+
     function updateLocalItemById(itemId: string | undefined, patch: Partial<CartItem>): void {
         if (!itemId) return;
         setLocalCart((prev) => {
             if (!prev) return prev;
-            const copy: Cart = JSON.parse(JSON.stringify(prev));
+            const copy = { ...prev, sellItems: [...(prev.sellItems ?? [])] }
             const arr = copy.sellItems ?? [];
             const idx = arr.findIndex((a) => a._id === itemId);
             if (idx === -1) return prev;
@@ -468,7 +602,7 @@ export default function ClientCart() {
         });
         setCart((prev) => {
             if (!prev) return prev;
-            const copy: Cart = JSON.parse(JSON.stringify(prev));
+            const copy = { ...prev, sellItems: [...(prev.sellItems ?? [])] }
             const arr = copy.sellItems ?? [];
             const idx = arr.findIndex((a) => a._id === itemId);
             if (idx === -1) return prev;
@@ -487,7 +621,14 @@ export default function ClientCart() {
         setSaving(true);
         setError("");
         try {
-            const result = await updateCartItem(cartId, String(item._id), Number(item.quantity ?? 1), "SELL");
+            const result = await updateCartItem(
+                cartId,
+                String(item._id),
+                String(item.productId),
+                Number(item.quantity ?? 1),
+                "SELL"
+            );
+            window.dispatchEvent(new Event("cartChanged"));
             if (!result?.success) {
                 throw new Error(result?.message || "Failed to update item");
             }
@@ -515,12 +656,6 @@ export default function ClientCart() {
     }
 
     async function performDelete() {
-        const cartId = cart?._id ?? cart?.cartId;
-        if (!cartId) {
-            setError("Cart not initialized yet.");
-            closeConfirmDialog();
-            return;
-        }
 
         if (!toDeleteItemId) {
             setError("No item selected for deletion.");
@@ -528,20 +663,116 @@ export default function ClientCart() {
             return;
         }
 
-        setDeleting(true);
-        setError("");
-        try {
-            const result = await removeFromCart(cartId, toDeleteItemId, "SELL");
-            if (!result?.success) throw new Error(result?.message || "Failed to delete item");
-            await fetchCart();
+        const token = getStoredAccessToken()
+
+        // GUEST CART DELETE
+        if (!token) {
+
+            const raw = localStorage.getItem("wcm_guest_cart_v1")
+            if (!raw) return
+
+            let items: any[] = []
+
+            try {
+                items = JSON.parse(raw)
+            } catch {
+                localStorage.removeItem("wcm_guest_cart_v1")
+                closeConfirmDialog()
+                return
+            }
+
+            const filtered = items.filter(
+                (i: any) => String(i.productId) !== String(toDeleteItemId)
+            )
+
+            localStorage.setItem("wcm_guest_cart_v1", JSON.stringify(filtered))
+
+            setLocalCart(prev => {
+                if (!prev) return prev
+
+                return {
+                    ...prev,
+                    sellItems: prev.sellItems?.filter(
+                        (it) => it._id !== toDeleteItemId
+                    )
+                }
+            })
+
+            window.dispatchEvent(new Event("cartChanged"));
+            closeConfirmDialog()
+
+            return
+        }
+
+        // SERVER CART DELETE
+        const cartId = cart?._id ?? cart?.cartId;
+
+        if (!cartId) {
+            setError("Cart not initialized yet.");
             closeConfirmDialog();
-        } catch (err: any) {
-            if (err?.message === "Auth required") {
-                redirectToLogin();
+            return;
+        }
+
+        setDeleting(true);
+
+        try {
+
+            const item = localCart?.sellItems?.find(
+                (it) => String(it._id) === String(toDeleteItemId)
+            );
+
+            if (!item?.productId) {
+                setError("Product not found for deletion.");
+                closeConfirmDialog();
                 return;
             }
+
+            // 1. Optimistic UI update
+            setLocalCart(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    sellItems: prev.sellItems?.filter(
+                        (it) => String(it._id) !== String(toDeleteItemId)
+                    )
+                };
+            });
+
+            // optional (keep cart + localCart in sync)
+            setCart(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    sellItems: prev.sellItems?.filter(
+                        (it) => String(it._id) !== String(toDeleteItemId)
+                    )
+                };
+            });
+
+            // 2. ACTUAL API CALL (this was missing ❌)
+            const result = await removeFromCart(
+                cartId,
+                String(toDeleteItemId),
+                String(item.productId),
+                "SELL"
+            );
+
+            if (!result?.success) {
+                throw new Error(result?.message || "Delete failed");
+            }
+
+            // 3. notify other components (header, product cards)
+            window.dispatchEvent(new Event("cartChanged"));
+
+            closeConfirmDialog();
+
+        } catch (err: any) {
             console.error("performDelete error:", err);
             setError(err?.message || "Unable to delete item");
+
+            // rollback if API fails
+            await fetchCart();
+
         } finally {
             setDeleting(false);
         }
@@ -581,19 +812,57 @@ export default function ClientCart() {
 
         updateLocalItemById(itemId, { quantity: qty });
 
-        const cartId = cart?._id ?? cart?.cartId;
-        if (!cartId) {
-            setError("Cart not initialized yet.");
-            return;
-        }
-        if (!cartId) {
-            setError("Cart identifier missing - cannot update quantity.");
-            return;
+        const token = getStoredAccessToken()
+
+        // GUEST CART QUANTITY UPDATE
+        if (!token) {
+
+            const raw = localStorage.getItem("wcm_guest_cart_v1")
+            if (!raw) return
+
+            let items: any[] = []
+
+            try {
+                items = JSON.parse(raw)
+            } catch {
+                localStorage.removeItem("wcm_guest_cart_v1")
+                closeConfirmDialog()
+                return
+            }
+
+            const index = items.findIndex(
+                (i: any) => String(i.productId) === String(itemId)
+            )
+
+            if (index >= 0) {
+                items[index].quantity = qty
+                localStorage.setItem("wcm_guest_cart_v1", JSON.stringify(items))
+
+                window.dispatchEvent(new Event("cartChanged"));
+            }
+
+            return
         }
 
-        setSavingItemId(itemId);
+        // SERVER CART QUANTITY UPDATE
+        const cartId = cart?._id ?? cart?.cartId
+
+        if (!cartId) {
+            setError("Cart not initialized yet.")
+            return
+        }
+
+        setSavingItemId(itemId)
+
         try {
-            const result = await updateCartItem(cartId, String(itemId), qty, "SELL");
+
+            const result = await updateCartItem(
+                cartId,
+                String(itemId),
+                String(item.productId),
+                qty,
+                "SELL"
+            );
             if (!result?.success) {
                 throw new Error(result?.message || "Failed to update quantity");
             }
@@ -867,8 +1136,8 @@ export default function ClientCart() {
         );
 
     // NOT logged in → show login / register CTA
-    if (!loading && !isAuthenticated) {
-        return <LoggedOutState />;
+    if (!loading && !isAuthenticated && !localCart) {
+        return <LoggedOutState />
     }
 
     if (!loading && localCart && Array.isArray(localCart.sellItems) && localCart.sellItems.length === 0) {

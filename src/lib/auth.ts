@@ -179,7 +179,7 @@ export async function refreshAccessToken(): Promise<boolean> {
         } catch {
             return false;
         } finally {
-            refreshPromise = null; // 🔓 Unlock
+            refreshPromise = null; // Unlock
         }
     })();
 
@@ -294,5 +294,6 @@ export function persistAuth(data: AuthShape | null) {
     localStorage.setItem(TOKEN_KEY, data.token.accessToken);
 
     scheduleSilentRefresh();
+
     window.dispatchEvent(new Event("authChanged"));
 }

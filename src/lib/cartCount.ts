@@ -22,16 +22,37 @@ export async function fetchCartCountUtil(): Promise<number> {
         if (typeof window === "undefined") return 0;
 
         const token = getStoredAccessToken();
+
+        /* ================= GUEST CART ================= */
         if (!token) {
-            localStorage.setItem("cartCount", "0");
-            return 0;
+            try {
+                const raw = localStorage.getItem("wcm_guest_cart_v1");
+                if (!raw) {
+                    localStorage.setItem("cartCount", "0");
+                    return 0;
+                }
+
+                const items = JSON.parse(raw);
+
+                if (!Array.isArray(items)) return 0;
+
+                const count = items.reduce(
+                    (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+                    0
+                );
+
+                localStorage.setItem("cartCount", String(count));
+                return count;
+
+            } catch {
+                localStorage.setItem("cartCount", "0");
+                return 0;
+            }
         }
 
-        const customerId = getStoredCustomerId();
+        /* ================= LOGGED-IN CART ================= */
 
-        const res = await api.get("/cart", {
-            params: { customerId }
-        });
+        const res = await api.get("/cart");
 
         const body = res.data;
 
