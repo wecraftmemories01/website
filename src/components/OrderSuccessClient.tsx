@@ -485,7 +485,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                             <div className="lg:sticky lg:top-6">
                                 <div className="flex flex-col gap-3">
                                     <button type="button"
-                                        onClick={() => router.push("/")}
+                                        onClick={() => router.push("/products")}
                                         className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-[#065975] font-medium hover:shadow-sm transition"
                                         aria-label="Continue shopping"
                                     >
@@ -557,7 +557,7 @@ export default function OrderSuccessClient(): React.ReactElement {
 
                     {/* Footer */}
                     <div className="px-6 py-4 border-t border-slate-100 bg-white/50 flex items-center justify-between gap-3">
-                        <button type="button" onClick={() => router.push("/")} className="inline-flex items-center gap-2 text-sm text-[#065975] font-medium">
+                        <button type="button" onClick={() => router.push("/products")} className="inline-flex items-center gap-2 text-sm text-[#065975] font-medium">
                             Continue shopping
                             <ArrowRight className="w-4 h-4" />
                         </button>

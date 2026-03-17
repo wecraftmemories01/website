@@ -1094,7 +1094,7 @@ export default function ClientCart() {
                     <a href="/products" className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md shadow">
                         Browse products
                     </a>
-                    <a href="/" className="inline-flex items-center gap-2 border px-4 py-2 rounded-md">
+                    <a href="/products" className="inline-flex items-center gap-2 border px-4 py-2 rounded-md">
                         Continue shopping
                     </a>
                 </div>

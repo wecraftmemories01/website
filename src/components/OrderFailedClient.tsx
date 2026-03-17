@@ -72,7 +72,7 @@ export default function OrderFailedClient() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
-                            onClick={() => router.push("/")}
+                            onClick={() => router.push("/products")}
                             className="w-full inline-flex items-center justify-center gap-3 py-3 rounded-xl border hover:shadow-sm transition bg-white"
                         >
                             <Home className="w-5 h-5 text-rose-600" />

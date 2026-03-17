@@ -1368,7 +1368,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     <div className="col-span-full text-center py-8 border rounded-xl">
                                         <p className="text-slate-500 mb-3">Your cart is empty</p>
                                         <button
-                                            onClick={() => router.push("/shop")}
+                                            onClick={() => router.push("/products")}
                                             className="px-4 py-2 bg-[#065975] text-white rounded-lg text-sm hover:brightness-95 transition"
                                         >
                                             Continue shopping
