@@ -4,6 +4,7 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -13,12 +14,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
-}
+} */
 
 body {
   background: var(--background);
@@ -31,6 +32,7 @@ html,
 body {
   max-width: 100%;
   overflow-x: hidden;
+  background-color: #ffffff;
 }
 
 /* Custom Scrollbar Styling */

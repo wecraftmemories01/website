@@ -20,6 +20,9 @@ export const metadata: Metadata = {
         shortcut: "/favicon.png",
         apple: "/apple-touch-icon.png",
     },
+    other: {
+        "color-scheme": "light",
+    },
 };
 
 export const viewport = {
@@ -37,7 +40,10 @@ const CONTAINER = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en">
+        <html lang="en" data-theme="light">
+            <head>
+                <meta name="color-scheme" content="light" />
+            </head>
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900 overflow-x-hidden`}>
 
                 <PWAInstallPrompt />
