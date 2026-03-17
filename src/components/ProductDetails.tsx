@@ -8,7 +8,6 @@ import { addToCart, isInCart } from "../lib/cart";
 import { authFetch } from "@/lib/auth";
 import {
     addFavouriteAPI,
-    fetchFavouritesAPI,
     removeFavouriteAPI,
 } from "../lib/favourites";
 
@@ -57,6 +56,18 @@ function formatINR(value?: number | null) {
         }).format(value);
     } catch {
         return `₹${value}`;
+    }
+}
+
+function isGuestInCart(productId: string) {
+    try {
+        const raw = localStorage.getItem("wcm_guest_cart_v1");
+        if (!raw) return false;
+
+        const items = JSON.parse(raw);
+        return items.some((i: any) => String(i.productId) === String(productId));
+    } catch {
+        return false;
     }
 }
 
@@ -423,6 +434,7 @@ function ReviewModule({ productName, initialReviews = [] as Review[], maxPerPage
 
 export default function ProductClient({ product }: { product: Product }) {
     const router = useRouter();
+    const addingRef = React.useRef(false);
 
     const {
         _id,
@@ -512,55 +524,58 @@ export default function ProductClient({ product }: { product: Product }) {
         });
     }
 
-    // Helper: update localStorage cart count (simple shared mechanism)
-    function incrementLocalCartCount(by = 1) {
-        try {
-            const key = 'wc_cart_count';
-            const cur = Number(localStorage.getItem(key) ?? 0);
-            localStorage.setItem(key, String(Math.max(0, cur + by)));
-        } catch (e) {
-            console.warn('incrementLocalCartCount failed', e);
-        }
-    }
-
     useEffect(() => {
-        let active = true;
 
-        async function checkFavourite() {
+        if (typeof window === "undefined") return;
+
+        const syncFromCart = () => {
             try {
-                const customerId = getStoredCustomerId();
-                const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+                const token = localStorage.getItem("accessToken");
 
-                if (!customerId) {
-                    setIsFavourite(false);
-                    setFavouriteId(null);
+                // ================= LOGGED IN =================
+                if (token) {
+                    const inCart = isInCart(String(_id));
+                    setCartState(inCart ? "added" : "not_added");
                     return;
                 }
 
-                const res = await fetchFavouritesAPI(customerId, undefined, token);
-                if (!active || !res.success) return;
+                // ================= GUEST CART =================
+                const raw = localStorage.getItem("wcm_guest_cart_v1");
 
-                const found = res.data.find(
-                    (f: any) => String(f.productId) === String(_id)
-                );
+                if (raw) {
+                    try {
+                        const items = JSON.parse(raw);
 
-                if (found) {
-                    setIsFavourite(true);
-                    setFavouriteId(found.favouriteId);
-                } else {
-                    setIsFavourite(false);
-                    setFavouriteId(null);
+                        const found = items.find(
+                            (i: any) => String(i.productId) === String(_id)
+                        );
+
+                        if (found) {
+                            setQuantity(found.quantity || 1); // ✅ FIX
+                            setCartState("added");
+                            return;
+                        }
+                    } catch { }
                 }
-            } catch (err) {
-                console.warn("Favourite check failed", err);
-            }
-        }
 
-        checkFavourite();
+                setCartState("not_added");
+
+            } catch (err) {
+                console.warn("Cart sync failed", err);
+                setCartState("not_added");
+            }
+        };
+
+        // initial
+        syncFromCart();
+
+        // listen for global updates
+        window.addEventListener("cartChanged", syncFromCart);
 
         return () => {
-            active = false;
+            window.removeEventListener("cartChanged", syncFromCart);
         };
+
     }, [_id]);
 
     async function toggleFavourite() {
@@ -605,189 +620,83 @@ export default function ProductClient({ product }: { product: Product }) {
         }
     }
 
-    /* ------------------ NEW: check if product present in cart once, and on cartUpdated ------------------ */
-    useEffect(() => {
 
-        if (typeof window === "undefined") return;
-
-        const syncFromCart = async () => {
-
-            try {
-
-                // 1️⃣ Check browser cart first (guest cart)
-                const inCart = isInCart(String(_id));
-
-                if (inCart) {
-                    setCartState("added");
-                    return;
-                }
-
-                // 2️⃣ If not found locally, check server cart (logged in users)
-                const customerId = getStoredCustomerId();
-
-                if (!customerId) {
-                    setCartState("not_added");
-                    return;
-                }
-
-                const res = await authFetch(`/cart?customerId=${customerId}`, {
-                    method: "GET"
-                });
-
-                const payload = await res.json();
-
-                const cartData = Array.isArray(payload?.cartData)
-                    ? payload.cartData
-                    : payload?.cartData
-                        ? [payload.cartData]
-                        : [];
-
-                let found = false;
-
-                for (const c of cartData) {
-
-                    const sellItems = Array.isArray(c?.sellItems) ? c.sellItems : [];
-
-                    const match = sellItems.find((s: any) => {
-
-                        const pid =
-                            s.productId?._id ||
-                            s.productId ||
-                            s.product?._id ||
-                            s.product;
-
-                        return String(pid) === String(_id);
-
-                    });
-
-                    if (match) {
-                        found = true;
-
-                        const q = Number(match.quantity ?? match.qty ?? 1);
-
-                        if (Number.isFinite(q) && q > 0) {
-                            setQuantity(q);
-                        }
-
-                        break;
-                    }
-                }
-
-                setCartState(found ? "added" : "not_added");
-
-            } catch (err) {
-                console.warn("Could not check cart", err);
-                setCartState("not_added");
-            }
-        };
-
-        // initial check
-        syncFromCart();
-
-        // listen for cart changes
-        window.addEventListener("cartChanged", syncFromCart);
-
-        return () => {
-            window.removeEventListener("cartChanged", syncFromCart);
-        };
-
-    }, [_id]);
 
     // ===== add to cart using shared helper OR fallback to raw fetch =====
     async function handleAddToCart() {
+
         if (isOutOfStock) {
             setToast("Cannot add — out of stock");
             return;
         }
-        if (adding || cartState !== "not_added") return;
 
-        setToast("Adding to cart...");
+        if (addingRef.current || cartState !== "not_added") return;
+
+        addingRef.current = true;
         setAdding(true);
 
         try {
-            const raw = await addToCart(String(_id), quantity, inferredType).catch((e: any) => {
-                console.warn('addToCart helper failed, falling back to raw fetch', e);
-                return null;
-            });
 
-            const result = raw as AddToCartResult;
+            const token = localStorage.getItem("accessToken");
 
-            if (result) {
-                if (result.needLogin || result.status === 401) {
-                    setToast("Please login to add to cart");
-                    setAdding(false);
-                    router.push('/login');
-                    return;
-                }
+            // ================= LOGGED IN =================
+            if (token) {
 
-                if (result.success) {
-                    const serverCount = (result as any)?.cartCount ?? (result as any)?.count ?? null;
-                    if (serverCount != null && Number.isFinite(Number(serverCount))) {
-                        try { localStorage.setItem('wc_cart_count', String(Number(serverCount))); } catch { }
-                    } else {
-                        incrementLocalCartCount(quantity);
-                    }
-                    setToast("Added to cart");
+                const result = await addToCart(String(_id), quantity, inferredType);
+
+                if (result?.success) {
                     setCartState("added");
-                    // notify other parts of the app to refetch cart
-                    window.dispatchEvent(new Event('cartUpdated'));
-                    setAdding(false);
+                    setToast("Added to cart");
+                    window.dispatchEvent(new Event("cartChanged"));
                     return;
                 }
 
-                setToast(typeof (result as any)?.message === 'string' ? (result as any).message : "Failed to add to cart");
-                setAdding(false);
+                if (result?.message?.includes("Auth")) {
+                    router.push("/login");
+                    return;
+                }
+
+                setToast(result?.message || "Failed to add to cart");
                 return;
             }
 
-            // fallback: original POST to /cart
-            const apiBaseRaw = process.env.NEXT_PUBLIC_API_BASE;
-            const API_BASE = apiBaseRaw ? String(apiBaseRaw).replace(/\/+$/, "") : "";
-            const fallback = typeof window !== "undefined" && process.env.NODE_ENV === "development"
-                ? "http://localhost:3000"
-                : "";
-            const cartUrl = API_BASE ? `${API_BASE}/cart` : `${fallback}/cart`;
+            // ================= GUEST CART =================
+            const key = "wcm_guest_cart_v1";
 
-            const payload = { productId: _id, quantity };
+            let existing: any[] = [];
 
-            const res = await fetch(cartUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify(payload),
-            });
-
-            if (res.status === 401) {
-                setToast("Please login to add to cart");
-                setAdding(false);
-                router.push('/login');
-                return;
+            try {
+                existing = JSON.parse(localStorage.getItem(key) || "[]");
+            } catch {
+                existing = [];
             }
 
-            if (!res.ok) {
-                const text = await res.text().catch(() => null);
-                console.error('Add to cart fallback failed', res.status, text);
-                setToast("Failed to add to cart");
-                setAdding(false);
-                return;
-            }
+            const existingItem = existing.find(
+                (i: any) => String(i.productId) === String(_id)
+            );
 
-            const json = await res.json().catch(() => null);
-            const serverCount = json?.cartCount ?? json?.count ?? null;
-            if (serverCount != null && Number.isFinite(Number(serverCount))) {
-                try { localStorage.setItem('wc_cart_count', String(Number(serverCount))); } catch { }
+            if (existingItem) {
+                existingItem.quantity += quantity;
             } else {
-                incrementLocalCartCount(quantity);
+                existing.push({
+                    productId: String(_id),
+                    quantity,
+                    type: inferredType
+                });
             }
 
-            setToast("Added to cart");
+            localStorage.setItem(key, JSON.stringify(existing));
+
             setCartState("added");
-            window.dispatchEvent(new Event('cartUpdated'));
+            setToast("Added to cart");
+
+            window.dispatchEvent(new Event("cartChanged"));
+
         } catch (err) {
-            console.error("Add to cart unexpected error:", err);
-            setToast("Network error — try again");
-            setCartState("not_added");
+            console.error("Add to cart error:", err);
+            setToast("Something went wrong");
         } finally {
+            addingRef.current = false;
             setAdding(false);
         }
     }
@@ -1053,7 +962,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                 <div
                                     className="prose max-w-none text-gray-700"
                                     dangerouslySetInnerHTML={{
-                                        __html: purify ? purify.sanitize(longDescription) : longDescription
+                                        __html: purify ? purify.sanitize(longDescription) : ""
                                     }}
                                 />
                             </div>
