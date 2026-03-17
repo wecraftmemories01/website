@@ -7,6 +7,7 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt"
+import FavouritesInitializer from "@/components/ui/FavouritesInitializer";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -47,6 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900 overflow-x-hidden`}>
 
                 <PWAInstallPrompt />
+
+                <FavouritesInitializer />
 
                 {/* accessibility skip link */}
                 <a

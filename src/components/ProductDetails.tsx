@@ -5,15 +5,7 @@ import DOMPurify from "dompurify";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { addToCart, isInCart } from "../lib/cart";
-import { authFetch } from "@/lib/auth";
-import {
-    addFavouriteAPI,
-    removeFavouriteAPI,
-} from "../lib/favourites";
-
-const purify = typeof window !== "undefined"
-    ? DOMPurify(window)
-    : null;
+import favouritesClient from "../lib/favouritesClient";
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
@@ -458,7 +450,7 @@ export default function ProductClient({ product }: { product: Product }) {
     ].filter(Boolean) as string[];
 
     // selectedImage starts with the primary image (if any), otherwise first available
-    const [selectedImage, setSelectedImage] = useState<string | null>(() => images[0] ?? null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
     const [quantity, setQuantity] = useState<number>(1);
     const [cartState, setCartState] = useState<"unknown" | "added" | "not_added">("unknown");
@@ -466,9 +458,19 @@ export default function ProductClient({ product }: { product: Product }) {
     const [lightbox, setLightbox] = useState(false);
     const [adding, setAdding] = useState(false); // indicates API call in progress
     const [isFavourite, setIsFavourite] = useState(false);
-    const [favouriteId, setFavouriteId] = useState<string | null>(null);
     const [favLoading, setFavLoading] = useState(false);
     const [unitSystem, setUnitSystem] = useState<"metric" | "converted">("metric");
+
+    const sanitizedHTML = useMemo(() => {
+        if (typeof window === "undefined") return longDescription || "";
+        return DOMPurify.sanitize(longDescription || "");
+    }, [longDescription]);
+
+    useEffect(() => {
+        if (images.length) {
+            setSelectedImage(images[0]);
+        }
+    }, [images]);
 
     useEffect(() => {
         const saved = localStorage.getItem("wc_units");
@@ -525,6 +527,24 @@ export default function ProductClient({ product }: { product: Product }) {
     }
 
     useEffect(() => {
+        const client = favouritesClient;
+
+        const update = () => {
+            setIsFavourite(client.isFavourite(String(_id)));
+        };
+
+        // ensure latest data (important after login)
+        client.refreshFromServerIfAuthorized?.().then(update);
+
+        client.subscribe(update);
+        update();
+
+        return () => {
+            client.unsubscribe(update);
+        };
+    }, [_id]);
+
+    useEffect(() => {
 
         if (typeof window === "undefined") return;
 
@@ -551,7 +571,7 @@ export default function ProductClient({ product }: { product: Product }) {
                         );
 
                         if (found) {
-                            setQuantity(found.quantity || 1); // ✅ FIX
+                            setQuantity(found.quantity || 1);
                             setCartState("added");
                             return;
                         }
@@ -578,50 +598,6 @@ export default function ProductClient({ product }: { product: Product }) {
 
     }, [_id]);
 
-    async function toggleFavourite() {
-        if (favLoading) return;
-
-        const customerId = getStoredCustomerId();
-        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-
-        if (!customerId || !token) {
-            setToast("Please login to add favourites");
-            router.push("/login");
-            return;
-        }
-
-        setFavLoading(true);
-
-        try {
-            if (!isFavourite) {
-                const res = await addFavouriteAPI(customerId, _id, token);
-                if (!res.success) {
-                    setToast(res.message ?? "Failed to add favourite");
-                    return;
-                }
-
-                setIsFavourite(true);
-                setToast("Added to favourites");
-            } else if (favouriteId) {
-                const res = await removeFavouriteAPI(favouriteId, token);
-                if (!res.success) {
-                    setToast(res.message ?? "Failed to remove favourite");
-                    return;
-                }
-
-                setIsFavourite(false);
-                setFavouriteId(null);
-                setToast("Removed from favourites");
-            }
-        } catch (err) {
-            setToast("Something went wrong");
-        } finally {
-            setFavLoading(false);
-        }
-    }
-
-
-
     // ===== add to cart using shared helper OR fallback to raw fetch =====
     async function handleAddToCart() {
 
@@ -630,7 +606,7 @@ export default function ProductClient({ product }: { product: Product }) {
             return;
         }
 
-        if (addingRef.current || cartState !== "not_added") return;
+        if (addingRef.current) return;
 
         addingRef.current = true;
         setAdding(true);
@@ -648,11 +624,6 @@ export default function ProductClient({ product }: { product: Product }) {
                     setCartState("added");
                     setToast("Added to cart");
                     window.dispatchEvent(new Event("cartChanged"));
-                    return;
-                }
-
-                if (result?.message?.includes("Auth")) {
-                    router.push("/login");
                     return;
                 }
 
@@ -676,7 +647,10 @@ export default function ProductClient({ product }: { product: Product }) {
             );
 
             if (existingItem) {
-                existingItem.quantity += quantity;
+                existingItem.quantity = Math.min(
+                    existingItem.quantity + quantity,
+                    stockNumber || existingItem.quantity + quantity
+                );
             } else {
                 existing.push({
                     productId: String(_id),
@@ -698,6 +672,34 @@ export default function ProductClient({ product }: { product: Product }) {
         } finally {
             addingRef.current = false;
             setAdding(false);
+        }
+    }
+
+    async function toggleFavourite() {
+        if (favLoading) return;
+
+        const prev = isFavourite;
+
+        // optimistic UI
+        setIsFavourite(!prev);
+        setFavLoading(true);
+
+        try {
+            const res = await favouritesClient.toggle(String(_id));
+
+            if (!res.success) {
+                setIsFavourite(prev); // rollback
+                setToast(res.message || "Failed");
+                return;
+            }
+
+            setToast(!prev ? "Added to favourites" : "Removed from favourites");
+
+        } catch {
+            setIsFavourite(prev);
+            setToast("Something went wrong");
+        } finally {
+            setFavLoading(false);
         }
     }
 
@@ -961,9 +963,7 @@ export default function ProductClient({ product }: { product: Product }) {
 
                                 <div
                                     className="prose max-w-none text-gray-700"
-                                    dangerouslySetInnerHTML={{
-                                        __html: purify ? purify.sanitize(longDescription) : ""
-                                    }}
+                                    dangerouslySetInnerHTML={{ __html: sanitizedHTML }}
                                 />
                             </div>
                         )}

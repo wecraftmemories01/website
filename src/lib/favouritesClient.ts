@@ -2,6 +2,25 @@ import { addFavouriteAPI, fetchFavouritesAPI, removeFavouriteAPI } from './favou
 
 type Subscriber = () => void
 
+const GUEST_KEY = "wcm_guest_favourites_v1";
+
+function getGuestFavourites(): string[] {
+    try {
+        const raw = localStorage.getItem(GUEST_KEY);
+        try {
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    } catch {
+        return [];
+    }
+}
+
+function setGuestFavourites(list: string[]) {
+    localStorage.setItem(GUEST_KEY, JSON.stringify(list));
+}
+
 class FavouritesClient {
     private subscribers = new Set<Subscriber>()
     private inflightPromise: Promise<any> | null = null
@@ -118,8 +137,22 @@ class FavouritesClient {
 
     /** Is the product favourited? */
     isFavourite(productId: string): boolean {
-        if (!this.cache) return false
-        return this.cache.some((it) => String(it.productId ?? it.product?._id ?? it.product) === String(productId))
+        if (typeof window === "undefined") return false;
+
+        const token = localStorage.getItem("accessToken");
+
+        // GUEST
+        if (!token) {
+            const guest = getGuestFavourites();
+            return guest.includes(String(productId));
+        }
+
+        // LOGGED IN
+        if (!this.cache) return false;
+
+        return this.cache.some(
+            (it) => String(it.productId ?? it.product?._id ?? it.product) === String(productId)
+        );
     }
 
     /** Toggle favourite: add or remove */
@@ -133,71 +166,117 @@ class FavouritesClient {
 
     /** Add favourite via API (requires auth). After add - refresh server cache once. */
     async add(productId: string): Promise<{ success: boolean; message?: string }> {
-        if (typeof window === 'undefined') return { success: false, message: 'no window' }
-        const token = localStorage.getItem('accessToken')
-        const authRaw = localStorage.getItem('auth')
-        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null
+        if (typeof window === "undefined") return { success: false };
+
+        const token = localStorage.getItem("accessToken");
+        const authRaw = localStorage.getItem("auth");
+        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null;
+
+        // ================= GUEST =================
         if (!token || !customerId) {
-            return { success: false, message: 'not_authenticated' }
-        }
+            const guest = getGuestFavourites();
 
-        const addRes = await addFavouriteAPI(customerId, productId, token)
-        if (!addRes.success) {
-            // if 401-like error, clear cache
-            if (String(addRes.message).includes('401')) {
-                this.cache = null
-                this.notify()
+            if (!guest.includes(productId)) {
+                guest.push(productId);
+                setGuestFavourites(guest);
             }
-            return { success: false, message: addRes.message }
+
+            this.notify();
+            return { success: true };
         }
 
-        // refresh from server once and notify subscribers
-        await this.refreshFromServer(customerId, token)
-        return { success: true }
+        // ================= LOGGED IN =================
+        const addRes = await addFavouriteAPI(customerId, productId, token);
+
+        if (!addRes.success) {
+            if (String(addRes.message).includes("401")) {
+                this.cache = null;
+                this.notify();
+            }
+            return { success: false, message: addRes.message };
+        }
+
+        await this.refreshFromServer(customerId, token);
+        return { success: true };
     }
 
     /** Remove favourite via API (requires auth). After delete - refresh server cache once. */
     async remove(productId: string): Promise<{ success: boolean; message?: string }> {
-        if (typeof window === 'undefined') return { success: false, message: 'no window' }
-        const token = localStorage.getItem('accessToken')
-        const authRaw = localStorage.getItem('auth')
-        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null
+        if (typeof window === "undefined") return { success: false };
+
+        const token = localStorage.getItem("accessToken");
+        const authRaw = localStorage.getItem("auth");
+        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null;
+
+        // ================= GUEST =================
         if (!token || !customerId) {
-            return { success: false, message: 'not_authenticated' }
+            const guest = getGuestFavourites().filter(id => id !== productId);
+            setGuestFavourites(guest);
+            this.notify();
+            return { success: true };
         }
 
-        // Need favouriteId to delete. Try to find in cache.
-        let favId: string | null = null
+        // ================= LOGGED IN =================
+        let favId: string | null = null;
+
         if (this.cache) {
-            const found = this.cache.find((it) => String(it.productId ?? it.product?._id ?? it.product) === String(productId))
-            favId = found?._id ?? found?.favouriteId ?? null
+            const found = this.cache.find(
+                (it) => String(it.productId ?? it.product?._id ?? it.product) === String(productId)
+            );
+            favId = found?._id ?? found?.favouriteId ?? null;
         }
 
         if (!favId) {
-            // If we don't have it in cache, refresh cache first then try again
-            await this.refreshFromServer(customerId, token)
-            if (this.cache) {
-                const found = this.cache.find((it) => String(it.productId ?? it.product?._id ?? it.product) === String(productId))
-                favId = found?._id ?? found?.favouriteId ?? null
-            }
+            await this.refreshFromServer(customerId, token);
+            const found = this.cache?.find(
+                (it) => String(it.productId ?? it.product?._id ?? it.product) === String(productId)
+            );
+            favId = found?._id ?? found?.favouriteId ?? null;
         }
 
-        if (!favId) {
-            return { success: false, message: 'favourite_id_not_found' }
+        if (!favId) return { success: false };
+
+        const delRes = await removeFavouriteAPI(favId, token);
+        if (!delRes.success) return { success: false };
+
+        await this.refreshFromServer(customerId, token);
+        return { success: true };
+    }
+
+    async syncGuestToServer() {
+        if (typeof window === "undefined") return;
+
+        const token = localStorage.getItem("accessToken");
+        const authRaw = localStorage.getItem("auth");
+        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null;
+
+        if (!token || !customerId) return;
+
+        const guest = getGuestFavourites();
+        if (!guest.length) return;
+
+        // ✅ fetch server favourites first
+        await this.refreshFromServer(customerId, token);
+
+        const existingIds = new Set(
+            (this.cache || []).map(it =>
+                String(it.productId ?? it.product?._id ?? it.product)
+            )
+        );
+
+        // ✅ only add missing ones
+        for (const productId of guest) {
+            if (existingIds.has(String(productId))) continue;
+
+            try {
+                await addFavouriteAPI(customerId, productId, token);
+            } catch { }
         }
 
-        const delRes = await removeFavouriteAPI(favId, token)
-        if (!delRes.success) {
-            if (String(delRes.message).includes('401')) {
-                this.cache = null
-                this.notify()
-            }
-            return { success: false, message: delRes.message }
-        }
+        localStorage.removeItem(GUEST_KEY);
 
-        // refresh cache once
-        await this.refreshFromServer(customerId, token)
-        return { success: true }
+        await this.refreshFromServer(customerId, token);
+        this.notify();
     }
 
     /** expose cached server favourites copy */

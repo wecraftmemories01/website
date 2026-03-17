@@ -63,7 +63,6 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
     const [imgError, setImgError] = useState(false);
     const [loadingAdd, setLoadingAdd] = useState(false);
     const [loadingWish, setLoadingWish] = useState(false);
-    const [syncingFromServer, setSyncingFromServer] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [showRemoveFavModal, setShowRemoveFavModal] = useState(false);
     const [errorModal, setErrorModal] = useState<{
@@ -104,10 +103,6 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
         setMounted(true);
         // initialize client once
         favouritesClient.init();
-
-        // when component mounts, ensure we load server favourites if authorized
-        setSyncingFromServer(true)
-        favouritesClient.refreshFromServerIfAuthorized().finally(() => setSyncingFromServer(false));
 
         // subscribe to changes
         const onChange = () => {
@@ -161,43 +156,31 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
             e.stopPropagation();
             if (loadingWish) return;
 
-            const token = typeof window !== 'undefined'
-                ? localStorage.getItem('accessToken')
-                : null;
-
-            if (!token) {
-                setShowLoginModal(true);
-                return;
-            }
-
-            // If already wishlisted → ask confirmation
-            if (wish) {
-                setShowRemoveFavModal(true);
-                return;
-            }
-
-            // Add to favourites
             try {
                 setLoadingWish(true);
-                setWish(true); // optimistic
 
                 const res = await favouritesClient.toggle(String(product._id));
 
                 if (!res.success) {
-                    setWish(false); // rollback
-
-                    if (res.message === 'not_authenticated' || String(res.message).includes('401')) {
-                        setShowLoginModal(true);
+                    if (!res.success) {
+                        setErrorModal({
+                            open: true,
+                            message: res.message || 'Could not update favourite.',
+                        });
+                        return;
                     } else {
                         setErrorModal({
                             open: true,
                             message: res.message || 'Could not update favourite.',
                         });
                     }
+                    return;
                 }
+
+                // update UI from source of truth
+                setWish(favouritesClient.isFavourite(String(product._id)));
             } catch (err) {
                 console.error('Favourite toggle error', err);
-                setWish(false);
                 setErrorModal({
                     open: true,
                     message: 'Something went wrong while updating favourites.',
@@ -206,7 +189,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                 setLoadingWish(false);
             }
         },
-        [product._id, wish, loadingWish]
+        [product._id, loadingWish]
     );
 
     return (
@@ -228,7 +211,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                         <button
                             aria-pressed={wish}
                             onClick={handleToggleWish}
-                            disabled={loadingWish || syncingFromServer}
+                            disabled={loadingWish}
                             className={`absolute top-3 right-3 p-2 rounded-full shadow-md transition
                                 ${wish
                                     ? "bg-rose-500 text-white"

@@ -4,6 +4,7 @@ import React, { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, User } from "lucide-react";
+import favouritesClient from "@/lib/favouritesClient";
 import {
     getAuth,
     isTokenValid,
@@ -135,6 +136,16 @@ export default function LoginPage() {
                     expiresIn: data.token?.expiresIn ?? data.expiresIn,
                 }
             });
+
+            // SYNC GUEST FAVOURITES → SERVER
+            try {
+                await favouritesClient.syncGuestToServer();
+
+                // notify UI
+                window.dispatchEvent(new Event("favouritesChanged"));
+            } catch (err) {
+                console.error("Favourites sync failed", err);
+            }
 
             // WAIT FOR CART SYNC BEFORE REDIRECT
             try {
