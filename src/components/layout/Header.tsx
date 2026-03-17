@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import useAuthGuard from "../../components/useAuthGuard";
 import { fetchCartFromApi } from "../../lib/cart";
+import { fetchCartCountUtil } from "@/lib/cartCount";
 import { getStoredAccessToken, logout } from "../../lib/auth";
 import api from "../../services/api";
 
@@ -339,113 +340,41 @@ export default function Header({
         };
     }, []);
 
-    async function fetchCartCount() {
-        // Do NOT call cart if not authenticated
-        if (!localAuthed) {
-            setCartCount(0);
-            return;
-        }
+    useEffect(() => {
+        if (!mounted) return;
 
-        if (typeof window === "undefined") return;
-
-        // Do NOT call cart if no access token
-        const token = getStoredAccessToken();
-        if (!token) {
-            setCartCount(0);
-            return;
-        }
-
-        setCartLoading(true);
-
-        try {
-            const customerId = getStoredCustomerId();
-
-            const res = await api.get("/cart", {
-                params: { customerId }
-            });
-
-            const body = res.data;
-
-            const raw = Array.isArray(body?.cartData)
-                ? body.cartData[0]
-                : body.cartData;
-
-            if (!raw) {
+        async function loadCart() {
+            if (!localAuthed) {
                 setCartCount(0);
-                localStorage.setItem("cartCount", "0");
                 return;
             }
 
-            let count = 0;
-
-            if (typeof raw.totalItems === "number") {
-                count = raw.totalItems;
-            } else if (Array.isArray(raw.sellItems)) {
-                count = raw.sellItems.reduce(
-                    (s: number, it: any) => s + (Number(it.quantity) || 0),
-                    0
-                );
+            // 🔥 instant UI
+            const cached = localStorage.getItem("cartCount");
+            if (cached) {
+                setCartCount(Number(cached));
             }
 
+            // 🔥 background sync
+            const count = await fetchCartCountUtil();
             setCartCount(count);
-            localStorage.setItem("cartCount", String(count));
-
-        } catch (err: any) {
-            console.error("[Header] fetchCartCount error:", err);
-            setCartCount(0);
-            localStorage.setItem("cartCount", "0");
-        } finally {
-            setCartLoading(false);
-        }
-    }
-
-    // only fetch cart after mount to avoid SSR/CSR mismatch
-    useEffect(() => {
-        if (!mounted) return;
-        if (!localAuthed) return;
-
-        fetchCartCount();
-
-        function onAuthChanged() {
-            if (localAuthed) fetchCartCount();
         }
 
-        function onCartChanged() {
-            if (localAuthed) fetchCartCount();
+        loadCart();
+
+        function handleCartRefresh() {
+            loadCart();
         }
 
-        function onStorage(e: StorageEvent) {
-            if (!e.key) return;
-
-            if (
-                e.key === "auth" ||
-                e.key === "accessToken" ||
-                e.key === "cartCount"
-            ) {
-                if (localAuthed) fetchCartCount();
-            }
-        }
-
-        window.addEventListener("authChanged", onAuthChanged);
-        window.addEventListener("cartChanged", onCartChanged);
-        window.addEventListener("storage", onStorage);
+        window.addEventListener("authChanged", handleCartRefresh);
+        window.addEventListener("cartChanged", handleCartRefresh);
+        window.addEventListener("storage", handleCartRefresh);
 
         return () => {
-            window.removeEventListener("authChanged", onAuthChanged);
-            window.removeEventListener("cartChanged", onCartChanged);
-            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("authChanged", handleCartRefresh);
+            window.removeEventListener("cartChanged", handleCartRefresh);
+            window.removeEventListener("storage", handleCartRefresh);
         };
-
-    }, [mounted, localAuthed]);
-
-    useEffect(() => {
-        if (!mounted) return;
-        if (!localAuthed) {
-            setCartCount(0);
-            return;
-        }
-
-        fetchCartCount();
 
     }, [mounted, localAuthed]);
 
