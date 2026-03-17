@@ -503,40 +503,41 @@ export default function ClientCart() {
                 return
             }
 
-            const ids = [...new Set(items.map((i: any) => i.productId))].join(",")
+            // Step 1: Merge duplicate productIds
+            const mergedMap: Record<string, number> = {}
 
-            const res = await api.get(`/product/sell?ids=${ids}`)
+            for (const item of items) {
+                const id = String(item.productId)
+                mergedMap[id] = (mergedMap[id] || 0) + Number(item.quantity || 1)
+            }
+
+            const uniqueIds = Object.keys(mergedMap)
+
+            const res = await api.get(`/product/sell?ids=${uniqueIds.join(",")}`)
 
             const products = Array.isArray(res.data?.productData)
                 ? res.data.productData
                 : []
 
-            const sellItems = products
-                .filter((p: any) =>
-                    items.some((i: any) => String(i.productId) === String(p._id))
-                )
-                .map((p: any) => {
+            // Step 2: Build sellItems using merged quantities
+            const sellItems = products.map((p: any) => {
+                const id = String(p._id)
 
-                    const cartItem = items.find(
-                        (i: any) => String(i.productId) === String(p._id)
-                    )
-
-                    return {
-                        _id: p._id,
-                        productId: p._id,
-                        quantity: cartItem?.quantity ?? 1,
-                        inUse: true,
-                        imagePath: p.productImage,
-                        thumbnail: p.productImage,
-                        productPublicName: p.productName,
-                        sellStockQuantity: p.sellStockQuantity,
-                        price: {
-                            actualPrice: p.latestSalePrice?.actualPrice,
-                            discountedPrice: p.latestSalePrice?.discountedPrice
-                        }
+                return {
+                    _id: p._id,
+                    productId: p._id,
+                    quantity: mergedMap[id] ?? 1,
+                    inUse: true,
+                    imagePath: p.productImage,
+                    thumbnail: p.productImage,
+                    productPublicName: p.productName,
+                    sellStockQuantity: p.sellStockQuantity,
+                    price: {
+                        actualPrice: p.latestSalePrice?.actualPrice,
+                        discountedPrice: p.latestSalePrice?.discountedPrice
                     }
-
-                })
+                }
+            })
 
             setLocalCart({
                 _id: "guest",
