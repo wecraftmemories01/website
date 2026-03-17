@@ -3,6 +3,7 @@ import { Minus, Plus, Trash } from "lucide-react";
 
 type Props = {
     item: any;
+    disabled?: boolean;
     onIncrease: () => void;
     onDecrease: () => void;
     onRemove: () => void;
@@ -13,6 +14,7 @@ type Props = {
 
 export default function MobileCartItem({
     item,
+    disabled,
     onIncrease,
     onDecrease,
     onRemove,
@@ -46,7 +48,7 @@ export default function MobileCartItem({
                     </p>
                 </div>
 
-                <button onClick={onRemove} className="text-gray-400">
+                <button onClick={onRemove} disabled={disabled} className="text-gray-400">
                     <Trash size={18} />
                 </button>
             </div>
@@ -55,11 +57,11 @@ export default function MobileCartItem({
 
             <div className="flex justify-between items-center">
                 <div className="flex items-center border rounded-lg">
-                    <button onClick={onDecrease} className="px-3 py-2">
+                    <button onClick={onDecrease} disabled={disabled} className="px-3 py-2">
                         <Minus size={14} />
                     </button>
                     <span className="px-3 font-medium">{item.quantity}</span>
-                    <button onClick={onIncrease} className="px-3 py-2">
+                    <button onClick={onIncrease} disabled={disabled} className="px-3 py-2">
                         <Plus size={14} />
                     </button>
                 </div>
@@ -73,10 +75,10 @@ export default function MobileCartItem({
             </div>
 
             <div className="mt-3 flex justify-between text-sm">
-                <button onClick={onSave} className="text-slate-600">
+                <button onClick={onSave} disabled={disabled}className="text-slate-600">
                     Save for later
                 </button>
-                <button onClick={onRemove} className="text-red-500">
+                <button onClick={onRemove} disabled={disabled} className="text-red-500">
                     Remove
                 </button>
             </div>

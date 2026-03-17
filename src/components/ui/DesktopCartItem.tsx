@@ -3,6 +3,7 @@ import { Minus, Plus, Trash } from "lucide-react";
 
 type Props = {
     item: any;
+    disabled?: boolean;
     onIncrease: () => void;
     onDecrease: () => void;
     onRemove: () => void;
@@ -13,6 +14,7 @@ type Props = {
 
 export default function DesktopCartItem({
     item,
+    disabled,
     onIncrease,
     onDecrease,
     onRemove,
@@ -41,6 +43,7 @@ export default function DesktopCartItem({
                 </p>
                 <button
                     onClick={onSave}
+                    disabled={disabled}
                     className="text-xs text-slate-600 mt-1 hover:underline"
                 >
                     Save for later
@@ -57,13 +60,13 @@ export default function DesktopCartItem({
             {/* Quantity */}
             <div className="flex justify-center">
                 <div className="flex items-center border rounded-md">
-                    <button onClick={onDecrease} className="px-2 py-1">
+                    <button onClick={onDecrease} disabled={disabled} className="px-2 py-1">
                         <Minus size={14} />
                     </button>
                     <span className="px-3 text-sm font-medium">
                         {item.quantity}
                     </span>
-                    <button onClick={onIncrease} className="px-2 py-1">
+                    <button onClick={onIncrease} disabled={disabled} className="px-2 py-1">
                         <Plus size={14} />
                     </button>
                 </div>
@@ -78,6 +81,7 @@ export default function DesktopCartItem({
             <div className="flex justify-center">
                 <button
                     onClick={onRemove}
+                    disabled={disabled}
                     className="text-gray-400 hover:text-red-600"
                     title="Remove item"
                 >

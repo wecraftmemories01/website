@@ -304,13 +304,15 @@ async function apiDeleteSavedByProduct(customerId: string, productId: string) {
 
 /* ---------------- Component ---------------- */
 export default function ClientCart() {
+    const fetchIdRef = React.useRef(0);
+    const qtyTimeoutRef = React.useRef<any>(null);
+
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-    const [cart, setCart] = useState<Cart | null>(null);
     const [localCart, setLocalCart] = useState<Cart | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
     const [savingItemId, setSavingItemId] = useState<string | null>(null);
-    const [error, setError] = useState<string>("");
+    const [error, setError] = useState<string | null>(null);
 
     const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
     const [savedLoading, setSavedLoading] = useState<boolean>(false);
@@ -346,18 +348,34 @@ export default function ClientCart() {
 
     function clampCartQuantities(inCart: Cart | null): Cart | null {
         if (!inCart) return inCart;
-        const copy: Cart = JSON.parse(JSON.stringify(inCart));
-        copy.sellItems = (copy.sellItems ?? []).map((it) => {
-            const stock = safeNumber(it.sellStockQuantity);
-            const currentQty = Number(it.quantity ?? 1);
-            if (stock === null) {
-                return { ...it, quantity: Math.max(1, Math.floor(currentQty)) };
-            }
-            const clamped = Math.max(1, Math.min(Math.floor(currentQty), Math.max(0, Math.floor(stock))));
-            return { ...it, quantity: clamped };
-        });
-        return copy;
+
+        return {
+            ...inCart,
+            sellItems: (inCart.sellItems ?? []).map((it) => {
+                const stock = safeNumber(it.sellStockQuantity);
+                const currentQty = Number(it.quantity ?? 1);
+
+                if (stock === null) {
+                    return { ...it, quantity: Math.max(1, Math.floor(currentQty)) };
+                }
+
+                const clamped = Math.max(
+                    1,
+                    Math.min(Math.floor(currentQty), Math.max(0, Math.floor(stock)))
+                );
+
+                return { ...it, quantity: clamped };
+            }),
+        };
     }
+
+    useEffect(() => {
+        return () => {
+            if (qtyTimeoutRef.current) {
+                clearTimeout(qtyTimeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const checkAuth = () => {
@@ -411,16 +429,15 @@ export default function ClientCart() {
     }, [])
 
     async function fetchCart(): Promise<void> {
-        setLoading(true);
-        setError("");
-        try {
-            const customerId = getStoredCustomerId();
-            if (!customerId) {
-                setLoading(false);
-                return;
-            }
+        const fetchId = ++fetchIdRef.current;
 
+        setLoading(true);
+        setError(null);
+
+        try {
             const res = await api.get(`/cart`);
+
+            if (fetchId !== fetchIdRef.current) return;
 
             const json = res.data;
 
@@ -429,18 +446,12 @@ export default function ClientCart() {
                 : json.cartData;
 
             const normalized = normalizeCartResponse(rawCart);
-            console.log("RAW CART:", rawCart);
-            console.log("NORMALIZED:", normalized);
 
-            if (normalized) {
-                setCart(normalized);
-                setLocalCart(clampCartQuantities(normalized));
-            } else {
-                setCart(null);
-                setLocalCart(null);
-            }
+            setLocalCart(clampCartQuantities(normalized));
 
         } catch (err: any) {
+            if (fetchId !== fetchIdRef.current) return;
+
             console.error("fetchCart error:", err);
 
             setError(
@@ -449,13 +460,15 @@ export default function ClientCart() {
                 "Unable to load cart"
             );
         } finally {
-            setLoading(false);
+            if (fetchId === fetchIdRef.current) {
+                setLoading(false);
+            }
         }
     }
 
     async function fetchSavedItems(): Promise<void> {
         setSavedLoading(true);
-        setError("");
+        setError(null);
         try {
             const customerId = getStoredCustomerId();
             if (!customerId) {
@@ -538,6 +551,19 @@ export default function ClientCart() {
 
                 })
 
+            const validIds = new Set(products.map((p: any) => String(p._id)))
+
+            const cleanedItems = items.filter((i: any) =>
+                validIds.has(String(i.productId))
+            )
+
+            // FIX: remove invalid productIds
+            if (cleanedItems.length !== items.length) {
+                console.warn("Removed invalid cart items:", items.filter(i => !validIds.has(String(i.productId))))
+            }
+
+            localStorage.setItem("wcm_guest_cart_v1", JSON.stringify(cleanedItems))
+
             setLocalCart({
                 _id: "guest",
                 sellItems
@@ -572,13 +598,15 @@ export default function ClientCart() {
                 return
             }
 
-            for (const item of items) {
-                await api.post("/cart", {
-                    productId: item.productId,
-                    quantity: item.quantity,
-                    type: "SELL"
-                })
-            }
+            await Promise.all(
+                items.map((item) =>
+                    api.post("/cart", {
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        type: "SELL",
+                    })
+                )
+            );
 
             localStorage.removeItem("wcm_guest_cart_v1")
 
@@ -591,35 +619,32 @@ export default function ClientCart() {
 
     function updateLocalItemById(itemId: string | undefined, patch: Partial<CartItem>): void {
         if (!itemId) return;
+
         setLocalCart((prev) => {
             if (!prev) return prev;
-            const copy = { ...prev, sellItems: [...(prev.sellItems ?? [])] }
-            const arr = copy.sellItems ?? [];
-            const idx = arr.findIndex((a) => a._id === itemId);
-            if (idx === -1) return prev;
-            arr[idx] = { ...arr[idx], ...patch };
-            return copy;
-        });
-        setCart((prev) => {
-            if (!prev) return prev;
-            const copy = { ...prev, sellItems: [...(prev.sellItems ?? [])] }
-            const arr = copy.sellItems ?? [];
-            const idx = arr.findIndex((a) => a._id === itemId);
-            if (idx === -1) return prev;
-            arr[idx] = { ...arr[idx], ...(patch as CartItem) };
-            return copy;
+
+            const updatedItems = prev.sellItems?.map((item) =>
+                item._id === itemId ? { ...item, ...patch } : item
+            );
+
+            return {
+                ...prev,
+                sellItems: updatedItems,
+            };
         });
     }
 
-    async function saveItem(cartObject: Cart | null, item: CartItem): Promise<void> {
-        const cartId = cartObject?._id ?? cartObject?.cartId;
+    async function saveItem(item: CartItem): Promise<void> {
+        const cartId = localCart?._id ?? localCart?.cartId;
+
         if (!cartId) {
             setError("Cart identifier is missing.");
-            console.warn("saveItem aborted - no cart id", { cartObject, item });
             return;
         }
+
         setSaving(true);
-        setError("");
+        setError(null);
+
         try {
             const result = await updateCartItem(
                 cartId,
@@ -628,16 +653,19 @@ export default function ClientCart() {
                 Number(item.quantity ?? 1),
                 "SELL"
             );
-            window.dispatchEvent(new Event("cartChanged"));
+
             if (!result?.success) {
                 throw new Error(result?.message || "Failed to update item");
             }
+
+            window.dispatchEvent(new Event("cartChanged"));
+
         } catch (err: any) {
             if (err?.message === "Auth required") {
                 redirectToLogin();
                 return;
             }
-            console.error("saveItem error:", err);
+
             setError(err?.message || "Unable to save item");
             await fetchCart();
         } finally {
@@ -705,7 +733,7 @@ export default function ClientCart() {
         }
 
         // SERVER CART DELETE
-        const cartId = cart?._id ?? cart?.cartId;
+        const cartId = localCart?._id ?? localCart?.cartId;
 
         if (!cartId) {
             setError("Cart not initialized yet.");
@@ -729,17 +757,6 @@ export default function ClientCart() {
 
             // 1. Optimistic UI update
             setLocalCart(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    sellItems: prev.sellItems?.filter(
-                        (it) => String(it._id) !== String(toDeleteItemId)
-                    )
-                };
-            });
-
-            // optional (keep cart + localCart in sync)
-            setCart(prev => {
                 if (!prev) return prev;
                 return {
                     ...prev,
@@ -831,7 +848,7 @@ export default function ClientCart() {
             }
 
             const index = items.findIndex(
-                (i: any) => String(i.productId) === String(itemId)
+                (i: any) => String(i.productId) === String(item.productId)
             )
 
             if (index >= 0) {
@@ -845,7 +862,7 @@ export default function ClientCart() {
         }
 
         // SERVER CART QUANTITY UPDATE
-        const cartId = cart?._id ?? cart?.cartId
+        const cartId = localCart?._id ?? localCart?.cartId
 
         if (!cartId) {
             setError("Cart not initialized yet.")
@@ -854,25 +871,29 @@ export default function ClientCart() {
 
         setSavingItemId(itemId)
 
-        try {
+        clearTimeout(qtyTimeoutRef.current);
 
-            const result = await updateCartItem(
-                cartId,
-                String(itemId),
-                String(item.productId),
-                qty,
-                "SELL"
-            );
-            if (!result?.success) {
-                throw new Error(result?.message || "Failed to update quantity");
+        qtyTimeoutRef.current = setTimeout(async () => {
+            try {
+                const result = await updateCartItem(
+                    cartId,
+                    String(itemId),
+                    String(item.productId),
+                    qty,
+                    "SELL"
+                );
+
+                if (!result?.success) {
+                    throw new Error(result?.message || "Failed to update quantity");
+                }
+            } catch (err: any) {
+                console.error("handleQuantityChangeById error:", err);
+                setError(err?.message || "Unable to update quantity");
+                await fetchCart();
+            } finally {
+                setSavingItemId(null);
             }
-        } catch (err: any) {
-            console.error("handleQuantityChangeById error:", err);
-            setError(err?.message || "Unable to update quantity");
-            await fetchCart();
-        } finally {
-            setSavingItemId(null);
-        }
+        }, 300);
     }
 
     /* ---------------- Save-for-later actions (with ApiError handling) ---------------- */
@@ -884,7 +905,7 @@ export default function ClientCart() {
         const item = localCart.sellItems![idx];
 
         const customerId = getStoredCustomerId();
-        const cartId = cart?._id ?? cart?.cartId;
+        const cartId = localCart?._id ?? localCart?.cartId;
         if (!cartId) {
             setError("Cart not initialized yet.");
             return;
@@ -898,19 +919,16 @@ export default function ClientCart() {
         // Optimistically remove locally so UI feels snappy
         setLocalCart((prev) => {
             if (!prev) return prev;
-            const cp: Cart = JSON.parse(JSON.stringify(prev));
-            cp.sellItems = (cp.sellItems ?? []).filter((s) => s._id !== itemId);
-            return cp;
-        });
-        setCart((prev) => {
-            if (!prev) return prev;
-            const cp: Cart = JSON.parse(JSON.stringify(prev));
+            const cp: Cart = {
+                ...prev,
+                sellItems: prev.sellItems?.map(i => ({ ...i })) ?? []
+            };
             cp.sellItems = (cp.sellItems ?? []).filter((s) => s._id !== itemId);
             return cp;
         });
 
         setSaving(true);
-        setError("");
+        setError(null);
         try {
             const priceVal: number | undefined =
                 typeof item.price?.discountedPrice === "number"
@@ -966,7 +984,7 @@ export default function ClientCart() {
     async function moveSavedToCart(saved: SavedItem) {
         const customerId = getStoredCustomerId();
 
-        const cartId = cart?._id ?? cart?.cartId;
+        const cartId = localCart?._id ?? localCart?.cartId;
         if (!cartId) {
             setError("Cart not initialized yet.");
             return;
@@ -979,7 +997,7 @@ export default function ClientCart() {
         if (!saved) return;
 
         setSaving(true);
-        setError("");
+        setError(null);
         try {
             const productId = saved.productId ?? saved.id;
             if (!productId) throw new Error("Product ID missing for saved item.");
@@ -1016,7 +1034,7 @@ export default function ClientCart() {
         if (!saved) return;
 
         setSaving(true);
-        setError("");
+        setError(null);
         try {
             const savedServerId = saved._savedId ?? saved.id;
             if (!savedServerId) throw new Error("Saved id is missing");
@@ -1057,7 +1075,7 @@ export default function ClientCart() {
         }
 
         setDeletingSaved(true);
-        setError("");
+        setError(null);
         try {
             await apiDeleteSaved(customerId, String(toDeleteSavedId));
             await fetchSavedItems();
@@ -1184,8 +1202,9 @@ export default function ClientCart() {
                                         .filter((it) => it.inUse !== false)
                                         .map((item) => (
                                             <MobileCartItem
-                                                key={item._id}
+                                                key={item._id ?? item.productId}
                                                 item={item}
+                                                disabled={savingItemId === item._id}
                                                 onIncrease={() =>
                                                     handleQuantityChangeById(item._id, (item.quantity ?? 1) + 1)
                                                 }
@@ -1206,8 +1225,9 @@ export default function ClientCart() {
                                         .filter((it) => it.inUse !== false)
                                         .map((item) => (
                                             <DesktopCartItem
-                                                key={item._id}
+                                                key={item._id ?? item.productId}
                                                 item={item}
+                                                disabled={savingItemId === item._id}
                                                 onIncrease={() =>
                                                     handleQuantityChangeById(item._id, (item.quantity ?? 1) + 1)
                                                 }
