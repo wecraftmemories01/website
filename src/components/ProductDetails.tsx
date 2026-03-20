@@ -442,12 +442,35 @@ export default function ProductClient({ product }: { product: Product }) {
     } = product;
 
     // Put primary (product.productImage) first so display image is shown immediately
-    const primaryImage = product.productImage ?? null;
-    const otherImages = (productImages?.map((p) => (p.imagePath ?? p.imageId)).filter(Boolean) as string[]) ?? [];
-    const images = [
-        ...(primaryImage ? [primaryImage] : []),
-        ...otherImages.filter((src) => src !== primaryImage),
-    ].filter(Boolean) as string[];
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
+
+    function normalizeImage(src: any): string | null {
+        if (!src) return null;
+
+        if (typeof src === "string") {
+            const trimmed = src.trim();
+            if (!trimmed) return null;
+
+            if (trimmed.startsWith("http")) return trimmed;
+
+            return `${BASE_URL}/${trimmed}`;
+        }
+
+        return null;
+    }
+
+    const primaryImage = normalizeImage(product.productImage);
+
+    const otherImages = (productImages || [])
+        .map((p) => normalizeImage(p.imagePath ?? p.imageId))
+        .filter(Boolean) as string[];
+
+    const images = useMemo(() => {
+        return [
+            ...(primaryImage ? [primaryImage] : []),
+            ...otherImages.filter((src) => src !== primaryImage),
+        ];
+    }, [primaryImage, otherImages]);
 
     // selectedImage starts with the primary image (if any), otherwise first available
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -463,14 +486,16 @@ export default function ProductClient({ product }: { product: Product }) {
 
     const sanitizedHTML = useMemo(() => {
         if (typeof window === "undefined") return longDescription || "";
-        return DOMPurify.sanitize(longDescription || "");
+        return typeof longDescription === "string"
+            ? DOMPurify.sanitize(longDescription)
+            : "";
     }, [longDescription]);
 
     useEffect(() => {
-        if (images.length) {
+        if (!selectedImage && images.length) {
             setSelectedImage(images[0]);
         }
-    }, [images]);
+    }, [images, selectedImage]);
 
     useEffect(() => {
         const saved = localStorage.getItem("wc_units");
@@ -529,17 +554,33 @@ export default function ProductClient({ product }: { product: Product }) {
     useEffect(() => {
         const client = favouritesClient;
 
+        let mounted = true;
+
         const update = () => {
-            setIsFavourite(client.isFavourite(String(_id)));
+            if (!mounted) return;
+
+            try {
+                const fav = client.isFavourite(String(_id));
+                setIsFavourite(!!fav);
+            } catch {
+                setIsFavourite(false);
+            }
         };
 
-        // ensure latest data (important after login)
-        client.refreshFromServerIfAuthorized?.().then(update);
+        // SAFE async call
+        client.refreshFromServerIfAuthorized?.()
+            .then(() => {
+                if (mounted) update();
+            })
+            .catch(() => {
+                // prevent crash / loop
+            });
 
         client.subscribe(update);
         update();
 
         return () => {
+            mounted = false;
             client.unsubscribe(update);
         };
     }, [_id]);
@@ -790,11 +831,8 @@ export default function ProductClient({ product }: { product: Product }) {
 
                                 <div className="relative w-full h-105 md:h-130 lg:h-150 flex items-center justify-center">
 
-                                    {selectedImage ? (
-                                        <button
-                                            onClick={() => setLightbox(true)}
-                                            className="relative w-full h-full group"
-                                        >
+                                    {typeof selectedImage === "string" && selectedImage ? (
+                                        <button onClick={() => setLightbox(true)} className="relative w-full h-full group">
                                             <Image
                                                 src={selectedImage}
                                                 alt={productName ?? "Product image"}
@@ -805,7 +843,9 @@ export default function ProductClient({ product }: { product: Product }) {
                                             />
                                         </button>
                                     ) : (
-                                        <div className="text-gray-400">No image available</div>
+                                        <div className="text-gray-400 flex items-center justify-center h-full">
+                                            No image available
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -814,6 +854,8 @@ export default function ProductClient({ product }: { product: Product }) {
                             {images.length > 1 && (
                                 <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex gap-4 bg-white px-6 py-3 rounded-2xl shadow-xl border border-gray-100 overflow-x-auto max-w-[90vw]">
                                     {images.map((src, idx) => {
+                                        if (!src || typeof src !== "string") return null;
+
                                         const isSelected = selectedImage === src;
 
                                         return (
@@ -821,7 +863,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                                 key={idx}
                                                 onClick={() => setSelectedImage(src)}
                                                 className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden transition-all duration-300
-                                                    ${isSelected
+                ${isSelected
                                                         ? "ring-2 ring-[#2F9E5A] scale-110"
                                                         : "hover:scale-110 opacity-80 hover:opacity-100"
                                                     }`}
@@ -1164,13 +1206,21 @@ export default function ProductClient({ product }: { product: Product }) {
                 </div>
 
                 {/* Lightbox */}
-                {lightbox && selectedImage && (
+                {lightbox && typeof selectedImage === "string" && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
                         <div className="absolute inset-0 bg-black/60" onClick={() => setLightbox(false)} />
                         <div className="relative w-full max-w-4xl h-[85vh] bg-white rounded-xl overflow-hidden shadow-2xl">
                             <button onClick={() => setLightbox(false)} className="absolute right-4 top-4 z-20 bg-white/90 px-3 py-1 rounded-full">✕</button>
                             <div className="relative w-full h-full p-6">
-                                <Image src={selectedImage} alt={productName ?? 'Product image'} fill style={{ objectFit: 'contain' }} sizes="100vw" />
+                                {selectedImage ? (
+                                    <Image
+                                        src={selectedImage}
+                                        alt={productName ?? 'Product image'}
+                                        fill
+                                        style={{ objectFit: 'contain' }}
+                                        sizes="100vw"
+                                    />
+                                ) : null}
                             </div>
                         </div>
                     </div>
