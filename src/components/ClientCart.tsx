@@ -669,9 +669,13 @@ export default function ClientCart() {
                 return
             }
 
+            const item = localCart?.sellItems?.find(
+                (it) => String(it._id) === String(toDeleteItemId)
+            );
+
             const filtered = items.filter(
-                (i: any) => String(i.productId) !== String(toDeleteItemId)
-            )
+                (i: any) => String(i.productId) !== String(item?.productId)
+            );
 
             localStorage.setItem("wcm_guest_cart_v1", JSON.stringify(filtered))
 
@@ -808,7 +812,7 @@ export default function ClientCart() {
             }
 
             const index = items.findIndex(
-                (i: any) => String(i.productId) === String(item.productId)
+                (i: any) => String(i.productId) === String(item?.productId)
             )
 
             if (index >= 0) {
@@ -1149,9 +1153,11 @@ export default function ClientCart() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start pb-24 md:pb-0">
                 <section className="order-1 md:order-0 md:col-span-2 space-y-6">
-                    <div className="bg-white rounded-xl shadow-lg p-5">
+
+                    {/* ================= CART ================= */}
+                    <div className="bg-white rounded-xl shadow-lg p-5 order-1 md:order-none">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold">Items in your cart</h3>
                         </div>
@@ -1168,7 +1174,7 @@ export default function ClientCart() {
                             </div>
                         ) : (
                             <>
-                                {/* MOBILE VIEW */}
+                                {/* MOBILE */}
                                 <div className="space-y-4 md:hidden">
                                     {localCart!.sellItems!
                                         .filter((it) => it.inUse !== false)
@@ -1191,7 +1197,7 @@ export default function ClientCart() {
                                         ))}
                                 </div>
 
-                                {/* DESKTOP VIEW */}
+                                {/* DESKTOP */}
                                 <div className="hidden md:block bg-white rounded-xl shadow-lg overflow-hidden">
                                     {localCart!.sellItems!
                                         .filter((it) => it.inUse !== false)
@@ -1219,125 +1225,202 @@ export default function ClientCart() {
                 </section>
 
                 <aside className="order-2 md:order-0 bg-linear-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
-                    <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-lg">Summary</h4>
-                        <div className="text-sm text-gray-500">Ready when you are</div>
+                    <div>
+                        <h4 className="font-semibold text-lg">Order Summary</h4>
+                        <p className="text-xs text-gray-500">Review your order before checkout</p>
                     </div>
 
-                    <div className="mt-4 space-y-3">
-                        <div className="flex justify-between text-sm">
-                            <span>Items</span>
-                            <span className="font-medium">{totalItemsCount}</span>
+                    <div className="mt-4 space-y-3 text-sm">
+
+                        <div className="flex justify-between">
+                            <span>Items ({totalItemsCount})</span>
+                            <span className="text-emerald-700">
+                                {formatCurrency(orderTotal(localCart?.sellItems))}
+                            </span>
                         </div>
 
-                        <div className="border-t pt-3 mt-3 flex justify-between font-medium">
-                            <span>Total</span>
+                        <div className="flex justify-between text-gray-500">
+                            <span>Delivery</span>
+                            <span className="text-gray-400 text-xs">
+                                Calculated at checkout
+                            </span>
+                        </div>
+
+                        <div className="border-t pt-3 mt-3 flex justify-between text-base font-semibold">
+                            <span>Total (excluding delivery)</span>
                             <span>{formatCurrency(orderTotal(localCart?.sellItems))}</span>
                         </div>
+
+                    </div>
+
+                    <div className="mt-4 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                        Items in your cart are not reserved — checkout now to secure them
                     </div>
 
                     <div className="mt-6 flex flex-col gap-3">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (!hasItems) return;
-                                try {
-                                    router.push("/checkout");
-                                } catch {
-                                    window.location.href = "/checkout";
-                                }
-                            }}
-                            disabled={!hasItems || loading || saving}
-                            aria-disabled={!hasItems || loading || saving}
-                            className={`w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-md shadow
-                ${hasItems && !loading && !saving ? "bg-emerald-600 hover:bg-emerald-700" : "bg-emerald-400 cursor-not-allowed opacity-60"}`}
-                        >
-                            Proceed to Checkout
-                        </button>
 
-                        <a href="/products" className="w-full inline-flex items-center justify-center gap-2 border px-4 py-3 rounded-md text-center">
+                        {/* ================= LOGGED-IN USER ================= */}
+                        {isAuthenticated ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!hasItems) return;
+                                    try {
+                                        router.push("/checkout");
+                                    } catch {
+                                        window.location.href = "/checkout";
+                                    }
+                                }}
+                                disabled={!hasItems || loading || saving}
+                                className={`w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-md shadow
+            ${hasItems && !loading && !saving
+                                        ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg hover:shadow-xl transition-all"
+                                        : "bg-emerald-400 cursor-not-allowed opacity-60"}`}
+                            >
+                                Continue to Checkout
+                            </button>
+                        ) : (
+                            <>
+                                {/* ================= GUEST CHECKOUT ================= */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!hasItems) return;
+                                        try {
+                                            router.push("/guest_checkout");
+                                        } catch {
+                                            window.location.href = "/guest_checkout";
+                                        }
+                                    }}
+                                    disabled={!hasItems || loading || saving}
+                                    className={`w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-md shadow
+                                        ${hasItems && !loading && !saving
+                                            ? "bg-emerald-600 hover:bg-emerald-700"
+                                            : "bg-emerald-400 cursor-not-allowed opacity-60"}`}
+                                >
+                                    Quick Checkout (No Login)
+                                </button>
+
+                                {/* ================= LOGIN OPTION ================= */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        try {
+                                            router.push("/login?redirect=/checkout");
+                                        } catch {
+                                            window.location.href = "/login?redirect=/checkout";
+                                        }
+                                    }}
+                                    className="w-full inline-flex items-center justify-center gap-2 border px-4 py-3 rounded-md text-gray-600 hover:bg-gray-50"
+                                >
+                                    Login for Faster Checkout
+                                </button>
+
+                                <p className="text-xs text-gray-500 text-center mt-1">
+                                    You can checkout without creating an account
+                                </p>
+                            </>
+                        )}
+
+                        <a
+                            href="/products"
+                            className="w-full inline-flex items-center justify-center gap-2 border px-4 py-3 rounded-md text-center"
+                        >
                             Continue shopping
                         </a>
                     </div>
 
-                    <p className="text-xs text-gray-500 mt-4">Quantities update automatically when changed. Final price will be calculated at checkout.</p>
-                </aside>
-
-                {/* Saved for later */}
-                <div className="order-3 md:order-0 md:col-span-2 bg-white rounded-xl shadow-lg p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">Saved for later</h3>
-                        <div className="text-sm text-gray-500">
-                            {savedLoading
-                                ? "Loading…"
-                                : `${savedItems.length} item${savedItems.length !== 1 ? "s" : ""}`}
-                        </div>
+                    <div className="text-xs text-gray-500 mt-4">
+                        Final price including delivery will be calculated at checkout after selecting your address.
                     </div>
 
-                    {savedLoading ? (
-                        <div className="text-sm text-gray-500">Loading saved items…</div>
-                    ) : savedItems.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8">
-                            You don’t have any saved items.
+                    <div className="mt-4 space-y-2 text-xs text-gray-600">
+                        <div>🔒 Secure checkout</div>
+                        <div>🚚 Fast delivery across India</div>
+                        <div>🎁 Handmade with care</div>
+                    </div>
+                </aside>
+
+                {/* ================= SAVED FOR LATER (NOW FIXED POSITION) ================= */}
+                {isAuthenticated && (
+                    <div className="order-3 md:order-none md:col-span-2 md:max-w-2xl mt-2 md:mt-4">
+
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-md font-semibold text-gray-700">
+                                Saved for later
+                            </h3>
+                            <div className="text-xs text-gray-400">
+                                {savedLoading
+                                    ? "Loading…"
+                                    : `${savedItems.length} item${savedItems.length !== 1 ? "s" : ""}`}
+                            </div>
                         </div>
-                    ) : (
-                        <ul className="space-y-3">
-                            {savedItems.map((s) => (
-                                <li
-                                    key={s._savedId ?? s.id}
-                                    className="flex flex-col sm:flex-row sm:items-center gap-4 p-3"
-                                >
-                                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-white border">
-                                        <Link
-                                            href={
-                                                s.productId
-                                                    ? `/products/${s.productId}`
-                                                    : "/products"
-                                            }
-                                            className="block w-full h-full"
-                                        >
-                                            <Image
-                                                src={s.img ?? "/placeholder-80x80.png"}
-                                                alt={s.title}
-                                                width={80}
-                                                height={80}
-                                                className="object-cover"
-                                            />
-                                        </Link>
-                                    </div>
 
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-medium truncate">
-                                            {s.title}
-                                        </div>
-                                        <div className="text-sm text-gray-500 mt-1">
-                                            {typeof s.price === "number"
-                                                ? formatCurrency(s.price)
-                                                : ""}
-                                        </div>
-                                    </div>
+                        <div className="bg-white rounded-lg border p-4">
 
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => moveSavedToCart(s)}
-                                            disabled={saving}
-                                            className="px-3 py-1 rounded bg-white border hover:shadow-sm"
+                            {savedLoading ? (
+                                <div className="text-sm text-gray-500">Loading…</div>
+                            ) : savedItems.length === 0 ? (
+                                <div className="text-sm text-gray-500 text-center py-6">
+                                    No saved items yet
+                                </div>
+                            ) : (
+                                <ul className="space-y-3">
+                                    {savedItems.map((s) => (
+                                        <li
+                                            key={s._savedId ?? s.id}
+                                            className="flex items-center gap-4"
                                         >
-                                            Move to cart
-                                        </button>
-                                        <button
-                                            onClick={() => openSavedConfirm(s)}
-                                            disabled={saving || deletingSaved}
-                                            className="px-3 py-1 rounded border text-rose-600 hover:bg-rose-50"
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
+                                            <div className="w-16 h-16 rounded-md overflow-hidden border bg-white">
+                                                <Link
+                                                    href={s.productId ? `/products/${s.productId}` : "/products"}
+                                                    className="block w-full h-full"
+                                                >
+                                                    <Image
+                                                        src={s.img ?? "/placeholder-80x80.png"}
+                                                        alt={s.title}
+                                                        width={64}
+                                                        height={64}
+                                                        className="object-cover"
+                                                    />
+                                                </Link>
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">
+                                                    {s.title}
+                                                </div>
+                                                {typeof s.price === "number" && (
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        {formatCurrency(s.price)}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => moveSavedToCart(s)}
+                                                    disabled={saving}
+                                                    className="text-xs px-3 py-1 rounded border hover:bg-gray-50"
+                                                >
+                                                    Move to cart
+                                                </button>
+
+                                                <button
+                                                    onClick={() => openSavedConfirm(s)}
+                                                    disabled={saving || deletingSaved}
+                                                    className="text-xs px-3 py-1 rounded text-rose-600 hover:bg-rose-50"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <ConfirmModal

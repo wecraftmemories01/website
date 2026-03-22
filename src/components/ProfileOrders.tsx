@@ -412,7 +412,17 @@ export default function OrdersCompact({
                                                                         >
                                                                             <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
                                                                                 {p.productImage ? (
-                                                                                    <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
+                                                                                    <Image
+                                                                                        src={p.productImage}
+                                                                                        alt={
+                                                                                            typeof p.productNameSnapshot === "string" && p.productNameSnapshot.trim()
+                                                                                                ? `${p.productNameSnapshot} product image`
+                                                                                                : "Product image"
+                                                                                        }
+                                                                                        fill
+                                                                                        sizes="48px"
+                                                                                        style={{ objectFit: "cover" }}
+                                                                                    />
                                                                                 ) : (
                                                                                     <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
                                                                                 )}
@@ -443,7 +453,17 @@ export default function OrdersCompact({
                                                                         >
                                                                             <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
                                                                                 {p.productImage ? (
-                                                                                    <Image src={p.productImage} alt={p.productNameSnapshot} fill sizes="48px" style={{ objectFit: "cover" }} />
+                                                                                    <Image
+                                                                                        src={p.productImage}
+                                                                                        alt={
+                                                                                            typeof p.productNameSnapshot === "string" && p.productNameSnapshot.trim()
+                                                                                                ? `${p.productNameSnapshot} product image`
+                                                                                                : "Product image"
+                                                                                        }
+                                                                                        fill
+                                                                                        sizes="48px"
+                                                                                        style={{ objectFit: "cover" }}
+                                                                                    />
                                                                                 ) : (
                                                                                     <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
                                                                                 )}

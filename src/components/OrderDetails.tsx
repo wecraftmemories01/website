@@ -393,7 +393,7 @@ export default function OrderDetails({
                                         {p.productImage ? (
                                             <Image
                                                 src={p.productImage}
-                                                alt={p.productNameSnapshot}
+                                                alt={p.productNameSnapshot || "Product image"}
                                                 fill
                                                 sizes="(max-width:768px) 100vw, 110px"
                                                 style={{ objectFit: "cover" }}

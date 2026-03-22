@@ -380,7 +380,7 @@ export default function SidebarFilters({
                     </div>
 
                     {/* Controls stacked below search */}
-                    <div className="mt-3 flex items-center justify-between">
+                    <div className="mt-3 flex flex-col items-left justify-between">
                         <button
                             onClick={() => {
                                 if (hasAnySelection) onClearAll()
@@ -394,7 +394,7 @@ export default function SidebarFilters({
                             Clear
                         </button>
 
-                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                        <label className="flex items-center gap-2 mt-3 text-sm cursor-pointer select-none">
                             <input type="checkbox" checked={inStockOnly} onChange={onToggleInStock} className="accent-teal-600 w-4 h-4" />
                             <span>In stock only</span>
                         </label>
