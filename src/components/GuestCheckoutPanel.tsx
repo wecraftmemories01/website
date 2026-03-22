@@ -54,6 +54,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [cartLoaded, setCartLoaded] = useState<boolean>(false);
     const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
     const [showForm, setShowForm] = useState(true);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     const [creating, setCreating] = useState(false);
     const [paymentInProgress, setPaymentInProgress] = useState(false);
@@ -136,6 +137,79 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             if (billingPincodeTimeoutRef.current) clearTimeout(billingPincodeTimeoutRef.current);
         };
     }, []);
+
+    // --- Validations ---
+    function validateForm() {
+        const newErrors: Record<string, string> = {};
+
+        // Contact
+        if (!guestInfo.name.trim()) {
+            newErrors.name = "Please enter your full name";
+        }
+
+        if (!guestInfo.email.trim()) {
+            newErrors.email = "Email is required";
+        } else if (!/^\S+@\S+\.\S+$/.test(guestInfo.email)) {
+            newErrors.email = "Enter a valid email address";
+        }
+
+        if (!guestInfo.mobile.trim()) {
+            newErrors.mobile = "Mobile number is required";
+        } else if (!/^[6-9]\d{9}$/.test(guestInfo.mobile)) {
+            newErrors.mobile = "Enter a valid 10-digit mobile number";
+        }
+
+        // Address
+        if (!form.addressLine1.trim()) {
+            newErrors.addressLine1 = "Address Line 1 is required";
+        }
+
+        if (!form.pincode) {
+            newErrors.pincode = "Pincode is required";
+        } else if (!isValidIndianPincode(form.pincode)) {
+            newErrors.pincode = "Enter valid 6-digit pincode";
+        }
+
+        if (!form.city) {
+            newErrors.city = "City not detected. Enter valid pincode";
+        }
+
+        if (!form.state) {
+            newErrors.state = "State not detected. Enter valid pincode";
+        }
+
+        if (!form.district) {
+            newErrors.district = "District not detected";
+        }
+
+        // Billing
+        if (!billingSame) {
+            if (!billingForm.addressLine1.trim()) {
+                newErrors.billing_addressLine1 = "Billing address required";
+            }
+
+            if (!billingForm.pincode || !isValidIndianPincode(billingForm.pincode)) {
+                newErrors.billing_pincode = "Enter valid billing pincode";
+            }
+        }
+
+        setErrors(newErrors);
+
+        return newErrors;
+    }
+
+    function scrollToError(errors: Record<string, string>) {
+        const firstKey = Object.keys(errors)[0];
+        if (!firstKey) return;
+
+        const el = document.querySelector(`[data-error="${firstKey}"]`);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+            const input = el.querySelector("input");
+            if (input) (input as HTMLInputElement).focus();
+        }
+    }
 
     // --- API helpers ---
     function getApiBase(): string {
@@ -794,21 +868,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
-        const addr = selectedAddress;
-
-        if (!addr) {
-            unlock();
-            alert("Selected address not found");
-            return;
-        }
-
-        if (!addr.pincode || !isValidIndianPincode(addr.pincode)) {
+        // (use form)
+        if (!form.pincode || !isValidIndianPincode(form.pincode)) {
             unlock();
             alert("Invalid delivery pincode");
             return;
         }
 
-        const svc = serviceMap[addr.pincode];
+        const svc = serviceMap[form.pincode];
+
         if (svc?.checking) {
             unlock();
             alert("Checking pincode serviceability — please wait");
@@ -821,12 +889,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
-        if (
-            !guestInfo.name ||
-            !/^\S+@\S+\.\S+$/.test(guestInfo.email) ||
-            !/^[6-9]\d{9}$/.test(guestInfo.mobile)
-        ) {
-            alert("Please enter valid contact details");
+        const validationErrors = validateForm();
+
+        if (Object.keys(validationErrors).length > 0) {
+            scrollToError(validationErrors);
             unlock();
             return;
         }
@@ -847,7 +913,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         (async () => {
             try {
-                await createGuestOrder(addr);
+                await createGuestOrder(form);
             } catch {
                 unlock();
             }
@@ -1129,26 +1195,44 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <div className="space-y-4">
                                 <h2 className="text-lg font-semibold">Contact details</h2>
 
-                                <input
-                                    placeholder="Full Name"
-                                    value={guestInfo.name}
-                                    onChange={(e) => setGuestInfo({ ...guestInfo, name: e.target.value })}
-                                    className="w-full border rounded-lg px-3 py-2"
-                                />
+                                <div data-error="name">
+                                    <input
+                                        placeholder="Full Name"
+                                        value={guestInfo.name}
+                                        onChange={(e) => {
+                                            setGuestInfo({ ...guestInfo, name: e.target.value });
+                                            setErrors(prev => ({ ...prev, name: "" }));
+                                        }}
+                                        className={`w-full border rounded-lg px-3 py-2 ${errors.name ? "border-red-500" : ""}`}
+                                    />
+                                    {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+                                </div>
 
-                                <input
-                                    placeholder="Email"
-                                    value={guestInfo.email}
-                                    onChange={(e) => setGuestInfo({ ...guestInfo, email: e.target.value })}
-                                    className="w-full border rounded-lg px-3 py-2"
-                                />
+                                <div data-error="email">
+                                    <input
+                                        placeholder="Email"
+                                        value={guestInfo.email}
+                                        onChange={(e) => {
+                                            setGuestInfo({ ...guestInfo, email: e.target.value });
+                                            setErrors(prev => ({ ...prev, email: "" }));
+                                        }}
+                                        className={`w-full border rounded-lg px-3 py-2 ${errors.email ? "border-red-500" : ""}`}
+                                    />
+                                    {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+                                </div>
 
-                                <input
-                                    placeholder="Mobile"
-                                    value={guestInfo.mobile}
-                                    onChange={(e) => setGuestInfo({ ...guestInfo, mobile: e.target.value })}
-                                    className="w-full border rounded-lg px-3 py-2"
-                                />
+                                <div data-error="mobile">
+                                    <input
+                                        placeholder="Mobile"
+                                        value={guestInfo.mobile}
+                                        onChange={(e) => {
+                                            setGuestInfo({ ...guestInfo, mobile: e.target.value });
+                                            setErrors(prev => ({ ...prev, mobile: "" }));
+                                        }}
+                                        className={`w-full border rounded-lg px-3 py-2 ${errors.mobile ? "border-red-500" : ""}`}
+                                    />
+                                    {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
+                                </div>
                             </div>
                             <div>
                                 <h2 className="text-lg font-semibold">Delivery address</h2>
@@ -1166,12 +1250,18 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             Address Line 1 <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            placeholder="House / Flat / Building"
-                                            value={form.addressLine1}
-                                            onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
-                                            className="w-full border p-2 rounded mt-1"
-                                        />
+                                        <div data-error="addressLine1">
+                                            <input
+                                                placeholder="House / Flat / Building"
+                                                value={form.addressLine1}
+                                                onChange={(e) => {
+                                                    setForm({ ...form, addressLine1: e.target.value });
+                                                    setErrors(prev => ({ ...prev, addressLine1: "" }));
+                                                }}
+                                                className={`w-full border p-2 rounded mt-1 ${errors.addressLine1 ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.addressLine1 && <p className="text-xs text-red-500 mt-1">{errors.addressLine1}</p>}
+                                        </div>
                                     </div>
 
                                     {/* Address Line 2 */}
@@ -1218,14 +1308,18 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             Pincode <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            placeholder="6-digit pincode"
-                                            value={form.pincode}
-                                            onChange={(e) =>
-                                                handlePincodeChange(e.target.value.replace(/\D/g, "").slice(0, 6))
-                                            }
-                                            className="w-full border p-2 rounded mt-1"
-                                        />
+                                        <div data-error="pincode">
+                                            <input
+                                                placeholder="6-digit pincode"
+                                                value={form.pincode}
+                                                onChange={(e) => {
+                                                    handlePincodeChange(e.target.value.replace(/\D/g, "").slice(0, 6));
+                                                    setErrors(prev => ({ ...prev, pincode: "" }));
+                                                }}
+                                                className={`w-full border p-2 rounded mt-1 ${errors.pincode ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.pincode && <p className="text-xs text-red-500 mt-1">{errors.pincode}</p>}
+                                        </div>
                                     </div>
 
                                     {/* City */}
@@ -1233,11 +1327,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             City <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            value={form.city || ""}
-                                            readOnly
-                                            className="w-full border p-2 rounded mt-1 bg-gray-100"
-                                        />
+                                        <div data-error="city">
+                                            <input
+                                                value={form.city || ""}
+                                                readOnly
+                                                className={`w-full border p-2 rounded mt-1 bg-gray-100 ${errors.city ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city}</p>}
+                                        </div>
                                     </div>
 
                                     {/* District */}
@@ -1245,11 +1342,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             District <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            value={form.district || ""}
-                                            readOnly
-                                            className="w-full border p-2 rounded mt-1 bg-gray-100"
-                                        />
+                                        <div data-error="district">
+                                            <input
+                                                value={form.district || ""}
+                                                readOnly
+                                                className={`w-full border p-2 rounded mt-1 bg-gray-100 ${errors.district ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.district && <p className="text-xs text-red-500 mt-1">{errors.district}</p>}
+                                        </div>
                                     </div>
 
                                     {/* State */}
@@ -1257,11 +1357,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             State <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            value={form.state || ""}
-                                            readOnly
-                                            className="w-full border p-2 rounded mt-1 bg-gray-100"
-                                        />
+                                        <div data-error="state">
+                                            <input
+                                                value={form.state || ""}
+                                                readOnly
+                                                className={`w-full border p-2 rounded mt-1 bg-gray-100 ${errors.state ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.state && <p className="text-xs text-red-500 mt-1">{errors.state}</p>}
+                                        </div>
                                     </div>
 
                                 </div>
@@ -1308,12 +1411,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             Address Line 1 <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            placeholder="House / Flat / Building"
-                                            value={billingForm.addressLine1}
-                                            onChange={(e) => setBillingForm({ ...billingForm, addressLine1: e.target.value })}
-                                            className="w-full border p-2 rounded mt-1"
-                                        />
+                                        <div data-error="billing_addressLine1">
+                                            <input
+                                                value={billingForm.addressLine1}
+                                                onChange={(e) => {
+                                                    setBillingForm({ ...billingForm, addressLine1: e.target.value });
+                                                    setErrors(prev => ({ ...prev, billing_addressLine1: "" }));
+                                                }}
+                                                className={`w-full border p-2 rounded mt-1 ${errors.billing_addressLine1 ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.billing_addressLine1 && <p className="text-xs text-red-500 mt-1">{errors.billing_addressLine1}</p>}
+                                        </div>
                                     </div>
 
                                     <div>
@@ -1356,13 +1464,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <label className="text-sm font-medium">
                                             Pincode <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            value={billingForm.pincode}
-                                            onChange={(e) =>
-                                                handleBillingPincodeChange(e.target.value.replace(/\D/g, "").slice(0, 6))
-                                            }
-                                            className="w-full border p-2 rounded mt-1"
-                                        />
+                                        <div data-error="billing_pincode">
+                                            <input
+                                                value={billingForm.pincode}
+                                                onChange={(e) => {
+                                                    handleBillingPincodeChange(e.target.value.replace(/\D/g, "").slice(0, 6));
+                                                    setErrors(prev => ({ ...prev, billing_pincode: "" }));
+                                                }}
+                                                className={`w-full border p-2 rounded mt-1 ${errors.billing_pincode ? "border-red-500" : ""}`}
+                                            />
+                                            {errors.billing_pincode && <p className="text-xs text-red-500 mt-1">{errors.billing_pincode}</p>}
+                                        </div>
                                     </div>
 
                                     <div>
@@ -1465,22 +1577,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <button
                                 onClick={placeOrder}
                                 className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating || !hasAddress ? "opacity-60 cursor-not-allowed bg-gray-200 text-gray-500" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
-                                disabled={
-                                    creating ||
-                                    paymentInProgress ||
-                                    cart.length === 0 ||
-                                    !hasAddress ||
-                                    currentDeliveryCharge === null ||
-                                    Boolean(selectedPincode && serviceMap[selectedPincode]?.checking)
-                                }
-                                aria-disabled={
-                                    creating ||
-                                    paymentInProgress ||
-                                    cart.length === 0 ||
-                                    !hasAddress ||
-                                    currentDeliveryCharge === null ||
-                                    Boolean(selectedPincode && serviceMap[selectedPincode]?.checking)
-                                }
+                                disabled={creating || paymentInProgress}
+                                aria-disabled={creating || paymentInProgress}
                             >
                                 {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
                             </button>
@@ -1565,23 +1663,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         </div>
                         <button
                             onClick={placeOrder}
-                            className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-lg font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed bg-gray-200 text-slate-500" : "bg-[#065975] text-white"}`}
-                            disabled={
-                                creating ||
-                                paymentInProgress ||
-                                cart.length === 0 ||
-                                !hasAddress ||
-                                currentDeliveryCharge === null ||
-                                Boolean(selectedPincode && serviceMap[selectedPincode]?.checking)
-                            }
-                            aria-disabled={
-                                creating ||
-                                paymentInProgress ||
-                                cart.length === 0 ||
-                                !hasAddress ||
-                                currentDeliveryCharge === null ||
-                                Boolean(selectedPincode && serviceMap[selectedPincode]?.checking)
-                            }
+                            className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-[0.98]
+                                ${creating || paymentInProgress
+                                    ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                                    : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white shadow-lg hover:brightness-95"
+                                }`}
+                            disabled={creating || paymentInProgress}
                         >
                             {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
                         </button>

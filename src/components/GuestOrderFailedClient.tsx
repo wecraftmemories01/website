@@ -51,7 +51,7 @@ export default function GuestOrderFailedClient() {
                                 if (token) {
                                     router.push(`/guest-order-details?token=${encodeURIComponent(token)}`);
                                 } else {
-                                    router.push("/contact-support");
+                                    router.push("/contact");
                                 }
                             }}
                             className="w-full inline-flex items-center justify-center gap-3 py-3 rounded-xl bg-rose-600 text-white font-semibold hover:brightness-95 transition"
@@ -60,7 +60,7 @@ export default function GuestOrderFailedClient() {
                             <span>{token ? "View order" : "Contact support"}</span>
                         </button>
 
-                        <button
+                        {/* <button
                             onClick={() => {
                                 if (orderId) {
                                     router.push(`/checkout?retryOrderId=${encodeURIComponent(orderId)}`);
@@ -69,7 +69,7 @@ export default function GuestOrderFailedClient() {
                             className="w-full inline-flex items-center justify-center gap-3 py-3 rounded-xl bg-[#065975] text-white font-semibold hover:brightness-95 transition"
                         >
                             Retry Payment
-                        </button>
+                        </button> */}
                     </div>
 
                     <div className="mt-5 text-xs text-slate-400">
