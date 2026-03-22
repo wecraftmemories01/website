@@ -438,20 +438,20 @@ export default function ProductsClient() {
                         <div className="flex items-center justify-between mb-6">
 
                             {/* LEFT SIDE */}
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-col gap-3">
 
-                                {/* MOBILE CONTROLS (unchanged) */}
-                                <div className="flex items-center gap-2">
+                                {/* ROW 1 → FILTER + SORT */}
+                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                                     <button
                                         onClick={() => setFiltersOpen(true)}
-                                        className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
+                                        className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm whitespace-nowrap"
                                     >
                                         Filters
                                     </button>
 
                                     <button
                                         onClick={() => setSortOpen(true)}
-                                        className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm"
+                                        className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm whitespace-nowrap"
                                     >
                                         Sort: {sortBy === "latest" ? "Newest" :
                                             sortBy === "price-low" ? "Low → High" :
@@ -461,14 +461,14 @@ export default function ProductsClient() {
                                     {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
                                         <button
                                             onClick={clearAll}
-                                            className="lg:hidden px-3 py-2 rounded-full text-sm bg-red-50 text-red-600 border border-red-200"
+                                            className="lg:hidden px-3 py-2 rounded-full text-sm bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
                                         >
                                             Clear
                                         </button>
                                     )}
                                 </div>
 
-                                {/* ✅ NEW PRODUCT COUNT */}
+                                {/* ROW 2 → PRODUCT COUNT */}
                                 <div className="text-sm text-slate-600">
                                     Showing{" "}
                                     <span className="font-semibold text-slate-900">
@@ -650,21 +650,31 @@ export default function ProductsClient() {
                 {sortOpen && (
                     <motion.div
                         className="fixed inset-0 bg-black/40 z-50 lg:hidden"
+                        onClick={() => setSortOpen(false)}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                     >
                         <motion.div
                             className="absolute bottom-0 w-full bg-white rounded-t-2xl p-6"
+                            onClick={(e) => e.stopPropagation()}
                             initial={{ y: "100%" }}
                             animate={{ y: 0 }}
                             exit={{ y: "100%" }}
                         >
+                            {/* HEADER */}
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold">Sort products</h3>
 
-                            <h3 className="text-lg font-semibold mb-4">
-                                Sort products
-                            </h3>
+                                <button
+                                    onClick={() => setSortOpen(false)}
+                                    className="text-sm px-3 py-1 border rounded-md"
+                                >
+                                    Close
+                                </button>
+                            </div>
 
+                            {/* OPTIONS */}
                             <div className="flex flex-col gap-3">
 
                                 <button
@@ -672,7 +682,7 @@ export default function ProductsClient() {
                                         setSortBy("latest")
                                         setSortOpen(false)
                                     }}
-                                    className="text-left py-2"
+                                    className={`text-left py-2 ${sortBy === "latest" ? "font-semibold text-[#0B5C73]" : ""}`}
                                 >
                                     Newest
                                 </button>
@@ -682,7 +692,7 @@ export default function ProductsClient() {
                                         setSortBy("price-low")
                                         setSortOpen(false)
                                     }}
-                                    className="text-left py-2"
+                                    className={`text-left py-2 ${sortBy === "price-low" ? "font-semibold text-[#0B5C73]" : ""}`}
                                 >
                                     Price: Low to High
                                 </button>
@@ -692,13 +702,12 @@ export default function ProductsClient() {
                                         setSortBy("price-high")
                                         setSortOpen(false)
                                     }}
-                                    className="text-left py-2"
+                                    className={`text-left py-2 ${sortBy === "price-high" ? "font-semibold text-[#0B5C73]" : ""}`}
                                 >
                                     Price: High to Low
                                 </button>
 
                             </div>
-
                         </motion.div>
                     </motion.div>
                 )}
