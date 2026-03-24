@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Pause, Play, Star } from 'lucide-react'
 import Link from "next/link";
 
 type Testimonial = {
@@ -37,187 +37,147 @@ export default function TestimonialsPages({
     interval?: number
 }) {
     const [visible, setVisible] = useState(1)
-    const [isMounted, setIsMounted] = useState(false)
     const [pageIndex, setPageIndex] = useState(0)
     const [playing, setPlaying] = useState(true)
     const timeoutRef = useRef<number | null>(null)
-    const containerRef = useRef<HTMLDivElement | null>(null)
 
-    const getPages = (arr: Testimonial[], per: number) => {
-        const pages: Testimonial[][] = []
-        for (let i = 0; i < arr.length; i += per) pages.push(arr.slice(i, i + per))
-        return pages
+    useEffect(() => {
+        const update = () => setVisible(window.innerWidth >= 768 ? 2 : 1)
+        update()
+        window.addEventListener('resize', update)
+        return () => window.removeEventListener('resize', update)
+    }, [])
+
+    const pages = []
+    for (let i = 0; i < items.length; i += visible) {
+        pages.push(items.slice(i, i + visible))
     }
 
     useEffect(() => {
-        setIsMounted(true)
-        const decide = () => setVisible(window.innerWidth >= 768 ? 2 : 1)
-        decide()
-        window.addEventListener('resize', decide)
-        return () => window.removeEventListener('resize', decide)
-    }, [])
+        if (!playing) return
+        timeoutRef.current && clearTimeout(timeoutRef.current)
+        timeoutRef.current = window.setTimeout(() => {
+            setPageIndex((p) => (p + 1) % pages.length)
+        }, interval)
+    }, [pageIndex, playing, pages.length])
 
-    const pages = getPages(items, visible)
-    const pagesCount = pages.length || 1
-
-    useEffect(() => {
-        if (pageIndex >= pagesCount) setPageIndex(0)
-    }, [pagesCount, pageIndex])
-
-    useEffect(() => {
-        if (!isMounted || !playing) return
-        timeoutRef.current && window.clearTimeout(timeoutRef.current)
-        timeoutRef.current = window.setTimeout(
-            () => setPageIndex((p) => (p + 1) % pagesCount),
-            interval
-        )
-        return () => {
-            if (timeoutRef.current) {
-                window.clearTimeout(timeoutRef.current)
-            }
-        }
-    }, [pageIndex, playing, pagesCount, interval, isMounted])
-
-    const prev = () => setPageIndex((p) => (p - 1 + pagesCount) % pagesCount)
-    const next = () => setPageIndex((p) => (p + 1) % pagesCount)
-    const goTo = (i: number) => setPageIndex(i)
-
-    const pageWidth = isMounted ? 100 / pagesCount : 100
+    const prev = () => setPageIndex((p) => (p - 1 + pages.length) % pages.length)
+    const next = () => setPageIndex((p) => (p + 1) % pages.length)
 
     return (
-        <section className="py-16 bg-gradient-to-b from-white to-slate-50">
-            <div className="max-w-6xl mx-auto px-4">
+        <section className="py-16 bg-[radial-gradient(circle_at_top,_#E6F7F5,_white_60%,_#FFF4E6)]">
+            <div className="max-w-6xl mx-auto px-4 relative">
+
+                {/* soft glow background */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#1FA6B8]/10 blur-3xl rounded-full -z-10" />
+
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
-                    <div>
-                        <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-800">
-                            Loved by Families Across India ❤️
-                        </h2>
-                        <p className="mt-2 text-slate-600 max-w-xl">
-                            Real stories from customers who chose handcrafted comfort for their loved ones.
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                            Testimonials sourced from our <Link href="https://www.instagram.com/wecraftmemories01/" target="_blank">Instagram</Link> community
-                        </p>
+                <div className="mb-6">
+                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0B5C73]">
+                        Loved by Families Across India ❤️
+                    </h2>
+                    <p className="mt-2 text-[#4B6B73]">
+                        Real stories from happy customers.
+                    </p>
+                </div>
+
+                {/* Trust */}
+                <div className="flex items-center gap-3 mb-8">
+                    <div className="flex text-[#F6B73C]">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} size={16} fill="currentColor" strokeWidth={0} />
+                        ))}
                     </div>
+                    <span className="text-sm text-[#4B6B73]">
+                        4.9 rating • 1000+ happy customers
+                    </span>
+                </div>
 
-                    <div className="flex items-center gap-2 relative z-20">
-                        {/* Play / Pause */}
+                {/* Controls */}
+                <div className="flex gap-3 mb-8">
+                    {[prev, next, () => setPlaying(p => !p)].map((fn, i) => (
                         <button
-                            type="button"
-                            onClick={() => setPlaying((p) => !p)}
-                            className="h-10 w-10 rounded-full bg-white/80 backdrop-blur shadow-md
-               flex items-center justify-center
-               hover:scale-110 transition"
-                            aria-label={playing ? 'Pause autoplay' : 'Play autoplay'}
+                            key={i}
+                            onClick={fn}
+                            className="h-11 w-11 rounded-full bg-white border border-[#0B5C73]/15 shadow-[0_6px_16px_rgba(11,92,115,0.12)] flex items-center justify-center text-[#0B5C73] hover:bg-[#0B5C73] hover:text-white hover:shadow-[0_10px_25px_rgba(11,92,115,0.25)] active:scale-95 transition-all"
                         >
-                            {playing ? <Pause size={18} /> : <Play size={18} />}
+                            {i === 0 && <ArrowLeft size={18} />}
+                            {i === 1 && <ArrowRight size={18} />}
+                            {i === 2 && (playing ? <Pause size={18} /> : <Play size={18} />)}
                         </button>
-
-                        {/* Previous */}
-                        <button
-                            type="button"
-                            onClick={prev}
-                            className="h-10 w-10 rounded-full bg-white shadow-md
-               flex items-center justify-center
-               hover:scale-110 transition"
-                            aria-label="Previous testimonials"
-                        >
-                            <ArrowLeft size={18} />
-                        </button>
-
-                        {/* Next */}
-                        <button
-                            type="button"
-                            onClick={next}
-                            className="h-10 w-10 rounded-full bg-white shadow-md
-               flex items-center justify-center
-               hover:scale-110 transition"
-                            aria-label="Next testimonials"
-                        >
-                            <ArrowRight size={18} />
-                        </button>
-                    </div>
+                    ))}
                 </div>
 
                 {/* Carousel */}
-                <div
-                    ref={containerRef}
-                    onMouseEnter={() => setPlaying(false)}
-                    onMouseLeave={() => setPlaying(true)}
-                    className="overflow-hidden rounded-3xl"
-                >
+                <div className="overflow-hidden">
                     <div
                         className="flex transition-transform duration-500"
                         style={{
-                            width: `${pagesCount * 100}%`,
-                            transform: `translateX(-${pageIndex * pageWidth}%)`,
+                            width: `${pages.length * 100}%`,
+                            transform: `translateX(-${pageIndex * (100 / pages.length)}%)`
                         }}
                     >
-                        {pages.map((page, pi) => (
-                            <div key={pi} className="p-4 shrink-0" style={{ width: `${pageWidth}%` }}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {pages.map((page, i) => (
+                            <div key={i} className="p-2" style={{ width: `${100 / pages.length}%` }}>
+                                <div className="grid md:grid-cols-2 gap-6">
+
                                     {page.map((t) => (
-                                        <blockquote
-                                            key={t.id}
-                                            className="relative p-7 rounded-3xl bg-gradient-to-br from-white to-slate-50
-                      shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 animate-fadeIn"
-                                        >
-                                            <span className="absolute -top-6 -left-2 text-7xl text-wecraft-primary/20 select-none">
-                                                “
-                                            </span>
+                                        <div key={t.id} className="relative">
 
-                                            {/* {t.tag && (
-                                                <span className="inline-block mb-3 text-xs px-3 py-1 rounded-full bg-wecraft-primary/10 text-wecraft-primary">
-                                                    {t.tag}
-                                                </span>
-                                            )} */}
+                                            <div className="absolute inset-0 translate-x-1 translate-y-1 rounded-3xl bg-[#0B5C73]/5" />
 
-                                            <p className="text-lg italic text-slate-700 leading-relaxed min-h-[72px]">
-                                                {t.text}
-                                            </p>
+                                            <div className="relative p-6 rounded-3xl bg-white border border-[#0B5C73]/10 shadow-[0_8px_20px_rgba(0,0,0,0.06)] hover:shadow-[0_20px_50px_rgba(11,92,115,0.15)] transition-all duration-300 hover:-translate-y-1">
 
-                                            <footer className="mt-6 flex items-center gap-4">
-                                                <div className="h-11 w-11 rounded-full bg-wecraft-primary/10 flex items-center justify-center font-semibold text-wecraft-primary">
-                                                    {t.name.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <div className="font-semibold text-slate-800">{t.name}</div>
-                                                    <div className="flex items-center gap-1 text-yellow-400 text-sm">
-                                                        {'★'.repeat(t.rating ?? 5)}
-                                                        <span className="ml-2 text-xs text-slate-500">Verified Buyer</span>
+                                                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-[#1FA6B8]/5 to-[#F6B73C]/5 pointer-events-none" />
+
+                                                <span className="absolute top-3 left-4 text-4xl text-[#1FA6B8]/15 font-serif">“</span>
+
+                                                {t.tag && (
+                                                    <span className="absolute -top-3 right-4 text-[11px] px-3 py-1 rounded-full bg-white border border-[#0B5C73]/10 shadow text-[#0B5C73] font-medium">
+                                                        {t.tag}
+                                                    </span>
+                                                )}
+
+                                                <p className="text-[15px] leading-relaxed text-[#3F5F66] mt-6">
+                                                    {t.text}
+                                                </p>
+
+                                                <div className="mt-5 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-10 w-10 rounded-full bg-[#1FA6B8]/20 flex items-center justify-center font-semibold text-[#0B5C73]">
+                                                            {t.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm font-semibold text-[#0B5C73]">{t.name}</div>
+                                                            <div className="text-xs text-gray-500">Verified Buyer</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex text-[#F6B73C]">
+                                                        {Array.from({ length: t.rating ?? 5 }).map((_, i) => (
+                                                            <Star key={i} size={14} fill="currentColor" strokeWidth={0} />
+                                                        ))}
                                                     </div>
                                                 </div>
-                                            </footer>
-                                        </blockquote>
+
+                                            </div>
+                                        </div>
                                     ))}
+
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Dots */}
-                <div className="flex justify-center mt-6 gap-2">
-                    {Array.from({ length: pagesCount }).map((_, i) => (
-                        <button
-                            type="button"
-                            key={i}
-                            onClick={() => goTo(i)}
-                            className={`h-2.5 rounded-full transition-all duration-300 ${i === pageIndex
-                                ? 'w-10 bg-wecraft-primary shadow-[0_0_0_4px_rgba(0,0,0,0.06)]'
-                                : 'w-3 bg-slate-300 hover:bg-slate-400'
-                                }`}
-                        />
-                    ))}
-                </div>
-
                 {/* CTA */}
-                <div className="text-center mt-10">
-                    <button className="px-8 py-3 rounded-full bg-wecraft-primary text-black font-medium shadow-lg hover:shadow-xl hover:scale-105 transition">
-                        Join 1000+ Happy Customers
+                <div className="mt-12 flex justify-center relative">
+                    <div className="absolute w-60 h-16 bg-[#0B5C73]/20 blur-2xl rounded-full" />
+                    <button className="relative px-10 py-3 rounded-full bg-[#0B5C73] text-white font-semibold shadow-[0_10px_25px_rgba(11,92,115,0.25)] hover:bg-[#094B5C] hover:shadow-[0_15px_35px_rgba(11,92,115,0.35)] hover:scale-105 active:scale-95 transition-all duration-300">
+                        🎁 Gift Something Handmade & Meaningful
                     </button>
                 </div>
+
             </div>
         </section>
     )

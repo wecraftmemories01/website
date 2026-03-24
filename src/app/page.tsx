@@ -47,9 +47,9 @@ export default function HomePage() {
                     <HomeProductGrid products={products} />
                 )}
 
-                <Testimonials />
-
                 <HomeGallery />
+
+                <Testimonials />
             </main>
         </div>
     )
