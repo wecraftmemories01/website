@@ -60,17 +60,31 @@ export default function ProductGrid({ products }: Props) {
         >
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold tracking-tight">
-                    Popular Products
-                </h2>
+            <div className="flex items-center justify-between mb-6 mt-6">
 
+                {/* LEFT: Title + Subtitle */}
+                <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+                        Popular Picks
+                    </h2>
+
+                    <p className="text-sm text-gray-500 mt-1">
+                        Handcrafted favorites loved by our customers
+                    </p>
+
+                    {/* Accent Line */}
+                    <div className="mt-2 w-12 h-1 bg-teal-500 rounded-full" />
+                </div>
+
+                {/* RIGHT: CTA */}
                 <button
                     onClick={() => router.push("/products")}
-                    className="inline-flex items-center text-sm font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                    className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-teal-600 hover:text-teal-700 transition"
                 >
-                    View All Products →
+                    Explore All
+                    <span className="text-lg">→</span>
                 </button>
+
             </div>
 
 
