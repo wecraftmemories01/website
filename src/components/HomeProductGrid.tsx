@@ -79,10 +79,10 @@ export default function ProductGrid({ products }: Props) {
                 {/* RIGHT: CTA */}
                 <button
                     onClick={() => router.push("/products")}
-                    className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-teal-600 hover:text-teal-700 transition"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-teal-600 hover:text-teal-700 transition"
                 >
-                    Explore All
-                    <span className="text-lg">→</span>
+                    <span className="sm:hidden">All →</span>
+                    <span className="hidden sm:inline">Explore All →</span>
                 </button>
 
             </div>
