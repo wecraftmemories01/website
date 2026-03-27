@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import HeroClient from '../components/HeroClient';
 import HomeProductGrid from '../components/HomeProductGrid';
+import HomeCollections from '../components/HomeCollections'
 import Testimonials from '../components/Testimonials';
 import HomeGallery from "@/components/HomeGallery";
 import type { Product } from '../types/product';
@@ -46,6 +47,10 @@ export default function HomePage() {
                 ) : (
                     <HomeProductGrid products={products} />
                 )}
+
+                {/* <section className="max-w-7xl mx-auto px-3 sm:px-3 lg:px-3 pl-2 pr-2 pt-2 pb-2">
+                    <HomeCollections />
+                </section> */}
 
                 <HomeGallery />
 
