@@ -809,7 +809,7 @@ export default function ProductClient({ product }: { product: Product }) {
             {/* Sticky product title */}
             <div className="sticky top-0">
                 <div className="backdrop-blur-sm bg-white/70 border-b">
-                    <div className="max-w-7xl mx-auto px-6 py-3">
+                    <div className="max-w-7xl mx-auto py-3">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <span className="w-1.5 h-8 rounded-md bg-[#2F9E5A] inline-block" />
@@ -822,14 +822,14 @@ export default function ProductClient({ product }: { product: Product }) {
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-6 pt-4 pb-28 lg:pt-10 lg:pb-10">
+            <div className="max-w-7xl mx-auto pt-4 pb-28 lg:pt-10 lg:pb-10">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                     <div className="lg:col-span-2 space-y-6">
                         <div className="relative">
                             {/* Main Image Container */}
                             <div className="relative rounded-3xl overflow-hidden bg-linear-to-br from-gray-50 to-white shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
 
-                                <div className="relative w-full h-105 md:h-130 lg:h-150 flex items-center justify-center">
+                                <div className="relative w-full aspect-square">
 
                                     {typeof selectedImage === "string" && selectedImage ? (
                                         <button onClick={() => setLightbox(true)} className="relative w-full h-full group">
