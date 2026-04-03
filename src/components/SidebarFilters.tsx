@@ -339,7 +339,7 @@ export default function SidebarFilters({
     const clearThemes = () => selectedThemes.forEach((id) => onToggleTheme(id))
 
     const hasAnyFilters =
-    (themes.length > 0)
+        (themes.length > 0)
     // || masters.length > 0
     // || supers.length > 0
     // || cats.length > 0
@@ -349,8 +349,8 @@ export default function SidebarFilters({
         showSelectedChips.length > 0 ||
         inStockOnly ||
         q.trim().length > 0 ||
-        minPrice !== '' ||
-        maxPrice !== ''
+        (minPrice !== '' && !isNaN(Number(minPrice))) ||
+        (maxPrice !== '' && !isNaN(Number(maxPrice)))
 
     const sliderMin = typeof minPrice === 'number' ? minPrice : priceRangeMin
     const sliderMax = typeof maxPrice === 'number' ? maxPrice : priceRangeMax
@@ -511,15 +511,16 @@ export default function SidebarFilters({
                     <div>
                         <label className="text-xs text-slate-500">Min</label>
                         <input
+                            key={`min-${minPrice}`}
                             type="number"
+                            inputMode="numeric"
                             min={priceRangeMin}
                             max={priceRangeMax}
-                            value={minPrice}
-                            onChange={(e) =>
-                                onMinPriceChange(
-                                    e.target.value === '' ? '' : Number(e.target.value)
-                                )
-                            }
+                            value={minPrice === '' ? '' : String(minPrice)}
+                            onChange={(e) => {
+                                const val = e.target.value
+                                onMinPriceChange(val === '' ? '' : Number(val))
+                            }}
                             className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
                         />
                     </div>
@@ -527,15 +528,16 @@ export default function SidebarFilters({
                     <div>
                         <label className="text-xs text-slate-500">Max</label>
                         <input
+                            key={`max-${maxPrice}`}
                             type="number"
+                            inputMode="numeric"
                             min={priceRangeMin}
                             max={priceRangeMax}
-                            value={maxPrice}
-                            onChange={(e) =>
-                                onMaxPriceChange(
-                                    e.target.value === '' ? '' : Number(e.target.value)
-                                )
-                            }
+                            value={maxPrice === '' ? '' : String(maxPrice)}
+                            onChange={(e) => {
+                                const val = e.target.value
+                                onMaxPriceChange(val === '' ? '' : Number(val))
+                            }}
                             className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
                         />
                     </div>

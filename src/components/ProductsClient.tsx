@@ -339,9 +339,24 @@ export default function ProductsClient() {
     }
 
     const clearAll = () => {
+        // reset all local state FIRST (instant UI update)
+        setSelectedMasters([])
+        setSelectedSupers([])
+        setSelectedCategories([])
+        setSelectedSubs([])
+        setSelectedAges([])
+        setSelectedThemes([])
 
+        setMinPrice('')
+        setMaxPrice('')
+        setDebouncedMin('')
+        setDebouncedMax('')
+
+        setQState('')
+        setInStockOnly(false)
+
+        // then clear URL
         const params = new URLSearchParams()
-
         router.push(`/products?${params.toString()}`)
     }
 
