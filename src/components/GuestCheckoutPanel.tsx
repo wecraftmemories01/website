@@ -147,9 +147,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             newErrors.name = "Please enter your full name";
         }
 
-        if (!guestInfo.email.trim()) {
-            newErrors.email = "Email is required";
-        } else if (!/^\S+@\S+\.\S+$/.test(guestInfo.email)) {
+        if (guestInfo.email && !/^\S+@\S+\.\S+$/.test(guestInfo.email)) {
             newErrors.email = "Enter a valid email address";
         }
 
@@ -1210,7 +1208,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                 <div data-error="email">
                                     <input
-                                        placeholder="Email"
+                                        placeholder="Email (optional)"
                                         value={guestInfo.email}
                                         onChange={(e) => {
                                             setGuestInfo({ ...guestInfo, email: e.target.value });
