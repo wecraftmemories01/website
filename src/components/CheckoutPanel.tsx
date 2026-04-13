@@ -32,6 +32,9 @@ function isValidIndianPincode(pin: string) {
 export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
     const router = useRouter();
     const placeOrderLockRef = useRef(false);
+    const isFirstCartLoadRef = useRef(true);
+    const couponInitRef = useRef(false);
+
     const [checkingAuth, setCheckingAuth] = useState(true);
 
     const [addresses, setAddresses] = useState<Address[]>([]);
@@ -46,6 +49,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const [creating, setCreating] = useState(false);
     const [paymentInProgress, setPaymentInProgress] = useState(false);
+
+    const [suggestedCoupons, setSuggestedCoupons] = useState<any[]>([]);
+    const [lockedCoupons, setLockedCoupons] = useState<any[]>([]);
+    const [bestCouponData, setBestCouponData] = useState<any | null>(null);
+    const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+    const [isCouponLocked, setIsCouponLocked] = useState(false);
+
+    const [couponError, setCouponError] = useState<string | null>(null);
+    const [discountAmount, setDiscountAmount] = useState(0);
+    const [discountedSubtotal, setDiscountedSubtotal] = useState<number | null>(null);
+    const [couponLoading, setCouponLoading] = useState(false);
 
     const blankAddress: Address = {
         id: `local_${Date.now()}`,
@@ -73,6 +87,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [deliveryMap, setDeliveryMap] = useState<Record<string, DeliveryEntry>>({});
 
     const mountedRef = useRef(true);
+
     useEffect(() => {
         mountedRef.current = true;
         return () => {
@@ -87,6 +102,104 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             localStorage.setItem("wcm_addresses", JSON.stringify(serverOnly));
         } catch { }
     }, [addresses]);
+
+    const prevCartRef = useRef(cart);
+
+    useEffect(() => {
+        if (!cartLoaded) return;
+
+        // prevent removing coupon on initial load
+        if (isFirstCartLoadRef.current) {
+            isFirstCartLoadRef.current = false;
+            prevCartRef.current = cart;
+            return;
+        }
+
+        const prev = prevCartRef.current;
+
+        const changed =
+            prev.length !== cart.length ||
+            prev.some((p, i) =>
+                p.id !== cart[i]?.id ||
+                p.qty !== cart[i]?.qty ||
+                p.price !== cart[i]?.price
+            );
+
+        if (changed && appliedCoupon) {
+            setAppliedCoupon(null);
+            setDiscountAmount(0);
+            setDiscountedSubtotal(null);
+            setIsCouponLocked(false);
+
+            try {
+                localStorage.removeItem("wcm_coupon");
+            } catch { }
+        }
+
+        prevCartRef.current = cart;
+    }, [cart, cartLoaded]);
+
+    /** Save coupon to localStorage */
+    useEffect(() => {
+        try {
+            if (typeof window === "undefined") return;
+
+            // skip first run (initial mount)
+            if (!couponInitRef.current) {
+                couponInitRef.current = true;
+                return;
+            }
+
+            const data = {
+                appliedCoupon,
+                discountAmount,
+                isCouponLocked,
+            };
+
+            if (appliedCoupon) {
+                localStorage.setItem("wcm_coupon", JSON.stringify(data));
+            } else {
+                localStorage.removeItem("wcm_coupon");
+            }
+        } catch { }
+    }, [appliedCoupon, discountAmount, isCouponLocked]);
+
+    /** Restore coupon on page load */
+    useEffect(() => {
+        if (!cartLoaded) return;
+
+        try {
+            if (typeof window === "undefined") return;
+
+            const raw = localStorage.getItem("wcm_coupon");
+            if (!raw) return;
+
+            const parsed = JSON.parse(raw);
+
+            if (parsed?.appliedCoupon) {
+                const code = parsed.appliedCoupon;
+
+                setCouponLoading(true);
+
+                validateCoupon(code)
+                    .then((res) => {
+                        if (!res.valid) {
+                            setAppliedCoupon(null);
+                            setDiscountAmount(0);
+                            setIsCouponLocked(false);
+                            localStorage.removeItem("wcm_coupon");
+                        } else {
+                            setAppliedCoupon(code);
+                            setDiscountAmount(res.discountAmount || 0);
+                            setIsCouponLocked(true);
+                        }
+                    })
+                    .finally(() => {
+                        setCouponLoading(false);
+                    });
+            }
+        } catch { }
+    }, [cartLoaded]);
 
     function getStoredCustomerId(): string | null {
         if (typeof window === "undefined") return null;
@@ -136,6 +249,75 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             // ignore
         }
         router.replace("/login");
+    }
+
+    /** Validate coupon */
+    async function validateCoupon(code: string) {
+        try {
+            const customerId = getStoredCustomerId();
+            const url = buildUrl("/coupon/validate");
+
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json"
+            };
+
+            const token = getAuthToken();
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const res = await fetch(url, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    code,
+                    customerId,
+                    cartItems: cart.map(it => ({
+                        productId: it.id,
+                        qty: it.qty,
+                        price: it.price
+                    })),
+                    subtotal
+                })
+            });
+
+            const json = await safeJson(res);
+
+            if (!res.ok || !json?.valid) {
+                return { valid: false, message: json?.message || "Invalid coupon" };
+            }
+
+            return {
+                valid: true,
+                discountAmount: json.discountAmount,
+                finalTotal: json.finalTotal
+            };
+
+        } catch (err: any) {
+            return { valid: false, message: err.message };
+        }
+    }
+
+    async function fetchCouponSuggestions() {
+        try {
+            const url = buildUrl(`/coupon/suggestions?subtotal=${subtotal}`);
+
+            const headers: Record<string, string> = {};
+            const token = getAuthToken();
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const res = await fetch(url, {
+                method: "GET",
+                headers
+            });
+
+            const json = await safeJson(res);
+
+            if (!res.ok || !json?.success) return null;
+
+            return json;
+        } catch (err) {
+            console.error("Coupon suggestion error", err);
+            return null;
+        }
     }
 
     async function safeJson(res: Response) {
@@ -292,16 +474,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
         const json = await safeJson(res);
         if (!res.ok) {
-            if (!res.ok) {
-                const msg =
-                    typeof json?.error === "string"
-                        ? json.error
-                        : json?.error?.message
-                        || json?.message
-                        || `Failed to create address (${res.status})`;
+            const msg =
+                typeof json?.error === "string"
+                    ? json.error
+                    : json?.error?.message
+                    || json?.message
+                    || `Failed to create address (${res.status})`;
 
-                throw new Error(msg);
-            }
+            throw new Error(msg);
         }
         return json;
     }
@@ -558,7 +738,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     return;
                 }
             },
-            modal: { ondismiss: () => console.info("Razorpay modal dismissed") },
+            modal: {
+                ondismiss: () => {
+                    console.warn("Razorpay modal dismissed by user");
+
+                    // UNLOCK EVERYTHING
+                    placeOrderLockRef.current = false;
+                    setPaymentInProgress(false);
+                    setCreating(false);
+                }
+            },
             prefill: prefillCustomer,
             notes: orderId ? { orderId: String(orderId) } : undefined,
             display: {
@@ -792,6 +981,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
+        if (!cart.length) {
+            unlock();
+            return;
+        }
+
         const cust = typeof window !== "undefined"
             ? getStoredCustomerId()
             : null;
@@ -831,10 +1025,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         (async () => {
             try {
                 await createOrderAndRedirect(cust, addr);
-            } catch {
+
+            } catch (err) {
+                console.error(err);
                 unlock();
             }
-            // DO NOT unlock on success — navigation will happen
         })();
     }
 
@@ -899,6 +1094,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 customerId: String(customerId),
                 deliveryAddressId,
                 billingAddressId: billingAddressIdToSend,
+                couponCode: appliedCoupon || null,
                 cart: cart.map(it => ({
                     productId: it.id,
                     qty: it.qty,
@@ -920,6 +1116,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             const json = (await safeJson(res)) || {};
             console.debug("[createOrder] response", res.status, json);
+
+            if (!res.ok && json?.message) {
+                if (json.message.toLowerCase().includes("coupon")) {
+                    setCouponError(json.message);
+                    setCreating(false);
+                    placeOrderLockRef.current = false;
+                    return;
+                }
+            }
 
             if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId || json?.data)) {
                 const numericOrderNumber =
@@ -953,7 +1158,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                 const subtotalLocal = subtotal;
                 const deliveryChargeVal = Number(currentDeliveryCharge || 0);
-                const totalLocal = subtotalLocal + deliveryChargeVal;
+                const totalLocal = subtotalLocal + deliveryChargeVal - discountAmount;
 
                 const qp: string[] = [];
                 if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
@@ -1017,6 +1222,30 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     const subtotal = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
+
+    useEffect(() => {
+        if (!cartLoaded) return;
+
+        (async () => {
+            const data = await fetchCouponSuggestions();
+            if (!data) return;
+
+            setSuggestedCoupons(data.coupons || []);
+            setLockedCoupons(data.lockedCoupons || []);
+            setBestCouponData(data.bestCoupon || null);
+
+            // only auto apply if nothing applied
+            if (!appliedCoupon && data.bestCoupon) {
+                const best = data.bestCoupon;
+
+                setAppliedCoupon(best.coupon.code);
+                setDiscountAmount(best.discountAmount || 0);
+                setDiscountedSubtotal(best.finalTotal || null);
+                setIsCouponLocked(true);
+            }
+        })();
+    }, [subtotal, cartLoaded]);
+
     const hasAddress = addresses.length > 0 && selectedAddressId !== null;
 
     const currentDeliveryCharge = useMemo(() => {
@@ -1030,7 +1259,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return 0;
     }, [selectedAddressId, addresses, deliveryMap]);
 
-    const total = subtotal + (Number(currentDeliveryCharge) || 0);
+    const total = Math.max(
+        0,
+        (discountedSubtotal !== null ? discountedSubtotal : subtotal)
+        + (Number(currentDeliveryCharge) || 0)
+    );
 
     useEffect(() => {
         if (!selectedAddressId) return;
@@ -1268,11 +1501,137 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                         <p className="text-sm text-slate-500 mt-1">Secure payment — we never store your card details</p>
 
+                        {/* Coupon Section */}
+                        <div className="mt-4 mb-4">
+                            {appliedCoupon && (
+                                <div className="mt-2 flex items-center justify-between text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                                    <span>
+                                        🎉 Applied <strong>{appliedCoupon}</strong> — You saved {formatINR(discountAmount)}
+                                    </span>
+
+                                    <button
+                                        onClick={() => {
+                                            setAppliedCoupon(null);
+                                            setDiscountAmount(0);
+                                            setDiscountedSubtotal(null);
+                                            setIsCouponLocked(false);
+
+                                            try {
+                                                localStorage.removeItem("wcm_coupon");
+                                            } catch { }
+                                        }}
+                                        className="text-red-500 text-xs"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            )}
+
+                            {couponError && (
+                                <div className="text-red-500 text-xs mt-1">
+                                    {couponError}
+                                </div>
+                            )}
+
+                            {suggestedCoupons.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    {suggestedCoupons.map((c, i) => (
+                                        <div
+                                            key={i}
+                                            className={`flex justify-between items-center p-2 rounded-lg border text-sm 
+                                                    ${c.coupon.code === appliedCoupon
+                                                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
+                                                    : c.isBest
+                                                        ? "border-blue-300 bg-blue-50"
+                                                        : "border-slate-200"
+                                                }`}
+                                        >
+                                            <div>
+                                                <div className="font-medium">
+                                                    {c.coupon.code}
+
+                                                    {c.coupon.code === appliedCoupon && (
+                                                        <span className="ml-2 text-xs text-green-700 font-semibold">
+                                                            Applied
+                                                        </span>
+                                                    )}
+
+                                                    {c.isBest && c.coupon.code !== appliedCoupon && (
+                                                        <span className="ml-2 text-xs text-blue-600 font-semibold">
+                                                            Best Deal
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs text-slate-500">
+                                                    Save {formatINR(c.discountAmount)}
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={() => {
+                                                    setAppliedCoupon(c.coupon.code);
+                                                    setDiscountAmount(c.discountAmount);
+                                                    setDiscountedSubtotal(c.finalTotal);
+                                                    setIsCouponLocked(true);
+                                                    setCouponError(null);
+                                                }}
+                                                className="text-xs text-[#065975] font-medium"
+                                            >
+                                                Apply
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    {lockedCoupons.length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            {lockedCoupons.map((c, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="flex justify-between items-center p-2 rounded-lg border border-dashed text-sm bg-slate-50"
+                                                >
+                                                    <div>
+                                                        <div className="font-medium text-slate-600">
+                                                            {c.code}
+                                                        </div>
+                                                        <div className="text-xs text-orange-600">
+                                                            {c.unlockMessage}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="mt-4 space-y-3 text-sm">
-                            <div className="flex justify-between">
-                                <div>Subtotal</div>
-                                <div>{formatINR(subtotal)}</div>
-                            </div>
+                            {/* Subtotal with coupon applied */}
+                            {discountAmount > 0 && discountedSubtotal !== null ? (
+                                <>
+                                    {/* Old subtotal */}
+                                    <div className="flex justify-between text-slate-400 line-through">
+                                        <div>Subtotal</div>
+                                        <div>{formatINR(subtotal)}</div>
+                                    </div>
+
+                                    {/* New subtotal from API */}
+                                    <div className="flex justify-between text-green-600 font-semibold">
+                                        <div>New Subtotal</div>
+                                        <div>{formatINR(discountedSubtotal)}</div>
+                                    </div>
+
+                                    {/* Savings */}
+                                    <div className="text-xs text-green-600 font-medium">
+                                        You saved {formatINR(discountAmount)} 🎉
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex justify-between">
+                                    <div>Subtotal</div>
+                                    <div>{formatINR(subtotal)}</div>
+                                </div>
+                            )}
 
                             <div className="flex justify-between items-center">
                                 <div>Delivery</div>

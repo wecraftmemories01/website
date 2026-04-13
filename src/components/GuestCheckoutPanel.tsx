@@ -108,6 +108,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     type DeliveryEntry = { checking: boolean; value: number | null; error?: string };
     const [deliveryMap, setDeliveryMap] = useState<Record<string, DeliveryEntry>>({});
+    const [backendTotal, setBackendTotal] = useState<number | null>(null);
 
     const mountedRef = useRef(true);
     const hydratedRef = useRef(false);
@@ -345,7 +346,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             if (typeof charge !== "number" && Array.isArray(json?.data?.boxes)) {
                 charge = json.data.boxes.reduce((sum: number, box: any) => {
-                    return sum + (box.charge || 0) + (box.extraCharge || 0);
+                    return sum + (box.charge || 0);
                 }, 0);
             }
 
@@ -980,11 +981,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 const key = json.key ?? null;
 
                 if (razorpayOrder && key) {
+
+                    // USE BACKEND TOTAL (NOT LOCAL)
+                    const finalAmount = json.finalPayableAmount;
+
+                    // IMPORTANT: SAVE IT
+                    setBackendTotal(finalAmount);
+
+                    console.log("BACKEND TOTAL:", finalAmount);
+
                     await openRazorpayCheckout({
                         key,
                         razorpayOrder,
                         orderId: json._id ?? null,
                     });
+
                     return;
                 }
 
@@ -1062,7 +1073,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return null;
     }, [selectedPincode, deliveryMap]);
 
-    const total = subtotal + (Number(currentDeliveryCharge) || 0);
+    const total = backendTotal ?? (subtotal + (Number(currentDeliveryCharge) || 0));
 
     useEffect(() => {
         if (!selectedAddressId) return;
@@ -1557,7 +1568,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     </div>
                                 ) : (
                                     <div className="text-xl font-extrabold text-[#065975]">
-                                        {formatINR(total)}
+                                        {backendTotal !== null
+                                            ? formatINR(backendTotal)
+                                            : formatINR(total)}
                                     </div>
                                 )}
                             </div>
@@ -1578,7 +1591,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 disabled={creating || paymentInProgress}
                                 aria-disabled={creating || paymentInProgress}
                             >
-                                {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
+                                {creating ? "Placing order…" : `Place order • ${formatINR(backendTotal ?? total)}`}
                             </button>
                         </div>
 
@@ -1656,7 +1669,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             <div className="text-lg font-extrabold">
                                 {!hasAddress || currentDeliveryCharge === null
                                     ? formatINR(subtotal)
-                                    : formatINR(total)}
+                                    : formatINR(backendTotal ?? total)}
                             </div>
                         </div>
                         <button
@@ -1668,7 +1681,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                 }`}
                             disabled={creating || paymentInProgress}
                         >
-                            {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
+                            {creating ? "Placing…" : `Place order • ${formatINR(backendTotal ?? total)}`}
                         </button>
                     </div>
                 </div>

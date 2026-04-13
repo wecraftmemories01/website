@@ -290,6 +290,10 @@ export default function ClientCart() {
     const [savedExistsModalOpen, setSavedExistsModalOpen] = useState(false);
     const [savedExistsTitle, setSavedExistsTitle] = useState<string | undefined>(undefined);
 
+    // ===== Coupon suggestion (guest only) =====
+    const [bestCoupon, setBestCoupon] = useState<any>(null);
+    const [couponLoading, setCouponLoading] = useState(false);
+
     const router = useRouter();
 
     const guestCartLoading = React.useRef(false);
@@ -387,6 +391,49 @@ export default function ClientCart() {
             window.removeEventListener("cartChanged", reload)
         }
     }, [])
+
+    // ===== Fetch best coupon for guest users =====
+    useEffect(() => {
+        async function fetchCouponSuggestion() {
+
+            if (isAuthenticated) {
+                setBestCoupon(null);
+                return;
+            }
+
+            const subtotal = orderTotal(localCart?.sellItems);
+
+            if (!subtotal || subtotal <= 0) {
+                setBestCoupon(null);
+                return;
+            }
+
+            setCouponLoading(true);
+
+            try {
+                const res = await api.get(
+                    `/coupon/suggestions?subtotal=${Math.floor(subtotal)}`
+                );
+
+                const data = res.data;
+
+                if (data?.success && data?.bestCoupon?.valid) {
+                    setBestCoupon(data.bestCoupon);
+                } else {
+                    setBestCoupon(null);
+                }
+
+            } catch (err) {
+                console.error("Coupon suggestion error:", err);
+                setBestCoupon(null);
+            } finally {
+                setCouponLoading(false);
+            }
+        }
+
+        fetchCouponSuggestion();
+
+    }, [localCart, isAuthenticated]);
 
     async function fetchCart(): Promise<void> {
         const fetchId = ++fetchIdRef.current;
@@ -1224,121 +1271,111 @@ export default function ClientCart() {
                     </div>
                 </section>
 
-                <aside className="order-2 md:order-0 bg-linear-to-br from-white to-gray-50 rounded-xl shadow-lg p-5 md:sticky md:top-6">
-                    <div>
-                        <h4 className="font-semibold text-lg">Order Summary</h4>
-                        <p className="text-xs text-gray-500">Review your order before checkout</p>
-                    </div>
+                <aside className="bg-white rounded-xl shadow p-5 md:sticky md:top-6 space-y-5">
 
-                    <div className="mt-4 space-y-3 text-sm">
+                    {/* Title */}
+                    <h4 className="font-semibold text-lg">Order Summary</h4>
 
+                    {/* Pricing */}
+                    <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span>Items ({totalItemsCount})</span>
-                            <span className="text-emerald-700">
-                                {formatCurrency(orderTotal(localCart?.sellItems))}
-                            </span>
+                            <span>{formatCurrency(orderTotal(localCart?.sellItems))}</span>
                         </div>
 
                         <div className="flex justify-between text-gray-500">
                             <span>Delivery</span>
-                            <span className="text-gray-400 text-xs">
-                                Calculated at checkout
-                            </span>
+                            <span className="text-xs">Calculated at Checkout</span>
                         </div>
 
-                        <div className="border-t pt-3 mt-3 flex justify-between text-base font-semibold">
-                            <span>Total (excluding delivery)</span>
+                        <div className="border-t pt-2 flex justify-between font-semibold">
+                            <span>Total</span>
                             <span>{formatCurrency(orderTotal(localCart?.sellItems))}</span>
                         </div>
-
                     </div>
 
-                    <div className="mt-4 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
-                        Items in your cart are not reserved — checkout now to secure them
-                    </div>
+                    {/* 🔥 DISCOUNT HOOK (KEY CHANGE) */}
+                    {!isAuthenticated && bestCoupon && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
 
-                    <div className="mt-6 flex flex-col gap-3">
+                            <div className="text-2xl mb-1">🎁</div>
 
-                        {/* ================= LOGGED-IN USER ================= */}
-                        {isAuthenticated ? (
+                            <p className="text-sm text-gray-600">
+                                You're eligible for a discount!
+                            </p>
+
+                            <p className="text-xl font-bold text-emerald-700">
+                                Save {formatCurrency(bestCoupon.discountAmount)}
+                            </p>
+
+                            <p className="text-xs text-gray-500 mt-1">
+                                Code: <span className="font-semibold">{bestCoupon.coupon.code}</span>
+                            </p>
+
+                            {/* 🔥 PRIMARY CTA (LOGIN) */}
                             <button
-                                type="button"
-                                onClick={() => {
-                                    if (!hasItems) return;
-                                    try {
-                                        router.push("/checkout");
-                                    } catch {
-                                        window.location.href = "/checkout";
-                                    }
-                                }}
-                                disabled={!hasItems || loading || saving}
-                                className={`w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-md shadow
-            ${hasItems && !loading && !saving
-                                        ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg hover:shadow-xl transition-all"
-                                        : "bg-emerald-400 cursor-not-allowed opacity-60"}`}
+                                onClick={() => router.push("/login?redirect=/checkout")}
+                                className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium shadow"
                             >
-                                Continue to Checkout
+                                Unlock Discount & Checkout
                             </button>
-                        ) : (
-                            <>
-                                {/* ================= GUEST CHECKOUT ================= */}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!hasItems) return;
-                                        try {
-                                            router.push("/guest_checkout");
-                                        } catch {
-                                            window.location.href = "/guest_checkout";
-                                        }
-                                    }}
-                                    disabled={!hasItems || loading || saving}
-                                    className={`w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-md shadow
-                                        ${hasItems && !loading && !saving
-                                            ? "bg-emerald-600 hover:bg-emerald-700"
-                                            : "bg-emerald-400 cursor-not-allowed opacity-60"}`}
-                                >
-                                    Quick Checkout (No Login)
-                                </button>
 
-                                {/* ================= LOGIN OPTION ================= */}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        try {
-                                            router.push("/login?redirect=/checkout");
-                                        } catch {
-                                            window.location.href = "/login?redirect=/checkout";
-                                        }
-                                    }}
-                                    className="w-full inline-flex items-center justify-center gap-2 border px-4 py-3 rounded-md text-gray-600 hover:bg-gray-50"
-                                >
-                                    Login for Faster Checkout
-                                </button>
+                            <p className="text-[11px] text-gray-400 mt-2">
+                                Login required to apply discount
+                            </p>
+                        </div>
+                    )}
 
-                                <p className="text-xs text-gray-500 text-center mt-1">
-                                    You can checkout without creating an account
-                                </p>
-                            </>
-                        )}
-
-                        <a
-                            href="/products"
-                            className="w-full inline-flex items-center justify-center gap-2 border px-4 py-3 rounded-md text-center"
+                    {/* ✅ LOGGED-IN USER */}
+                    {isAuthenticated && (
+                        <button
+                            onClick={() => router.push("/checkout")}
+                            disabled={!hasItems}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium"
                         >
-                            Continue shopping
-                        </a>
+                            Continue to Checkout
+                        </button>
+                    )}
+
+                    {/* ⚠️ SECONDARY (LESS PROMINENT) */}
+                    {!isAuthenticated && (
+                        <button
+                            onClick={() => router.push("/guest_checkout")}
+                            disabled={!hasItems}
+                            className="w-full border py-2 rounded-md text-sm text-gray-500 hover:bg-gray-50"
+                        >
+                            Continue as Guest
+                        </button>
+                    )}
+
+                    {/* 🌿 TRUST + BENEFITS */}
+                    <div className="border-t pt-4 space-y-2 text-xs text-gray-600">
+
+                        <div className="flex items-center gap-2">
+                            <span>🔒</span>
+                            <span>Secure checkout</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span>🚚</span>
+                            <span>Fast delivery across India</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span>🎁</span>
+                            <span>Handmade with care</span>
+                        </div>
+
                     </div>
 
-                    <div className="text-xs text-gray-500 mt-4">
-                        Final price including delivery will be calculated at checkout after selecting your address.
-                    </div>
+                    {/* 🛍 CONTINUE SHOPPING */}
+                    <button
+                        onClick={() => router.push("/products")}
+                        className="w-full text-sm text-emerald-700 hover:underline text-center"
+                    >
+                        ← Continue shopping
+                    </button>
 
-                    <div className="mt-4 space-y-2 text-xs text-gray-600">
-                        <div>🔒 Secure checkout</div>
-                        <div>🚚 Fast delivery across India</div>
-                        <div>🎁 Handmade with care</div>
-                    </div>
                 </aside>
 
                 {/* ================= SAVED FOR LATER (NOW FIXED POSITION) ================= */}

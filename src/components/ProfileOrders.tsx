@@ -29,6 +29,16 @@ type ApiOrder = {
     orderId?: string;
     orderStatus?: ApiOrderStatus;
     orderProductsDetails: ApiOrderProduct[];
+    coupon?: {
+        code?: string;
+        type?: "PERCENTAGE" | "FLAT" | "FREE_SHIPPING";
+        value?: number;
+        discountAmount?: number;
+        isFreeShipping?: boolean;
+    };
+    couponAmount?: number;
+    finalPayableAmount?: number;
+    effectiveSubtotalAfterCoupon?: number;
 };
 
 function currency(n: number) {
@@ -347,13 +357,25 @@ export default function OrdersCompact({
                                             (s, p) => s + (Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0)),
                                             0
                                         );
-                                        const itemsTotal = apiItemsTotal || computedItemsTotal;
+                                        const itemsTotal = o.orderTotal != null
+                                            ? Number(o.orderTotal)
+                                            : computedItemsTotal;
                                         const delivery = Number(o.quotedDeliveryCharge ?? 0);
-                                        const grandTotal = itemsTotal + delivery;
+                                        const grandTotal = o.finalPayableAmount != null
+                                            ? Number(o.finalPayableAmount)
+                                            : itemsTotal + delivery;
 
                                         const totalItemsCount = (o.orderProductsDetails || []).reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
                                         const aggTotalCount = aggregated.reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
                                         const totalCount = Math.max(totalItemsCount, aggTotalCount);
+
+                                        const couponDiscount = Number(o.coupon?.discountAmount ?? o.couponAmount ?? 0);
+
+                                        const deliverySaved = o.coupon?.isFreeShipping
+                                            ? Number(o.quotedDeliveryCharge ?? 0)
+                                            : 0;
+
+                                        const totalSavings = couponDiscount + deliverySaved;
 
                                         return (
                                             <article
@@ -480,30 +502,99 @@ export default function OrdersCompact({
                                                     }
                                                 </div>
 
-                                                <aside className="flex flex-col items-end justify-between gap-3 md:gap-4">
-                                                    <div className="w-full md:w-44 bg-slate-50 border rounded-lg p-3 text-sm">
-                                                        <div className="flex justify-between items-center">
-                                                            <div className="text-xs text-slate-600">
-                                                                <div className="font-medium">Items <span className="text-xs text-slate-500">({totalCount})</span></div>
+                                                <aside className="flex flex-col items-end gap-3 md:gap-4">
+                                                    <div className="w-full rounded-2xl border bg-gradient-to-br from-white to-[#f8fbfb] p-4 shadow-sm hover:shadow-md transition-all duration-300 md:w-[240px]">
+                                                        {/* ITEMS */}
+                                                        <div className="flex justify-between items-center text-sm">
+                                                            <span className="text-slate-600">
+                                                                Items <span className="text-xs text-slate-400">({totalCount})</span>
+                                                            </span>
+                                                            <span className="font-medium text-slate-800">
+                                                                {currency(itemsTotal)}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* COUPON ROW */}
+                                                        <div className="mt-3 flex items-center justify-between min-h-[24px] w-full">
+
+                                                            {couponDiscount > 0 ? (
+                                                                <>
+                                                                    <div className="flex items-center gap-2 min-w-0">
+
+                                                                        {o.coupon?.code && (
+                                                                            <span className="px-2 py-[3px] text-[10px] font-semibold rounded-md bg-[#065975] text-white tracking-wide shrink-0">
+                                                                                {o.coupon.code}
+                                                                            </span>
+                                                                        )}
+
+                                                                        <span className="text-[11px] text-green-700 font-medium truncate">
+                                                                            {o.coupon?.type === "PERCENTAGE"
+                                                                                ? `${o.coupon.value ?? 0}% OFF`
+                                                                                : o.coupon?.type === "FLAT"
+                                                                                    ? `Flat ${currency(o.coupon.value ?? 0)} OFF`
+                                                                                    : "Discount"}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <span className="text-sm font-semibold text-green-700 shrink-0">
+                                                                        -{currency(couponDiscount)}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                        <span className="text-[11px] px-2 py-[3px] rounded-md bg-slate-100 text-slate-500 font-medium">
+                                                                            No offers
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <span className="text-sm font-medium text-slate-400 shrink-0">
+                                                                        —
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+
+                                                        {/* FREE SHIPPING */}
+                                                        {o.coupon?.isFreeShipping && (
+                                                            <div className="mt-1 text-[11px] text-green-600 flex items-center gap-1">
+                                                                🚚 <span>Free delivery</span>
                                                             </div>
-                                                            <div className="text-slate-800 font-medium">{currency(itemsTotal)}</div>
-                                                        </div>
-
-                                                        <div className="flex justify-between items-center text-slate-600 mt-2">
-                                                            <span className="text-xs">Delivery</span>
-                                                            <span className="font-medium text-slate-800">{delivery > 0 ? currency(delivery) : "—"}</span>
-                                                        </div>
-
-                                                        <hr className="my-2 border-slate-200" />
-
-                                                        <div className="flex justify-between items-center text-slate-700 font-semibold">
-                                                            <span className="text-sm">Total</span>
-                                                            <span className="text-[#065975] text-sm font-bold">{currency(grandTotal)}</span>
-                                                        </div>
-
-                                                        {apiItemsTotal && apiItemsTotal !== computedItemsTotal && (
-                                                            <div className="mt-1 text-xs text-rose-600">Note: subtotal mismatch</div>
                                                         )}
+
+                                                        {/* DELIVERY */}
+                                                        <div className="flex justify-between items-center text-sm text-slate-600 mt-3">
+                                                            <span>Delivery</span>
+                                                            <span className="font-medium text-slate-800">
+                                                                {o.coupon?.isFreeShipping
+                                                                    ? "Free"
+                                                                    : delivery > 0
+                                                                        ? currency(delivery)
+                                                                        : "—"}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* DIVIDER */}
+                                                        <div className="my-3 h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+
+                                                        {/* TOTAL */}
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm font-semibold text-slate-700">
+                                                                Total
+                                                            </span>
+                                                            <span className="text-xl font-extrabold text-[#0B5C73] tracking-tight tracking-tight">
+                                                                {currency(grandTotal)}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* SAVINGS BADGE (HIGHLIGHT) */}
+                                                        <div className="mt-3 w-full h-[26px] flex items-center justify-center">
+                                                            {totalSavings > 0 && (
+                                                                <div className="w-full text-center px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-black text-[11px] font-semibold">
+                                                                    🎉 You saved {currency(totalSavings)}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
 
                                                     <div className="w-full">

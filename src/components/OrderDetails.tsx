@@ -105,6 +105,16 @@ type ApiOrder = {
 
     orderStatusTimeline?: OrderStatusEntry[];
 
+    coupon?: {
+        code?: string;
+        type?: "PERCENTAGE" | "FLAT" | "FREE_SHIPPING";
+        value?: number;
+        discountAmount?: number;
+        isFreeShipping?: boolean;
+    };
+    couponAmount?: number;
+    finalPayableAmount?: number;
+
     orderCustomerAddressDetails?: {
         deliveryAddress?: AddressSnapshot;
         billingAddress?: AddressSnapshot;
@@ -194,7 +204,18 @@ export default function OrderDetails({
     }, [products]);
 
     const delivery = Number(order?.quotedDeliveryCharge ?? 0);
-    const displayedTotal = itemsSubtotal + delivery;
+
+    const couponDiscount = Number(
+        order?.coupon?.discountAmount ?? order?.couponAmount ?? 0
+    );
+
+    const deliverySaved = order?.coupon?.isFreeShipping ? delivery : 0;
+
+    const finalTotal = Number(
+        order?.finalPayableAmount ?? (itemsSubtotal + delivery - couponDiscount)
+    );
+
+    const totalSavings = couponDiscount + deliverySaved;
 
     const renderAddress = (a?: AddressSnapshot | null) => {
         if (!a) return <div className="text-sm text-slate-500">—</div>;
@@ -268,7 +289,7 @@ export default function OrderDetails({
 
     // totals
     const totalPaid = paymentMethodsRaw.reduce((s, p) => s + Number(p.amount ?? 0), 0);
-    const balance = Math.max(0, displayedTotal - totalPaid);
+    const balance = Math.max(0, finalTotal - totalPaid);
     const latestStatus = order?.orderStatusTimeline?.[0];
 
     /* ----- loading / error / empty states ----- */
@@ -348,8 +369,8 @@ export default function OrderDetails({
 
                             <div
                                 className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${balance > 0
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-emerald-100 text-emerald-800"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-emerald-100 text-emerald-800"
                                     }`}
                             >
                                 {balance > 0 ? "Payment Pending" : "Fully Paid"}
@@ -359,7 +380,7 @@ export default function OrderDetails({
                                 Total
                             </div>
                             <div className="text-3xl font-extrabold text-[#065975]">
-                                {currency(displayedTotal)}
+                                {currency(finalTotal)}
                             </div>
                         </div>
                     </div>
@@ -474,28 +495,93 @@ export default function OrderDetails({
                                 Payment Summary
                             </div>
                             <div className="text-xl font-bold text-slate-900">
-                                {currency(displayedTotal)}
+                                {currency(finalTotal)}
                             </div>
                         </div>
 
                         <div className="space-y-2 text-sm">
+
+                            {/* ITEMS */}
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Items</span>
                                 <span>{currency(itemsSubtotal)}</span>
                             </div>
 
+                            {/* COUPON */}
+                            <div className="flex justify-between items-center min-h-[22px]">
+                                {couponDiscount > 0 ? (
+                                    <>
+                                        <div className="flex items-center gap-2">
+                                            {order?.coupon?.code && (
+                                                <span className="px-2 py-[3px] text-[10px] font-semibold rounded-md bg-[#065975] text-white">
+                                                    {order.coupon.code}
+                                                </span>
+                                            )}
+
+                                            <span className="text-[11px] text-green-700 font-medium">
+                                                {order?.coupon?.type === "PERCENTAGE"
+                                                    ? `${order?.coupon?.value ?? 0}% OFF`
+                                                    : order?.coupon?.type === "FLAT"
+                                                        ? `Flat ${currency(order?.coupon?.value ?? 0)} OFF`
+                                                        : "Discount"}
+                                            </span>
+                                        </div>
+
+                                        <span className="text-green-700 font-semibold">
+                                            -{currency(couponDiscount)}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-slate-400 w-full text-center">
+                                        No offers applied
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* ✅ FREE SHIPPING BELOW */}
+                            {order?.coupon?.isFreeShipping && (
+                                <div className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                                    🚚 Free delivery applied
+                                </div>
+                            )}
+
+                            {/* DELIVERY */}
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Delivery</span>
                                 <span>
-                                    {delivery > 0 ? currency(delivery) : "—"}
+                                    {order?.coupon?.isFreeShipping
+                                        ? "Free"
+                                        : delivery > 0
+                                            ? currency(delivery)
+                                            : "—"}
                                 </span>
                             </div>
 
-                            <div className="flex justify-between font-semibold">
+                            {/* DIVIDER */}
+                            <div className="border-t my-2" />
+
+                            {/* TOTAL */}
+                            <div className="flex justify-between font-semibold text-base">
+                                <span>Total</span>
+                                <span className="text-[#065975]">{currency(finalTotal)}</span>
+                            </div>
+
+                            {/* SAVINGS */}
+                            {totalSavings > 0 && (
+                                <div className="mt-2 flex justify-center">
+                                    <div className="px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white text-[11px] font-semibold">
+                                        🎉 You saved {currency(totalSavings)}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* PAID */}
+                            <div className="flex justify-between font-semibold mt-2">
                                 <span>Total Paid</span>
                                 <span>{currency(totalPaid)}</span>
                             </div>
 
+                            {/* BALANCE */}
                             {balance > 0 && (
                                 <div className="flex justify-between text-rose-600 font-semibold">
                                     <span>Outstanding</span>

@@ -52,14 +52,27 @@ type CustomerDetailsSnapshot = {
     customerEmailSnapshot?: string;
 };
 
+type CouponSnapshot = {
+    code?: string;
+    name?: string;
+    type?: "PERCENTAGE" | "FLAT" | "FREE_SHIPPING";
+    value?: number;
+    discountAmount?: number;
+    isFreeShipping?: boolean;
+};
+
 type Order = {
     _id?: string;
     quotedDeliveryCharge?: number;
     orderTotal?: number;
+    finalPayableAmount?: number;
+    couponAmount?: number;
+    coupon?: CouponSnapshot;
     purchaseDate?: string;
     orderNumber?: number | string;
     orderId?: string;
     customerDetails?: CustomerDetailsSnapshot;
+    effectiveSubtotalAfterCoupon?: number;
     orderCustomerAddressDetails?: {
         deliveryAddress?: AddressSnapshot;
         billingAddress?: AddressSnapshot;
@@ -229,11 +242,8 @@ export default function OrderSuccessClient(): React.ReactElement {
 
             try {
                 const url = buildUrl(fetchPath);
-                const headers: Record<string, string> = { "Content-Type": "application/json" };
-                const token = getAuthToken();
-                if (token) headers["Authorization"] = `Bearer ${token}`;
-
-                const res = await fetch(url, { method: "GET", headers });
+                
+                const res = await authFetch(url, { method: "GET" });
 
                 if (res.status === 401) {
                     try {
@@ -294,7 +304,7 @@ export default function OrderSuccessClient(): React.ReactElement {
 
     const handleShare = async (): Promise<void> => {
         const shareText = `Order ${order?.orderNumber ?? order?.orderId ?? ""} • ₹${(
-            order?.orderTotal ?? quickTotal ?? 0
+            order?.finalPayableAmount ?? 0
         ).toLocaleString("en-IN")}`;
         const url = typeof window !== "undefined" ? window.location.href : "";
         const shareData = { title: "Order details", text: shareText, url };
@@ -333,11 +343,32 @@ export default function OrderSuccessClient(): React.ReactElement {
     };
 
     const subtotalAmount = (): number => {
+        if (order?.orderTotal != null) return Number(order.orderTotal);
+
         const items = order?.orderProductsDetails ?? [];
         return items.reduce(
             (s, it) => s + (Number(it.sellPrice ?? 0) * Number(it.quantity ?? 1)),
             0
         );
+    };
+
+    const discountedSubtotal = (): number => {
+        if (order?.effectiveSubtotalAfterCoupon != null) {
+            return Number(order.effectiveSubtotalAfterCoupon);
+        }
+
+        const subtotal = subtotalAmount();
+        const discount = Number(order?.coupon?.discountAmount ?? 0);
+        return Math.max(0, subtotal - discount);
+    };
+
+    const totalSavings = (): number => {
+        const coupon = Number(order?.coupon?.discountAmount ?? 0);
+        const deliverySaved = order?.coupon?.isFreeShipping
+            ? Number(order?.quotedDeliveryCharge ?? 0)
+            : 0;
+
+        return coupon + deliverySaved;
     };
 
     const resolveProductImage = (raw?: string | null) => {
@@ -368,7 +399,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                         <div className="sm:ml-auto sm:text-right flex items-start sm:block justify-between w-full sm:w-auto">
                             <div className="text-xs text-slate-400">Order total</div>
                             <div className="text-lg font-semibold text-[#065975]">
-                                {currency((order?.orderTotal ?? 0) + (order?.quotedDeliveryCharge ?? 0))}
+                                {currency(order?.finalPayableAmount ?? 0)}
                             </div>
                         </div>
                     </div>
@@ -435,7 +466,7 @@ export default function OrderSuccessClient(): React.ReactElement {
                                                     <div className="text-xs text-slate-500">Qty: {p.quantity ?? 1}</div>
                                                 </div>
 
-                                                <div className="text-sm font-semibold text-slate-700 shrink-0">{currency(p.sellPrice)}</div>
+                                                <div className="text-sm font-semibold text-slate-700 shrink-0">{currency((p.sellPrice ?? 0) * (p.quantity ?? 1))}</div>
                                             </li>
                                         );
                                     })}
@@ -528,19 +559,77 @@ export default function OrderSuccessClient(): React.ReactElement {
                                     <div className="text-xs text-slate-400">Order summary</div>
 
                                     <div className="mt-3 space-y-2">
-                                        <div className="flex items-center justify-between text-sm text-slate-600">
-                                            <div>Subtotal</div>
-                                            <div>{currency(subtotalAmount())}</div>
-                                        </div>
+                                        {/* Subtotal with discount applied */}
+                                        {order?.coupon?.code && Number(order?.coupon?.discountAmount ?? 0) > 0 ? (
+                                            <>
+                                                {/* Coupon Applied Badge */}
+                                                <div className="flex items-center justify-between text-xs bg-green-50 border border-green-100 text-green-700 px-2 py-1 rounded-md">
+                                                    <div>
+                                                        Coupon <span className="font-semibold">{order.coupon.code}</span> applied
+                                                    </div>
+                                                    <div className="font-semibold">
+                                                        -{currency(order?.coupon?.discountAmount ?? 0)}
+                                                    </div>
+                                                </div>
 
+                                                {order?.coupon?.type === "PERCENTAGE" && (
+                                                    <div className="text-[11px] text-green-600">
+                                                        {order.coupon.value}% OFF applied
+                                                    </div>
+                                                )}
+
+                                                {order?.coupon?.type === "FLAT" && (
+                                                    <div className="text-[11px] text-green-600">
+                                                        Flat {currency(order.coupon.value)} OFF
+                                                    </div>
+                                                )}
+
+                                                {order?.coupon?.isFreeShipping && (
+                                                    <div className="text-[11px] text-green-600">
+                                                        Free delivery applied 🚚
+                                                    </div>
+                                                )}
+
+                                                {/* Old subtotal */}
+                                                <div className="flex items-center justify-between text-sm text-slate-400 line-through">
+                                                    <div>Subtotal</div>
+                                                    <div>{currency(subtotalAmount())}</div>
+                                                </div>
+
+                                                {/* Discounted subtotal */}
+                                                <div className="flex items-center justify-between text-sm text-green-600 font-semibold">
+                                                    <div>Discounted Subtotal</div>
+                                                    <div>{currency(discountedSubtotal())}</div>
+                                                </div>
+
+                                                {/* Savings line */}
+                                                <div className="text-xs text-green-600 font-medium">
+                                                    You saved {currency(order.coupon.discountAmount)} 🎉
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="flex items-center justify-between text-sm text-slate-600">
+                                                <div>Subtotal</div>
+                                                <div>{currency(subtotalAmount())}</div>
+                                            </div>
+                                        )}
+
+                                        {/* Delivery */}
                                         <div className="flex items-center justify-between text-sm text-slate-600">
                                             <div>Delivery</div>
-                                            <div>{currency(order?.quotedDeliveryCharge ?? 0)}</div>
+                                            <div>
+                                                {order?.coupon?.isFreeShipping
+                                                    ? "Free (Coupon)"
+                                                    : order?.quotedDeliveryCharge === 0
+                                                        ? "Free"
+                                                        : currency(order?.quotedDeliveryCharge ?? 0)}
+                                            </div>
                                         </div>
 
+                                        {/* Total */}
                                         <div className="flex items-center justify-between text-sm font-semibold text-[#065975] mt-2 border-t pt-2">
                                             <div>Total</div>
-                                            <div>{currency((order?.orderTotal ?? 0) + (order?.quotedDeliveryCharge ?? 0))}</div>
+                                            <div>{currency(order?.finalPayableAmount ?? 0)}</div>
                                         </div>
                                     </div>
                                 </div>

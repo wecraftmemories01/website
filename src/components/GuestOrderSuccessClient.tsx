@@ -56,6 +56,7 @@ type Order = {
     _id?: string;
     quotedDeliveryCharge?: number;
     orderTotal?: number;
+    finalPayableAmount?: number;
     purchaseDate?: string;
     orderNumber?: number | string;
     orderId?: string;
@@ -171,8 +172,7 @@ export default function GuestOrderSuccessClient({
 
     const handleShare = async (): Promise<void> => {
         const shareText = `Order ${order?.orderNumber ?? order?.orderId ?? ""} • ₹${(
-            (order?.orderTotal ?? 0) +
-            (order?.quotedDeliveryCharge ?? 0)
+            order?.finalPayableAmount ?? 0
         ).toLocaleString("en-IN")}`;
         const url = typeof window !== "undefined" ? window.location.href : "";
         const shareData = { title: "Order details", text: shareText, url };
@@ -261,9 +261,7 @@ export default function GuestOrderSuccessClient({
 
                         <div className="sm:ml-auto sm:text-right flex items-start sm:block justify-between w-full sm:w-auto">
                             <div className="text-xs text-slate-400">Order total</div>
-                            <div className="text-lg font-semibold text-[#065975]">
-                                {currency((order?.orderTotal ?? 0) + (order?.quotedDeliveryCharge ?? 0))}
-                            </div>
+                            <div>{currency(order?.finalPayableAmount ?? 0)}</div>
                         </div>
                     </div>
 
@@ -436,7 +434,7 @@ export default function GuestOrderSuccessClient({
 
                                         <div className="flex items-center justify-between text-sm font-semibold text-[#065975] mt-2 border-t pt-2">
                                             <div>Total</div>
-                                            <div>{currency((order?.orderTotal ?? 0) + (order?.quotedDeliveryCharge ?? 0))}</div>
+                                            <div>{currency(order?.finalPayableAmount ?? 0)}</div>
                                         </div>
                                     </div>
                                 </div>
