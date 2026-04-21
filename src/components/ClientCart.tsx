@@ -1342,7 +1342,7 @@ export default function ClientCart() {
                         <button
                             onClick={() => router.push("/guest_checkout")}
                             disabled={!hasItems}
-                            className="w-full border py-2 rounded-md text-sm text-gray-500 hover:bg-gray-50"
+                            className="w-full py-2 rounded-md text-sm text-white bg-[rgb(6,89,117)] hover:bg-blue-700"
                         >
                             Continue as Guest
                         </button>
