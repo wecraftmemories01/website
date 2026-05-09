@@ -100,6 +100,8 @@ type ApiOrder = {
     _id: string;
     orderNumber: number | string;
     quotedDeliveryCharge?: number;
+    isDeliveryChargeRefunded?: boolean;
+    deliveryRefundAmount?: number;
     orderTotal?: number;
     purchaseDate?: string;
 
@@ -546,15 +548,37 @@ export default function OrderDetails({
                             )}
 
                             {/* DELIVERY */}
-                            <div className="flex justify-between">
+                            <div className="flex justify-between items-start">
                                 <span className="text-slate-500">Delivery</span>
-                                <span>
-                                    {order?.coupon?.isFreeShipping
-                                        ? "Free"
-                                        : delivery > 0
-                                            ? currency(delivery)
-                                            : "—"}
-                                </span>
+
+                                <div className="text-right">
+                                    <div
+                                        className={
+                                            order?.isDeliveryChargeRefunded
+                                                ? "line-through text-slate-400"
+                                                : ""
+                                        }
+                                    >
+                                        {order?.coupon?.isFreeShipping
+                                            ? "Free"
+                                            : delivery > 0
+                                                ? currency(delivery)
+                                                : "—"}
+                                    </div>
+
+                                    {order?.isDeliveryChargeRefunded && (
+                                        <div
+                                            className={`text-[11px] font-semibold mt-1 ${Number(order?.deliveryRefundAmount || 0) >= Number(order?.quotedDeliveryCharge || 0)
+                                                    ? "text-green-600"
+                                                    : "text-amber-600"
+                                                }`}
+                                        >
+                                            {Number(order?.deliveryRefundAmount || 0) >= Number(order?.quotedDeliveryCharge || 0)
+                                                ? `Delivery refunded (${currency(order?.deliveryRefundAmount || 0)})`
+                                                : `Partially refunded (${currency(order?.deliveryRefundAmount || 0)})`}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* DIVIDER */}

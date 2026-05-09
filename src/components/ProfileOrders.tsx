@@ -24,6 +24,8 @@ type ApiOrder = {
     _id: string;
     orderNumber: number | string;
     quotedDeliveryCharge?: number;
+    deliveryRefundAmount?: number;
+    isDeliveryChargeRefunded?: boolean;
     orderTotal: number;
     purchaseDate: string;
     orderId?: string;
@@ -563,15 +565,48 @@ export default function OrdersCompact({
                                                         )}
 
                                                         {/* DELIVERY */}
-                                                        <div className="flex justify-between items-center text-sm text-slate-600 mt-3">
+                                                        <div className="flex justify-between items-start text-sm text-slate-600 mt-3">
+
                                                             <span>Delivery</span>
-                                                            <span className="font-medium text-slate-800">
-                                                                {o.coupon?.isFreeShipping
-                                                                    ? "Free"
-                                                                    : delivery > 0
-                                                                        ? currency(delivery)
-                                                                        : "—"}
-                                                            </span>
+
+                                                            <div className="text-right">
+
+                                                                {o.coupon?.isFreeShipping ? (
+
+                                                                    <span className="font-medium text-green-600">
+                                                                        Free
+                                                                    </span>
+
+                                                                ) : o.isDeliveryChargeRefunded ? (
+
+                                                                    <div className="flex flex-col items-end">
+
+                                                                        {/* ORIGINAL DELIVERY */}
+                                                                        <span className="line-through text-slate-400">
+                                                                            {delivery > 0 ? currency(delivery) : "—"}
+                                                                        </span>
+
+                                                                        {/* REFUND STATUS */}
+                                                                        <span className="text-rose-600 font-medium text-xs">
+
+                                                                            {Number(o.deliveryRefundAmount || 0) >=
+                                                                                Number(o.quotedDeliveryCharge || 0)
+                                                                                ? `Refunded ${currency(o.deliveryRefundAmount || 0)}`
+                                                                                : `Partially Refunded ${currency(o.deliveryRefundAmount || 0)}`}
+
+                                                                        </span>
+
+                                                                    </div>
+
+                                                                ) : (
+
+                                                                    <span className="font-medium text-slate-800">
+                                                                        {delivery > 0 ? currency(delivery) : "—"}
+                                                                    </span>
+
+                                                                )}
+
+                                                            </div>
                                                         </div>
 
                                                         {/* DIVIDER */}
