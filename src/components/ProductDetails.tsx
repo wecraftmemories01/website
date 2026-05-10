@@ -9,7 +9,12 @@ import favouritesClient from "../lib/favouritesClient";
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
-type ProductAttribute = { attributeId: string; attributePublicName: string; value: string };
+type ProductAttribute = {
+    attributeId: string;
+    attributePublicName: string;
+    value: string;
+    showOnWeb?: boolean;
+};
 type ProductImage = { imageId?: string; imagePath?: string; title?: string };
 
 type Product = {
@@ -483,6 +488,11 @@ export default function ProductClient({ product }: { product: Product }) {
     const [isFavourite, setIsFavourite] = useState(false);
     const [favLoading, setFavLoading] = useState(false);
     const [unitSystem, setUnitSystem] = useState<"metric" | "converted">("metric");
+    const visibleProductAttributes = useMemo(() => {
+        return (productAttributes || []).filter(
+            (attr) => attr.showOnWeb !== false
+        );
+    }, [productAttributes]);
 
     const sanitizedHTML = useMemo(() => {
         if (typeof window === "undefined") return longDescription || "";
@@ -953,12 +963,12 @@ export default function ProductClient({ product }: { product: Product }) {
 
                                 <div className="bg-[#F58634]/10 rounded-xl p-5 shadow">
                                     <ul className="text-sm text-gray-700 space-y-2">
-                                        {productAttributes.length === 0 ? (
+                                        {visibleProductAttributes.length === 0 ? (
                                             <li className="text-gray-500">
                                                 No attributes provided
                                             </li>
                                         ) : (
-                                            productAttributes.map((attr) => {
+                                            visibleProductAttributes.map((attr) => {
                                                 const name = attr.attributePublicName;
                                                 const rawValue = parseFloat(attr.value);
                                                 let displayValue: React.ReactNode = attr.value;
@@ -1161,10 +1171,10 @@ export default function ProductClient({ product }: { product: Product }) {
 
                         <div className="bg-[#F58634]/10 rounded-xl p-6 shadow">
                             <ul className="text-sm text-gray-700 space-y-2">
-                                {productAttributes.length === 0 ? (
+                                {visibleProductAttributes.length === 0 ? (
                                     <li className="text-gray-500">No attributes provided</li>
                                 ) : (
-                                    productAttributes.map((attr) => {
+                                    visibleProductAttributes.map((attr) => {
                                         const name = attr.attributePublicName;
                                         const rawValue = parseFloat(attr.value);
                                         let displayValue: React.ReactNode = attr.value;
