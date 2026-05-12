@@ -571,7 +571,7 @@ export default function SidebarFilters({
                 />
             )} */}
 
-            {cats.length > 0 && (
+            {/* {cats.length > 0 && (
                 <Section
                     title="Category"
                     options={cats}
@@ -582,7 +582,7 @@ export default function SidebarFilters({
                     clearSelected={clearCategories}
                     name="category"
                 />
-            )}
+            )} */}
 
             {/* {subs.length > 0 && (
                 <Section
