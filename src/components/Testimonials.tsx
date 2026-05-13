@@ -173,9 +173,9 @@ export default function TestimonialsPages({
                 {/* CTA */}
                 <div className="mt-12 flex justify-center relative">
                     <div className="absolute w-60 h-16 bg-[#0B5C73]/20 blur-2xl rounded-full" />
-                    <button className="relative px-10 py-3 rounded-full bg-[#0B5C73] text-white font-semibold shadow-[0_10px_25px_rgba(11,92,115,0.25)] hover:bg-[#094B5C] hover:shadow-[0_15px_35px_rgba(11,92,115,0.35)] hover:scale-105 active:scale-95 transition-all duration-300">
+                    <Link href={"/products"} className="relative px-10 py-3 rounded-full bg-[#0B5C73] text-white font-semibold shadow-[0_10px_25px_rgba(11,92,115,0.25)] hover:bg-[#094B5C] hover:shadow-[0_15px_35px_rgba(11,92,115,0.35)] hover:scale-105 active:scale-95 transition-all duration-300">
                         🎁 Gift Something Handmade & Meaningful
-                    </button>
+                    </Link>
                 </div>
 
             </div>
