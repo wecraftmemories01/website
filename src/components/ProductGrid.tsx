@@ -6,7 +6,7 @@ type Props = {
     products: Product[]
 }
 
-export default function ProductGrid({ products }: Props) {
+function ProductGrid({ products }: Props) {
 
     if (products.length === 0) {
         return (
@@ -27,3 +27,5 @@ export default function ProductGrid({ products }: Props) {
         </div>
     )
 }
+
+export default React.memo(ProductGrid)

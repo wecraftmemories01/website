@@ -15,7 +15,11 @@ type Props = {
 
     masterOptions: Option[]
     superOptions: Option[]
-    categoryOptions: Option[]
+    categoryOptions: {
+        id: string
+        label: string
+        count: number
+    }[]
     subOptions: Option[]
     ageOptions: Option[]
     themeOptions: Option[]
@@ -63,28 +67,45 @@ function OptionChip({
     checked: boolean
     onToggle: (id: string) => void
 }) {
+
+    const disabled = !checked && (option.count ?? 0) === 0
+
     return (
         <button
             type="button"
+            disabled={disabled}
             onClick={() => onToggle(option.id)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border transition-all duration-200 active:scale-95
-            ${checked
+            className={`
+                flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border transition-all duration-200 active:scale-95
+
+                ${checked
                     ? 'bg-[#1FA6B8]/15 text-[#0B5C73] border-[#1FA6B8]/40 shadow-sm'
-                    : 'bg-white text-[#0B5C73] border-[#0B5C73]/15 hover:bg-[#F6B73C]/15'
-                }`}
+                    : disabled
+                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                        : 'bg-white text-[#0B5C73] border-[#0B5C73]/15 hover:bg-[#F6B73C]/15'
+                }
+            `}
             aria-pressed={checked}
         >
             <span
-                className={`w-2 h-2 rounded-full ${checked ? 'bg-[#E24B5B]' : 'bg-[#1FA6B8]/30'
+                className={`w-2 h-2 rounded-full ${checked
+                    ? 'bg-[#E24B5B]'
+                    : disabled
+                        ? 'bg-slate-300'
+                        : 'bg-[#1FA6B8]/30'
                     }`}
             />
+
             <span className="truncate max-w-40 font-medium">
                 {option.label}
             </span>
+
             <span
-                className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked
+                className={`text-xs px-2 py-0.5 rounded-full ${checked
                     ? 'bg-white text-[#0B5C73]'
-                    : 'bg-[#1FA6B8]/10 text-[#0B5C73]'
+                    : disabled
+                        ? 'bg-slate-200 text-slate-500'
+                        : 'bg-[#1FA6B8]/10 text-[#0B5C73]'
                     }`}
             >
                 {option.count ?? 0}
@@ -195,20 +216,104 @@ export default function SidebarFilters({
         theme: true,
     } as Record<string, boolean>)
 
-    // show only available (count > 0)
-    const onlyAvailable = (opts: Option[]) => opts.filter((o) => o.count === undefined || o.count > 0)
+    // keep all filters visible
+    const onlyAvailable = (opts: Option[]) => opts
 
-    const filterOptions = (opts: Option[], q: string) =>
+    const filterOptions = (
+        opts: Option[],
+        q: string,
+        selectedIds: string[]
+    ) =>
         opts
-            .filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()))
-            .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label))
+            .filter((o) =>
+                o.label
+                    .toLowerCase()
+                    .includes(q.trim().toLowerCase())
+            )
+            .sort((a, b) => {
 
-    const masters = useMemo(() => filterOptions(onlyAvailable(masterOptions), searchMaster), [masterOptions, searchMaster])
-    const supers = useMemo(() => filterOptions(onlyAvailable(superOptions), searchSuper), [superOptions, searchSuper])
-    const cats = useMemo(() => filterOptions(onlyAvailable(categoryOptions), searchCategory), [categoryOptions, searchCategory])
-    const subs = useMemo(() => filterOptions(onlyAvailable(subOptions), searchSub), [subOptions, searchSub])
-    const ages = useMemo(() => filterOptions(onlyAvailable(ageOptions), searchAge), [ageOptions, searchAge])
-    const themes = useMemo(() => filterOptions(onlyAvailable(themeOptions), searchTheme), [themeOptions, searchTheme])
+                // selected first
+                const aSelected = selectedIds.includes(a.id)
+                const bSelected = selectedIds.includes(b.id)
+
+                if (aSelected && !bSelected) return -1
+                if (!aSelected && bSelected) return 1
+
+                // then available first
+                const aAvailable = (a.count ?? 0) > 0
+                const bAvailable = (b.count ?? 0) > 0
+
+                if (aAvailable && !bAvailable) return -1
+                if (!aAvailable && bAvailable) return 1
+
+                // then higher count
+                if ((b.count ?? 0) !== (a.count ?? 0)) {
+                    return (b.count ?? 0) - (a.count ?? 0)
+                }
+
+                // then alphabetical
+                return a.label.localeCompare(b.label)
+            })
+
+    const masters = useMemo(
+        () =>
+            filterOptions(
+                onlyAvailable(masterOptions),
+                searchMaster,
+                selectedMasters
+            ),
+        [masterOptions, searchMaster, selectedMasters]
+    )
+
+    const supers = useMemo(
+        () =>
+            filterOptions(
+                onlyAvailable(superOptions),
+                searchSuper,
+                selectedSupers
+            ),
+        [superOptions, searchSuper, selectedSupers]
+    )
+
+    const cats = useMemo(
+        () =>
+            filterOptions(
+                onlyAvailable(categoryOptions),
+                searchCategory,
+                selectedCategories
+            ),
+        [categoryOptions, searchCategory, selectedCategories]
+    )
+
+    const subs = useMemo(
+        () =>
+            filterOptions(
+                onlyAvailable(subOptions),
+                searchSub,
+                selectedSubs
+            ),
+        [subOptions, searchSub, selectedSubs]
+    )
+
+    const ages = useMemo(
+        () =>
+            filterOptions(
+                onlyAvailable(ageOptions),
+                searchAge,
+                selectedAges
+            ),
+        [ageOptions, searchAge, selectedAges]
+    )
+
+    const themes = useMemo(
+        () =>
+            filterOptions(
+                onlyAvailable(themeOptions),
+                searchTheme,
+                selectedThemes
+            ),
+        [themeOptions, searchTheme, selectedThemes]
+    )
 
     const allOptionsById = useMemo(() => {
         const map = new Map<string, string>()
@@ -342,7 +447,7 @@ export default function SidebarFilters({
         (themes.length > 0)
     // || masters.length > 0
     // || supers.length > 0
-    // || cats.length > 0
+    || cats.length > 0
     // || subs.length > 0
     // || ages.length > 0
     const hasAnySelection =
@@ -511,7 +616,6 @@ export default function SidebarFilters({
                     <div>
                         <label className="text-xs text-slate-500">Min</label>
                         <input
-                            key={`min-${minPrice}`}
                             type="number"
                             inputMode="numeric"
                             min={priceRangeMin}
@@ -528,7 +632,6 @@ export default function SidebarFilters({
                     <div>
                         <label className="text-xs text-slate-500">Max</label>
                         <input
-                            key={`max-${maxPrice}`}
                             type="number"
                             inputMode="numeric"
                             min={priceRangeMin}
@@ -571,7 +674,7 @@ export default function SidebarFilters({
                 />
             )} */}
 
-            {/* {cats.length > 0 && (
+            {cats.length > 0 && (
                 <Section
                     title="Category"
                     options={cats}
@@ -582,7 +685,7 @@ export default function SidebarFilters({
                     clearSelected={clearCategories}
                     name="category"
                 />
-            )} */}
+            )}
 
             {/* {subs.length > 0 && (
                 <Section

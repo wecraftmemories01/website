@@ -11,7 +11,19 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:3000/v1'
 
-type IdLabel = { _id: string; publicName?: string; name?: string }
+type FilterItem = {
+    _id: string
+    publicName?: string
+    name?: string
+    productCount?: number
+    isSelected?: boolean
+    isAvailable?: boolean
+}
+
+type FilterGroup = {
+    selected: FilterItem[]
+    unselected: FilterItem[]
+}
 
 export default function ProductsClient() {
     const searchParams = useSearchParams() // read query params
@@ -52,19 +64,44 @@ export default function ProductsClient() {
         setQState(urlQ)
     }, [searchParams])
 
-    const [allProducts, setAllProducts] = useState<Product[]>([])
-    const [filtered, setFiltered] = useState<Product[]>([])
+    const [products, setProducts] = useState<Product[]>([])
+    const [productIds, setProductIds] = useState<string[]>([])
     const [totalRecords, setTotalRecords] = useState(0)
-    const [loading, setLoading] = useState(true)
+    const [filtersLoading, setFiltersLoading] = useState(false)
+    const [productsLoading, setProductsLoading] = useState(false)
+    const [initialLoading, setInitialLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
     // lists for filters (master lists from API)
-    const [masterCategories, setMasterCategories] = useState<IdLabel[]>([])
-    const [superCategories, setSuperCategories] = useState<IdLabel[]>([])
-    const [categories, setCategories] = useState<IdLabel[]>([])
-    const [subCategories, setSubCategories] = useState<IdLabel[]>([])
-    const [ageGroups, setAgeGroups] = useState<IdLabel[]>([])
-    const [themes, setThemes] = useState<IdLabel[]>([])
+    const [masterCategories, setMasterCategories] = useState<FilterGroup>({
+        selected: [],
+        unselected: []
+    })
+
+    const [superCategories, setSuperCategories] = useState<FilterGroup>({
+        selected: [],
+        unselected: []
+    })
+
+    const [categories, setCategories] = useState<FilterGroup>({
+        selected: [],
+        unselected: []
+    })
+
+    const [subCategories, setSubCategories] = useState<FilterGroup>({
+        selected: [],
+        unselected: []
+    })
+
+    const [ageGroups, setAgeGroups] = useState<FilterGroup>({
+        selected: [],
+        unselected: []
+    })
+
+    const [themes, setThemes] = useState<FilterGroup>({
+        selected: [],
+        unselected: []
+    })
 
     // multi-select filter state (arrays)
     const [selectedMasters, setSelectedMasters] = useState<string[]>([])
@@ -80,7 +117,17 @@ export default function ProductsClient() {
     const [maxPrice, setMaxPrice] = useState<number | ''>('')
     const [debouncedMin, setDebouncedMin] = useState<number | ''>('')
     const [debouncedMax, setDebouncedMax] = useState<number | ''>('')
+    const mergeFilterGroup = (
+        group?: FilterGroup
+    ): FilterItem[] => {
 
+        if (!group) return []
+
+        return [
+            ...(group.selected ?? []),
+            ...(group.unselected ?? [])
+        ]
+    }
     const perPageOptions = [16, 32, 64]
 
     const safeDateMs = (s?: string | null) => {
@@ -89,92 +136,182 @@ export default function ProductsClient() {
         return Number.isNaN(t) ? 0 : t
     }
 
-    // fetch products + lists
+    /*****************************************************************
+ * FILTER API
+ *****************************************************************/
     useEffect(() => {
-        let mounted = true
-        const fetchAll = async () => {
-            setLoading(true)
-            setError(null)
-            try {
-                const [pRes, allRes, mRes, sRes, cRes, subRes, ageRes, themeRes] = await Promise.all([
-                    fetch(`${API_BASE}/product/sell?${searchParams.toString()}`),
-                    fetch(`${API_BASE}/product/sell?page=1&limit=1000`),
-                    fetch(`${API_BASE}/master_category`),
-                    fetch(`${API_BASE}/super_category`),
-                    fetch(`${API_BASE}/category`),
-                    fetch(`${API_BASE}/sub_category`),
-                    fetch(`${API_BASE}/age_group`),
-                    fetch(`${API_BASE}/theme`),
-                ])
 
-                const [pJson, allJson, mJson, sJson, cJson, subJson, ageJson, themeJson] = await Promise.all([
-                    pRes.json().catch(() => ({})),
-                    allRes.json().catch(() => ({})),
-                    mRes.json().catch(() => ({})),
-                    sRes.json().catch(() => ({})),
-                    cRes.json().catch(() => ({})),
-                    subRes.json().catch(() => ({})),
-                    ageRes.json().catch(() => ({})),
-                    themeRes.json().catch(() => ({})),
-                ])
+        let mounted = true
+
+        async function fetchFilters() {
+
+            try {
+
+                setFiltersLoading(true)
+                setError(null)
+
+                const params = new URLSearchParams()
+
+                if (qState) {
+                    params.set('q', qState)
+                }
+
+                if (selectedThemes.length) {
+                    params.set('themeIds', selectedThemes.join(','))
+                }
+
+                if (selectedMasters.length) {
+                    params.set('masterCategoryIds', selectedMasters.join(','))
+                }
+
+                if (selectedSupers.length) {
+                    params.set('superCategoryIds', selectedSupers.join(','))
+                }
+
+                if (selectedCategories.length) {
+                    params.set('categoryIds', selectedCategories.join(','))
+                }
+
+                if (selectedSubs.length) {
+                    params.set('subCategoryIds', selectedSubs.join(','))
+                }
+
+                if (selectedAges.length) {
+                    params.set('ageGroupIds', selectedAges.join(','))
+                }
+
+                if (debouncedMin !== '') {
+                    params.set('priceFrom', String(debouncedMin))
+                }
+
+                if (debouncedMax !== '') {
+                    params.set('priceTo', String(debouncedMax))
+                }
+
+                const response = await fetch(
+                    `${API_BASE}/product/sell_product_filter?${params.toString()}`
+                )
+
+                const json = await response.json()
 
                 if (!mounted) return
 
-                setAllProducts(Array.isArray(allJson?.productData) ? allJson.productData : [])
-                setTotalRecords(pJson?.totalRecords ?? 0)
+                setProductIds(json.productIds ?? [])
 
-                setMasterCategories(Array.isArray(mJson?.masterCategoryData) ? mJson.masterCategoryData : [])
-                setSuperCategories(Array.isArray(sJson?.superCategoryData) ? sJson.superCategoryData : [])
-                setCategories(Array.isArray(cJson?.categoryData) ? cJson.categoryData : [])
-                setSubCategories(Array.isArray(subJson?.subCategoryData) ? subJson.subCategoryData : [])
-                setAgeGroups(Array.isArray(ageJson?.ageGroupData) ? ageJson.ageGroupData : [])
-                setThemes(Array.isArray(themeJson?.themeData) ? themeJson.themeData : [])
+                setTotalRecords(json.totalProducts ?? 0)
+
+                setMasterCategories(json.masterCategories ?? [])
+                setSuperCategories(json.superCategories ?? [])
+                setCategories(json.categories ?? [])
+                setSubCategories(json.subCategories ?? [])
+                setAgeGroups(json.ageGroups ?? [])
+                setThemes(json.themes ?? [])
+
             } catch (err: any) {
-                console.error('Failed to fetch lists:', err)
-                setError(err?.message ?? 'Failed to fetch data')
+
+                console.error(err)
+
+                setError(err?.message ?? 'Failed to load filters')
+
             } finally {
-                if (mounted) setLoading(false)
+
+                if (mounted) {
+                    setFiltersLoading(false)
+                }
             }
         }
 
-        fetchAll()
+        fetchFilters()
+
         return () => {
             mounted = false
         }
-    }, [paramsString])
 
-    const priceStats = useMemo(() => {
-        const prices = allProducts
-            .map(p => p.latestSalePrice?.discountedPrice ?? p.latestSalePrice?.actualPrice)
-            .filter((p): p is number => typeof p === 'number')
+    }, [
+        qState,
+        selectedThemes,
+        selectedMasters,
+        selectedSupers,
+        selectedCategories,
+        selectedSubs,
+        selectedAges,
+        debouncedMin,
+        debouncedMax
+    ])
 
-        if (!prices.length) {
-            return { min: 0, max: 10000 }
+    /*****************************************************************
+ * PRODUCT API
+ *****************************************************************/
+    useEffect(() => {
+
+        let mounted = true
+
+        async function fetchProducts() {
+
+            if (filtersLoading) {
+                return
+            }
+
+            try {
+
+                setProductsLoading(true)
+                setError(null)
+
+                const params = new URLSearchParams()
+
+                params.set('page', String(page))
+                params.set('limit', String(perPage))
+
+                if (productIds.length) {
+                    params.set('ids', productIds.join(','))
+                }
+
+                const response = await fetch(
+                    `${API_BASE}/product/sell?${params.toString()}`
+                )
+
+                const json = await response.json()
+
+                if (!mounted) return
+
+                setProducts(json.productData ?? [])
+
+                setTotalRecords(json.totalRecords ?? 0)
+
+            } catch (err: any) {
+
+                console.error(err)
+
+                setError(err?.message ?? 'Failed to load products')
+
+            } finally {
+
+                if (mounted) {
+                    setProductsLoading(false)
+
+                    if (initialLoading) {
+                        setInitialLoading(false)
+                    }
+                }
+            }
         }
 
-        return {
-            min: 1,
-            max: Math.ceil(Math.max(...prices))
+        fetchProducts()
+
+        return () => {
+            mounted = false
         }
-    }, [allProducts])
 
-    const themeCounts = useMemo(() => {
+    }, [
+        productIds,
+        page,
+        perPage
+    ])
 
-        const map = new Map<string, number>()
-
-        allProducts.forEach((p: any) => {
-
-            if (!p.themeId) return
-
-            const id = String(p.themeId)
-
-            map.set(id, (map.get(id) ?? 0) + 1)
-
-        })
-
-        return map
-
-    }, [allProducts])
+    const priceStats = {
+        min: 1,
+        max: 10000
+    }
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -185,126 +322,8 @@ export default function ProductsClient() {
         return () => clearTimeout(t)
     }, [minPrice, maxPrice])
 
-    // apply filters (multi-select)
-    useEffect(() => {
-        const term = qState.trim().toLowerCase()
-        let list = [...allProducts]
-
-        if (selectedMasters.length) {
-            list = list.filter((p) => selectedMasters.includes(String(p.masterCategoryId)))
-        }
-
-        if (selectedSupers.length) {
-            list = list.filter((p) => selectedSupers.includes(String(p.superCategoryId)))
-        }
-
-        if (selectedCategories.length) {
-            list = list.filter((p) => selectedCategories.includes(String(p.categoryId)))
-        }
-
-        if (selectedSubs.length) {
-            list = list.filter((p) => selectedSubs.includes(String(p.subCategoryId)))
-        }
-
-        if (selectedAges.length) {
-            list = list.filter((p: any) => selectedAges.includes(String(p.ageGroupId ?? '')))
-        }
-
-        if (selectedThemes.length) {
-            list = list.filter((p) =>
-                p.themeId && selectedThemes.includes(String(p.themeId))
-            )
-        }
-
-        if (inStockOnly) {
-            list = list.filter((p) => {
-                const qstr = String(p.sellStockQuantity ?? '').trim()
-                if (qstr === '' || qstr === '0') return false
-                const digits = parseInt(qstr.replace(/\D/g, ''), 10)
-                return !Number.isNaN(digits) ? digits > 0 : true
-            })
-        }
-
-        if (term) {
-            list = list.filter((p: any) => {
-
-                const name = (p.productName ?? '').toLowerCase()
-                const sub = (p.subCategoryPublicName ?? '').toLowerCase()
-                const cat = (p.categoryPublicName ?? '').toLowerCase()
-                const sup = (p.superCategoryPublicName ?? '').toLowerCase()
-
-                const tags = Array.isArray(p.tags)
-                    ? p.tags.join(' ').toLowerCase()
-                    : ''
-
-                return (
-                    name.includes(term) ||
-                    sub.includes(term) ||
-                    cat.includes(term) ||
-                    sup.includes(term) ||
-                    tags.includes(term)
-                )
-            })
-        }
-
-        // Price filter
-        if (debouncedMin !== '' || debouncedMax !== '') {
-            list = list.filter((p) => {
-                const discounted = p.latestSalePrice?.discountedPrice
-                const actual = p.latestSalePrice?.actualPrice
-                const price = discounted ?? actual
-
-                if (price === undefined || price === null) return false
-
-                if (debouncedMin !== '' && price < debouncedMin) return false
-                if (debouncedMax !== '' && price > debouncedMax) return false
-
-                return true
-            })
-        }
-
-        // SORT PRODUCTS
-        if (sortBy === "price-low") {
-            list.sort((a, b) =>
-                (a.latestSalePrice?.discountedPrice ?? a.latestSalePrice?.actualPrice ?? 0) -
-                (b.latestSalePrice?.discountedPrice ?? b.latestSalePrice?.actualPrice ?? 0)
-            )
-        } else if (sortBy === "price-high") {
-            list.sort((a, b) =>
-                (b.latestSalePrice?.discountedPrice ?? b.latestSalePrice?.actualPrice ?? 0) -
-                (a.latestSalePrice?.discountedPrice ?? a.latestSalePrice?.actualPrice ?? 0)
-            )
-        } else {
-            list.sort((a, b) => {
-                const aMs = Math.max(safeDateMs(a.updatedAt), safeDateMs(a.createdAt))
-                const bMs = Math.max(safeDateMs(b.updatedAt), safeDateMs(b.createdAt))
-                return bMs - aMs
-            })
-        }
-
-        setFiltered(list)
-    }, [
-        qState,
-        selectedMasters,
-        selectedSupers,
-        selectedCategories,
-        selectedSubs,
-        selectedAges,
-        selectedThemes,
-        inStockOnly,
-        debouncedMin,
-        debouncedMax,
-        allProducts,
-        sortBy
-    ]);
-
-    const total = filtered.length
-    const totalPages = Math.ceil(total / perPage)
-
-    const pageItems = useMemo(() => {
-        const start = (page - 1) * perPage
-        return filtered.slice(start, start + perPage)
-    }, [filtered, page, perPage])
+    const total = totalRecords
+    const totalPages = Math.ceil(totalRecords / perPage)
 
     const toggle = (arr: string[], set: (v: string[]) => void, id: string) => {
         if (!id) return
@@ -391,39 +410,41 @@ export default function ProductsClient() {
                             inStockOnly={inStockOnly}
                             onToggleInStock={() => setInStockOnly((s) => !s)}
 
-                            masterOptions={masterCategories.map(m => ({
+                            masterOptions={mergeFilterGroup(masterCategories).map((m: any) => ({
                                 id: m._id,
-                                label: m.publicName ?? m.name ?? ''
+                                label: m.publicName ?? m.name ?? '',
+                                count: m.productCount ?? 0
                             }))}
 
-                            superOptions={superCategories.map(s => ({
+                            superOptions={mergeFilterGroup(superCategories).map((s: any) => ({
                                 id: s._id,
-                                label: s.publicName ?? s.name ?? ''
+                                label: s.publicName ?? s.name ?? '',
+                                count: s.productCount ?? 0
                             }))}
 
-                            categoryOptions={categories.map(c => ({
+                            categoryOptions={mergeFilterGroup(categories).map((c: any) => ({
                                 id: c._id,
-                                label: c.publicName ?? c.name ?? ''
+                                label: c.publicName ?? c.name ?? '',
+                                count: c.productCount ?? 0
                             }))}
 
-                            subOptions={subCategories.map(s => ({
+                            subOptions={mergeFilterGroup(subCategories).map((s: any) => ({
                                 id: s._id,
-                                label: s.publicName ?? s.name ?? ''
+                                label: s.publicName ?? s.name ?? '',
+                                count: s.productCount ?? 0
                             }))}
 
-                            ageOptions={ageGroups.map(a => ({
+                            ageOptions={mergeFilterGroup(ageGroups).map((a: any) => ({
                                 id: a._id,
-                                label: a.publicName ?? a.name ?? ''
+                                label: a.publicName ?? a.name ?? '',
+                                count: a.productCount ?? 0
                             }))}
 
-                            themeOptions={themes
-                                .map(t => ({
-                                    id: t._id,
-                                    label: t.publicName ?? t.name ?? '',
-                                    count: themeCounts.get(t._id) ?? 0
-                                }))
-                                .filter(t => t.count > 0)
-                            }
+                            themeOptions={mergeFilterGroup(themes).map((t: any) => ({
+                                id: t._id,
+                                label: t.publicName ?? t.name ?? '',
+                                count: t.productCount ?? 0
+                            }))}
 
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
@@ -525,17 +546,19 @@ export default function ProductsClient() {
                         </div>
 
                         {/* PRODUCT GRID */}
-                        {loading ? (
+                        {initialLoading ? (
+
                             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {Array.from({ length: perPage }).map((_, i) => (
                                     <div
                                         key={i}
                                         className="animate-pulse bg-white rounded-xl p-4 h-64"
                                     />
-
                                 ))}
                             </div>
+
                         ) : error ? (
+
                             <div className="text-center py-12">
                                 <p className="text-rose-600 font-medium">
                                     Unable to load products
@@ -545,27 +568,56 @@ export default function ProductsClient() {
                                     {error}
                                 </p>
                             </div>
+
                         ) : (
-                            <>
-                                <ProductGrid products={pageItems} />
 
-                                {totalPages > 1 && (
-                                    <div className="mt-10 flex justify-center">
-                                        <Pagination
-                                            page={page}
-                                            totalPages={totalPages}
-                                            onPageChange={(p) => {
+                            <div className="relative">
 
-                                                const params = new URLSearchParams(searchParams.toString())
-                                                params.set('page', String(p))
+                                {/* LOADING OVERLAY */}
+                                {productsLoading && (
+                                    <div className="absolute inset-0 z-10 bg-transparent backdrop-blur-[1px] rounded-xl flex items-center justify-center">
 
-                                                router.push(`/products?${params.toString()}`)
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-white border rounded-full shadow-md">
 
-                                            }}
-                                        />
+                                            <div className="w-4 h-4 border-2 border-[#0B5C73] border-t-transparent rounded-full animate-spin" />
+
+                                            <span className="text-sm font-medium text-slate-700">
+                                                Updating products...
+                                            </span>
+
+                                        </div>
+
                                     </div>
                                 )}
-                            </>
+
+                                <div>
+
+                                    <ProductGrid products={products} />
+
+                                    {totalPages > 1 && (
+                                        <div className="mt-10 flex justify-center">
+
+                                            <Pagination
+                                                page={page}
+                                                totalPages={totalPages}
+                                                onPageChange={(p) => {
+
+                                                    const params = new URLSearchParams(searchParams.toString())
+
+                                                    params.set('page', String(p))
+
+                                                    router.push(`/products?${params.toString()}`)
+
+                                                }}
+                                            />
+
+                                        </div>
+                                    )}
+
+                                </div>
+
+                            </div>
+
                         )}
                     </main>
                 </div>
@@ -598,39 +650,37 @@ export default function ProductsClient() {
                             inStockOnly={inStockOnly}
                             onToggleInStock={() => setInStockOnly((s) => !s)}
 
-                            masterOptions={masterCategories.map(m => ({
+                            masterOptions={mergeFilterGroup(masterCategories).map(m => ({
                                 id: m._id,
                                 label: m.publicName ?? m.name ?? ''
                             }))}
 
-                            superOptions={superCategories.map(s => ({
+                            superOptions={mergeFilterGroup(superCategories).map(s => ({
                                 id: s._id,
                                 label: s.publicName ?? s.name ?? ''
                             }))}
 
-                            categoryOptions={categories.map(c => ({
+                            categoryOptions={mergeFilterGroup(categories).map((c: any) => ({
                                 id: c._id,
-                                label: c.publicName ?? c.name ?? ''
+                                label: c.publicName ?? c.name ?? '',
+                                count: c.productCount ?? 0
                             }))}
 
-                            subOptions={subCategories.map(s => ({
+                            subOptions={mergeFilterGroup(subCategories).map(s => ({
                                 id: s._id,
                                 label: s.publicName ?? s.name ?? ''
                             }))}
 
-                            ageOptions={ageGroups.map(a => ({
+                            ageOptions={mergeFilterGroup(ageGroups).map(a => ({
                                 id: a._id,
                                 label: a.publicName ?? a.name ?? ''
                             }))}
 
-                            themeOptions={themes
-                                .map(t => ({
-                                    id: t._id,
-                                    label: t.publicName ?? t.name ?? '',
-                                    count: themeCounts.get(t._id) ?? 0
-                                }))
-                                .filter(t => t.count > 0)
-                            }
+                            themeOptions={mergeFilterGroup(themes).map((t: any) => ({
+                                id: t._id,
+                                label: t.publicName ?? t.name ?? '',
+                                count: t.productCount ?? 0
+                            }))}
 
                             selectedMasters={selectedMasters}
                             selectedSupers={selectedSupers}
