@@ -331,7 +331,7 @@ export default function ProductsClient() {
 
     const priceStats = {
         min: 1,
-        max: 10000
+        max: 2000
     }
 
     useEffect(() => {
