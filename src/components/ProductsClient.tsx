@@ -51,6 +51,19 @@ export default function ProductsClient() {
     }, [searchParams])
 
     useEffect(() => {
+
+        const categoryParam = searchParams.get('category')
+
+        if (!categoryParam) {
+            setSelectedCategories([])
+            return
+        }
+
+        setSelectedCategories(categoryParam.split(','))
+
+    }, [searchParams])
+
+    useEffect(() => {
         if (productsTopRef.current) {
             productsTopRef.current.scrollIntoView({
                 behavior: 'smooth',
@@ -160,20 +173,28 @@ export default function ProductsClient() {
                     params.set('themeIds', selectedThemes.join(','))
                 }
 
-                if (selectedMasters.length) {
-                    params.set('masterCategoryIds', selectedMasters.join(','))
+                const masterParam = searchParams.get('master')
+
+                if (masterParam) {
+                    params.set('masterCategoryIds', masterParam)
                 }
 
-                if (selectedSupers.length) {
-                    params.set('superCategoryIds', selectedSupers.join(','))
+                const superParam = searchParams.get('super')
+
+                if (superParam) {
+                    params.set('superCategoryIds', superParam)
                 }
 
-                if (selectedCategories.length) {
-                    params.set('categoryIds', selectedCategories.join(','))
+                const categoryParam = searchParams.get('category')
+
+                if (categoryParam) {
+                    params.set('categoryIds', categoryParam)
                 }
 
-                if (selectedSubs.length) {
-                    params.set('subCategoryIds', selectedSubs.join(','))
+                const subParam = searchParams.get('sub')
+
+                if (subParam) {
+                    params.set('subCategoryIds', subParam)
                 }
 
                 if (selectedAges.length) {
@@ -460,7 +481,33 @@ export default function ProductsClient() {
                             priceRangeMax={priceStats.max}
                             onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
                             onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
-                            onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
+                            onToggleCategory={(id) => {
+
+                                const params = new URLSearchParams(searchParams.toString())
+
+                                let next: string[]
+
+                                if (selectedCategories.includes(id)) {
+
+                                    next = selectedCategories.filter(x => x !== id)
+
+                                } else {
+
+                                    next = [...selectedCategories, id]
+                                }
+
+                                setSelectedCategories(next)
+
+                                if (next.length === 0) {
+                                    params.delete('category')
+                                } else {
+                                    params.set('category', next.join(','))
+                                }
+
+                                params.set('page', '1')
+
+                                router.push(`/products?${params.toString()}`)
+                            }}
                             onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
                             onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
                             onToggleTheme={toggleTheme}
@@ -699,7 +746,33 @@ export default function ProductsClient() {
 
                             onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
                             onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
-                            onToggleCategory={(id) => toggle(selectedCategories, setSelectedCategories, id)}
+                            onToggleCategory={(id) => {
+
+                                const params = new URLSearchParams(searchParams.toString())
+
+                                let next: string[]
+
+                                if (selectedCategories.includes(id)) {
+
+                                    next = selectedCategories.filter(x => x !== id)
+
+                                } else {
+
+                                    next = [...selectedCategories, id]
+                                }
+
+                                setSelectedCategories(next)
+
+                                if (next.length === 0) {
+                                    params.delete('category')
+                                } else {
+                                    params.set('category', next.join(','))
+                                }
+
+                                params.set('page', '1')
+
+                                router.push(`/products?${params.toString()}`)
+                            }}
                             onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
                             onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
                             onToggleTheme={toggleTheme}
