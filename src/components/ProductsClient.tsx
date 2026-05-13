@@ -529,17 +529,17 @@ export default function ProductsClient() {
                                         onClick={() => setFiltersOpen(true)}
                                         className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm whitespace-nowrap"
                                     >
-                                        Filters
+                                        Filters ({selectedCategories.length + selectedThemes.length})
                                     </button>
 
-                                    <button
+                                    {/* <button
                                         onClick={() => setSortOpen(true)}
                                         className="lg:hidden px-4 py-2 rounded-full border bg-white shadow-sm text-sm whitespace-nowrap"
                                     >
                                         Sort: {sortBy === "latest" ? "Newest" :
                                             sortBy === "price-low" ? "Low → High" :
                                                 "High → Low"}
-                                    </button>
+                                    </button> */}
 
                                     {(selectedThemes.length || inStockOnly || minPrice !== '' || maxPrice !== '') && (
                                         <button
@@ -674,111 +674,187 @@ export default function ProductsClient() {
             <AnimatePresence>
                 {filtersOpen && (
                     <motion.div
-                        className="fixed inset-0 z-50 bg-white p-6 overflow-y-auto lg:hidden"
-                        initial={{ x: "100%" }}
-                        animate={{ x: 0 }}
-                        exit={{ x: "100%" }}
-                        transition={{ duration: 0.25 }}
+                        className="fixed inset-0 z-50 bg-black/40 lg:hidden"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setFiltersOpen(false)}
                     >
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-semibold">Filters</h2>
-
-                            <button
-                                onClick={() => setFiltersOpen(false)}
-                                className="px-3 py-1 border rounded-md text-sm"
-                            >
-                                Close
-                            </button>
-                        </div>
-
-                        <SidebarFilters
-                            q={qState}
-                            onQChange={setQState}
-                            inStockOnly={inStockOnly}
-                            onToggleInStock={() => setInStockOnly((s) => !s)}
-
-                            masterOptions={mergeFilterGroup(masterCategories).map(m => ({
-                                id: m._id,
-                                label: m.publicName ?? m.name ?? ''
-                            }))}
-
-                            superOptions={mergeFilterGroup(superCategories).map(s => ({
-                                id: s._id,
-                                label: s.publicName ?? s.name ?? ''
-                            }))}
-
-                            categoryOptions={mergeFilterGroup(categories).map((c: any) => ({
-                                id: c._id,
-                                label: c.publicName ?? c.name ?? '',
-                                count: c.productCount ?? 0
-                            }))}
-
-                            subOptions={mergeFilterGroup(subCategories).map(s => ({
-                                id: s._id,
-                                label: s.publicName ?? s.name ?? ''
-                            }))}
-
-                            ageOptions={mergeFilterGroup(ageGroups).map(a => ({
-                                id: a._id,
-                                label: a.publicName ?? a.name ?? ''
-                            }))}
-
-                            themeOptions={mergeFilterGroup(themes).map((t: any) => ({
-                                id: t._id,
-                                label: t.publicName ?? t.name ?? '',
-                                count: t.productCount ?? 0
-                            }))}
-
-                            selectedMasters={selectedMasters}
-                            selectedSupers={selectedSupers}
-                            selectedCategories={selectedCategories}
-                            selectedSubs={selectedSubs}
-                            selectedAges={selectedAges}
-                            selectedThemes={selectedThemes}
-
-                            minPrice={minPrice}
-                            maxPrice={maxPrice}
-                            onMinPriceChange={setMinPrice}
-                            onMaxPriceChange={setMaxPrice}
-
-                            priceRangeMin={priceStats.min}
-                            priceRangeMax={priceStats.max}
-
-                            onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
-                            onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
-                            onToggleCategory={(id) => {
-
-                                const params = new URLSearchParams(searchParams.toString())
-
-                                let next: string[]
-
-                                if (selectedCategories.includes(id)) {
-
-                                    next = selectedCategories.filter(x => x !== id)
-
-                                } else {
-
-                                    next = [...selectedCategories, id]
+                        <motion.div
+                            className="
+                    absolute bottom-0 left-0 right-0
+                    bg-white
+                    rounded-t-3xl
+                    h-[92vh]
+                    overflow-hidden
+                    shadow-2xl
+                    flex flex-col
+                "
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ duration: 0.25 }}
+                            onClick={(e) => e.stopPropagation()}
+                            drag="y"
+                            dragConstraints={{ top: 0, bottom: 0 }}
+                            dragElastic={0.12}
+                            onDragEnd={(e, info) => {
+                                if (info.offset.y > 120) {
+                                    setFiltersOpen(false)
                                 }
-
-                                setSelectedCategories(next)
-
-                                if (next.length === 0) {
-                                    params.delete('category')
-                                } else {
-                                    params.set('category', next.join(','))
-                                }
-
-                                params.set('page', '1')
-
-                                router.push(`/products?${params.toString()}`)
                             }}
-                            onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
-                            onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
-                            onToggleTheme={toggleTheme}
+                        >
+                            {/* HANDLE */}
+                            <div className="flex justify-center pt-3 pb-2">
+                                <div className="w-12 h-1.5 rounded-full bg-slate-300" />
+                            </div>
 
-                            onClearAll={clearAll}
-                        />
+                            {/* HEADER */}
+                            <div className="px-4 pb-4 border-b flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-semibold text-slate-900">
+                                        Filters
+                                    </h2>
+
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Refine your products
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={() => setFiltersOpen(false)}
+                                    className="
+                            w-9 h-9 rounded-full
+                            border border-slate-200
+                            flex items-center justify-center
+                            text-slate-600
+                        "
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* SCROLL AREA */}
+                            <div className="flex-1 overflow-y-auto px-4 py-4">
+                                <SidebarFilters
+                                    q={qState}
+                                    onQChange={setQState}
+                                    inStockOnly={inStockOnly}
+                                    onToggleInStock={() => setInStockOnly((s) => !s)}
+
+                                    masterOptions={mergeFilterGroup(masterCategories).map(m => ({
+                                        id: m._id,
+                                        label: m.publicName ?? m.name ?? ''
+                                    }))}
+
+                                    superOptions={mergeFilterGroup(superCategories).map(s => ({
+                                        id: s._id,
+                                        label: s.publicName ?? s.name ?? ''
+                                    }))}
+
+                                    categoryOptions={mergeFilterGroup(categories).map((c: any) => ({
+                                        id: c._id,
+                                        label: c.publicName ?? c.name ?? '',
+                                        count: c.productCount ?? 0
+                                    }))}
+
+                                    subOptions={mergeFilterGroup(subCategories).map(s => ({
+                                        id: s._id,
+                                        label: s.publicName ?? s.name ?? ''
+                                    }))}
+
+                                    ageOptions={mergeFilterGroup(ageGroups).map(a => ({
+                                        id: a._id,
+                                        label: a.publicName ?? a.name ?? ''
+                                    }))}
+
+                                    themeOptions={mergeFilterGroup(themes).map((t: any) => ({
+                                        id: t._id,
+                                        label: t.publicName ?? t.name ?? '',
+                                        count: t.productCount ?? 0
+                                    }))}
+
+                                    selectedMasters={selectedMasters}
+                                    selectedSupers={selectedSupers}
+                                    selectedCategories={selectedCategories}
+                                    selectedSubs={selectedSubs}
+                                    selectedAges={selectedAges}
+                                    selectedThemes={selectedThemes}
+
+                                    minPrice={minPrice}
+                                    maxPrice={maxPrice}
+                                    onMinPriceChange={setMinPrice}
+                                    onMaxPriceChange={setMaxPrice}
+
+                                    priceRangeMin={priceStats.min}
+                                    priceRangeMax={priceStats.max}
+
+                                    onToggleMaster={(id) => toggle(selectedMasters, setSelectedMasters, id)}
+                                    onToggleSuper={(id) => toggle(selectedSupers, setSelectedSupers, id)}
+
+                                    onToggleCategory={(id) => {
+
+                                        const params = new URLSearchParams(searchParams.toString())
+
+                                        let next: string[]
+
+                                        if (selectedCategories.includes(id)) {
+
+                                            next = selectedCategories.filter(x => x !== id)
+
+                                        } else {
+
+                                            next = [...selectedCategories, id]
+                                        }
+
+                                        setSelectedCategories(next)
+
+                                        if (next.length === 0) {
+                                            params.delete('category')
+                                        } else {
+                                            params.set('category', next.join(','))
+                                        }
+
+                                        params.set('page', '1')
+
+                                        router.push(`/products?${params.toString()}`)
+                                    }}
+
+                                    onToggleSub={(id) => toggle(selectedSubs, setSelectedSubs, id)}
+                                    onToggleAge={(id) => toggle(selectedAges, setSelectedAges, id)}
+                                    onToggleTheme={toggleTheme}
+
+                                    onClearAll={clearAll}
+                                />
+                            </div>
+
+                            {/* STICKY FOOTER */}
+                            <div className="border-t bg-white p-4 flex gap-3">
+                                <button
+                                    onClick={clearAll}
+                                    className="
+                            flex-1 h-12 rounded-xl
+                            border border-slate-300
+                            text-sm font-medium
+                            text-slate-700
+                        "
+                                >
+                                    Clear
+                                </button>
+
+                                <button
+                                    onClick={() => setFiltersOpen(false)}
+                                    className="
+                            flex-1 h-12 rounded-xl
+                            bg-[#0B5C73]
+                            text-white
+                            text-sm font-semibold
+                        "
+                                >
+                                    View {total} Products
+                                </button>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>

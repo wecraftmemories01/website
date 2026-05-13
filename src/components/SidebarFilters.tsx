@@ -358,7 +358,7 @@ export default function SidebarFilters({
         const moreCount = !showAll[name] ? Math.max(0, options.length - limit) : 0
 
         return (
-            <div className="relative border rounded-lg p-3 bg-white shadow-sm">
+            <div className="relative border rounded-xl p-3 bg-white shadow-sm">
                 <div
                     className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${selectedIds.length ? 'bg-[#1FA6B8]' : 'bg-transparent'}`}
                     aria-hidden
@@ -404,7 +404,7 @@ export default function SidebarFilters({
                                 )}
                             </div>
 
-                            <div className="mt-3 flex flex-col gap-2">
+                            <div className="mt-3 flex flex-wrap gap-2">
                                 {(search ? options : short).map((o) => (
                                     <OptionChip key={o.id} option={o} checked={selectedIds.includes(o.id)} onToggle={onToggle} />
                                 ))}
