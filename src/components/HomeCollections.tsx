@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
+import { ArrowRight } from 'lucide-react'
 
 type Theme = {
     _id: string
@@ -16,13 +17,14 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE
 
 export default function HomeCollections() {
     const router = useRouter()
+
     const [themes, setThemes] = useState<Theme[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         const fetchThemes = async () => {
             try {
-                const res = await fetch(`${API_BASE}/theme`)
+                const res = await fetch(`${API_BASE}/theme/top_themes`)
                 const data = await res.json()
 
                 if (data?.themeData) {
@@ -43,138 +45,153 @@ export default function HomeCollections() {
     }
 
     if (loading) {
-        return <div className="py-10 text-center">Loading...</div>
+        return (
+            <div className="py-10 text-center text-sm text-slate-500">
+                Loading collections...
+            </div>
+        )
     }
 
     if (!themes.length) return null
 
-    const featured = themes[0]
-    const rest = themes.slice(1, 7)
-
     return (
-        <section className="max-w-7xl mx-auto px-4 py-8">
+        <section className="max-w-7xl mx-auto px-4 py-10">
 
             {/* HEADER */}
             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-                    Shop by Collection
-                </h2>
+
+                <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[#0B5C73] font-medium mb-1">
+                        Collections
+                    </p>
+
+                    <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900">
+                        Shop by Collection
+                    </h2>
+                </div>
 
                 <button
                     onClick={() => router.push('/products')}
-                    className="text-sm text-[#0B5C73] font-medium hover:underline"
+                    className="
+                        hidden sm:flex items-center gap-1
+                        text-sm font-medium text-slate-700
+                        hover:text-black transition
+                    "
                 >
-                    View all →
+                    View all
+                    <ArrowRight size={15} />
                 </button>
+
             </div>
 
-            {/* MOBILE → SCROLL */}
-            <div className="flex gap-4 overflow-x-auto no-scrollbar sm:hidden">
-                {themes.map((t) => (
-                    <Card key={t._id} theme={t} onClick={handleClick} />
+            {/* MOBILE */}
+            <div className="sm:hidden flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                {themes.map((theme) => (
+                    <CollectionCard
+                        key={theme._id}
+                        theme={theme}
+                        onClick={handleClick}
+                        mobile
+                    />
                 ))}
             </div>
 
-            {/* DESKTOP → PREMIUM GRID */}
-            <div className="hidden sm:grid grid-cols-3 gap-5">
-
-                {/* FEATURED BIG CARD */}
-                <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="col-span-2 row-span-2 cursor-pointer"
-                    onClick={() => handleClick(featured._id)}
-                >
-                    <div className="relative h-full rounded-3xl overflow-hidden shadow-lg">
-
-                        {featured.image ? (
-                            <Image
-                                src={featured.image}
-                                alt={featured.publicName || featured.name || 'Collection'}
-                                fill
-                                priority
-                                className="object-cover"
-                                sizes="(max-width: 1024px) 100vw, 66vw"
-                            />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1FA6B8]/20 to-[#F6B73C]/20 text-4xl">
-                                🌼
-                            </div>
-                        )}
-
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-
-                        <div className="absolute bottom-0 p-6 text-white">
-                            <h3 className="text-2xl font-bold">
-                                {featured.publicName || featured.name}
-                            </h3>
-                            <p className="text-sm opacity-90 mt-1">
-                                Explore this collection →
-                            </p>
-                        </div>
-                    </div>
-                </motion.div>
-
-                {/* SMALL CARDS */}
-                {rest.map((t) => (
-                    <Card key={t._id} theme={t} onClick={handleClick} small />
+            {/* DESKTOP */}
+            <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {themes.slice(0, 6).map((theme) => (
+                    <CollectionCard
+                        key={theme._id}
+                        theme={theme}
+                        onClick={handleClick}
+                    />
                 ))}
             </div>
+
         </section>
     )
 }
 
-/* ---------------- CARD COMPONENT ---------------- */
+/* -------------------------------------- */
+/* CARD */
+/* -------------------------------------- */
 
-function Card({
+function CollectionCard({
     theme,
     onClick,
-    small
+    mobile
 }: {
     theme: Theme
     onClick: (id: string) => void
-    small?: boolean
+    mobile?: boolean
 }) {
     const name = theme.publicName ?? theme.name ?? 'Collection'
 
     return (
         <motion.div
-            whileTap={{ scale: 0.95 }}
-            whileHover={{ y: -5 }}
-            className={`cursor-pointer ${small ? '' : 'min-w-[160px]'}`}
+            whileHover={{ y: -3 }}
+            transition={{ duration: 0.2 }}
             onClick={() => onClick(theme._id)}
+            className={`
+                group cursor-pointer
+                ${mobile ? 'min-w-[160px]' : ''}
+            `}
         >
-            <div className={`
-                relative overflow-hidden rounded-2xl
-                ${small ? 'h-[180px]' : 'aspect-[4/5]'}
-                shadow-md hover:shadow-xl transition
-            `}>
 
-                {/* IMAGE */}
+            {/* IMAGE */}
+            <div className="
+                relative overflow-hidden rounded-2xl
+                aspect-[4/5]
+                bg-slate-100
+            ">
+
                 {theme.image ? (
                     <Image
                         src={theme.image}
                         alt={name}
                         fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 40vw, (max-width: 1024px) 25vw, 200px"
+                        className="
+                            object-cover
+                            transition-transform duration-500
+                            group-hover:scale-105
+                        "
+                        sizes="300px"
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1FA6B8]/20 to-[#F6B73C]/20 text-3xl">
-                        🌼
-                    </div>
+                    <div className="w-full h-full bg-gradient-to-br from-[#1FA6B8]/10 to-[#F6B73C]/10" />
                 )}
 
                 {/* OVERLAY */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="
+                    absolute inset-0
+                    bg-gradient-to-t from-black/50 to-transparent
+                " />
 
-                {/* TEXT */}
-                <div className="absolute bottom-0 p-3 text-white">
-                    <p className="text-sm font-semibold">
-                        {name}
-                    </p>
+                {/* TITLE */}
+                <div className="absolute bottom-0 left-0 right-0 p-3">
+
+                    <div className="flex items-center justify-between gap-2">
+
+                        <h3 className="
+                            text-white text-sm font-medium
+                            line-clamp-1
+                        ">
+                            {name}
+                        </h3>
+
+                        <div className="
+                            opacity-0 group-hover:opacity-100
+                            transition
+                            text-white
+                        ">
+                            <ArrowRight size={15} />
+                        </div>
+
+                    </div>
+
                 </div>
 
             </div>
+
         </motion.div>
     )
 }

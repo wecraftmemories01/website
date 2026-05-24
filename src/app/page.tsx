@@ -48,9 +48,9 @@ export default function HomePage() {
                     <HomeProductGrid products={products} />
                 )}
 
-                {/* <section className="max-w-7xl mx-auto px-3 sm:px-3 lg:px-3 pl-2 pr-2 pt-2 pb-2">
+                <section className="max-w-7xl mx-auto px-3 sm:px-3 lg:px-3 pl-2 pr-2 pt-2 pb-2">
                     <HomeCollections />
-                </section> */}
+                </section>
 
                 <HomeGallery />
 
