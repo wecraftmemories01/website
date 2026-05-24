@@ -3,17 +3,19 @@
 import { useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'pwa_prompt_closed_at'
-const WAIT_TIME = 30 * 60 * 1000 // 30 minutes
+
+// show again after 7 days
+const WAIT_TIME = 7 * 24 * 60 * 60 * 1000
 
 export default function PWAInstallPrompt() {
     const [prompt, setPrompt] = useState<any>(null)
     const [visible, setVisible] = useState(false)
 
-    // ✅ Cooldown check
     const isInCooldown = () => {
         if (typeof window === 'undefined') return true
 
         const closedAt = localStorage.getItem(STORAGE_KEY)
+
         if (!closedAt) return false
 
         return Date.now() - Number(closedAt) < WAIT_TIME
@@ -24,50 +26,93 @@ export default function PWAInstallPrompt() {
         if (isInCooldown()) return
 
         let eventCaptured = false
+        let userEngaged = false
 
+        // Detect engagement
+        const onScroll = () => {
+            userEngaged = true
+            window.removeEventListener('scroll', onScroll)
+        }
+
+        window.addEventListener('scroll', onScroll)
+
+        // Real install prompt event
         const handler = (e: any) => {
-            console.log("✅ PWA install event captured")
+            console.log('beforeinstallprompt fired')
 
             e.preventDefault()
-            eventCaptured = true
 
+            eventCaptured = true
             setPrompt(e)
-            setVisible(true)
+
+            // show gently after engagement
+            setTimeout(() => {
+                if (userEngaged) {
+                    setVisible(true)
+                }
+            }, 15000) // 15 sec
         }
 
         window.addEventListener('beforeinstallprompt', handler)
 
-        // ✅ Fallback (IMPORTANT for localhost / unsupported cases)
+        // Smart fallback
         const fallback = setTimeout(() => {
-            if (!eventCaptured && !isInCooldown()) {
-                console.log("⚠️ Fallback showing install UI")
+            if (
+                !eventCaptured &&
+                !isInCooldown() &&
+                userEngaged
+            ) {
+                console.log('Showing fallback install prompt')
                 setVisible(true)
             }
-        }, 4000) // show after 4 sec
+        }, 45000) // 45 sec
 
         return () => {
-            window.removeEventListener('beforeinstallprompt', handler)
+            window.removeEventListener(
+                'beforeinstallprompt',
+                handler
+            )
+
+            window.removeEventListener('scroll', onScroll)
+
             clearTimeout(fallback)
         }
     }, [])
 
-    // ✅ Install handler
     const install = async () => {
-        if (!prompt) {
-            alert("To install this app, open browser menu → Add to Home Screen")
-            return
+        try {
+            // Real browser prompt
+            if (prompt) {
+                prompt.prompt()
+
+                const choice = await prompt.userChoice
+
+                console.log(choice)
+
+                setVisible(false)
+                setPrompt(null)
+
+                return
+            }
+
+            // Fallback instructions
+            alert(
+                'To install this app:\n\nAndroid: Browser Menu → Add to Home Screen\n\niPhone: Share → Add to Home Screen'
+            )
+
+            setVisible(false)
+
+        } catch (err) {
+            console.log(err)
         }
-
-        prompt.prompt()
-        await prompt.userChoice
-
-        setVisible(false)
-        setPrompt(null)
     }
 
-    // ✅ Close handler (store cooldown)
     const closePrompt = () => {
-        localStorage.setItem(STORAGE_KEY, Date.now().toString())
+        localStorage.setItem(
+            STORAGE_KEY,
+            Date.now().toString()
+        )
+
         setVisible(false)
         setPrompt(null)
     }
@@ -76,69 +121,64 @@ export default function PWAInstallPrompt() {
 
     return (
         <div
-            className="fixed z-[999] right-4 sm:right-6"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
+            className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4"
+            style={{
+                paddingBottom:
+                    'calc(env(safe-area-inset-bottom) + 12px)',
+            }}
         >
-            <div className="
-                w-[90vw] sm:w-[320px]
-                max-w-[340px]
-                animate-in slide-in-from-bottom-6 fade-in duration-300
-            ">
-                <div className="
-                    bg-white/95 backdrop-blur
+            <div
+                className="
+                    mx-auto
+                    max-w-md
+                    rounded-2xl
+                    bg-white/95
+                    backdrop-blur-md
                     border border-gray-200
                     shadow-xl
-                    rounded-2xl
-                    p-3 sm:p-4
-                ">
+                    px-4 py-3
+                    flex items-center justify-between gap-3
+                    animate-in slide-in-from-bottom-5 fade-in duration-300
+                "
+            >
+                <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">
+                        Install WeCraftMemories
+                    </p>
 
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        Faster browsing & quick checkout
+                    </p>
+                </div>
 
-                        <div className="flex items-start gap-2 sm:gap-3">
-                            {/* Icon */}
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0B5C73]/10 flex items-center justify-center text-[#0B5C73] text-base">
-                                📲
-                            </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        onClick={closePrompt}
+                        className="
+                            text-sm
+                            text-gray-500
+                            hover:text-gray-800
+                            transition
+                        "
+                    >
+                        Later
+                    </button>
 
-                            <div>
-                                <h4 className="text-xs sm:text-sm font-semibold text-gray-900 leading-tight">
-                                    Install WeCraftMemories
-                                </h4>
-                                <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">
-                                    Faster checkout & quick access
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Close */}
-                        <button
-                            onClick={closePrompt}
-                            className="text-gray-400 hover:text-gray-700 text-sm"
-                        >
-                            ✕
-                        </button>
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="mt-3 flex items-center gap-2">
-
-                        <button
-                            onClick={install}
-                            className="flex-1 bg-[#0B5C73] hover:bg-[#094a5c] text-white text-xs sm:text-sm font-medium py-2 rounded-lg transition"
-                        >
-                            Install
-                        </button>
-
-                        <button
-                            onClick={closePrompt}
-                            className="text-xs sm:text-sm text-gray-500 hover:text-gray-800 px-2"
-                        >
-                            Not now
-                        </button>
-
-                    </div>
-
+                    <button
+                        onClick={install}
+                        className="
+                            bg-[#0B5C73]
+                            hover:bg-[#094a5c]
+                            text-white
+                            text-sm
+                            font-medium
+                            px-4 py-2
+                            rounded-xl
+                            transition
+                        "
+                    >
+                        Install
+                    </button>
                 </div>
             </div>
         </div>
