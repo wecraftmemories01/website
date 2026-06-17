@@ -192,9 +192,14 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
         [product._id, loadingWish]
     );
 
+    const productUrl =
+        product.seoSlug
+            ? `/products/${product.seoSlug}`
+            : `/products/${product._id}`;
+
     return (
         <>
-            <Link href={`/products/${product._id}`} className="block">
+            <Link href={productUrl} className="block">
                 <article className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col">
                     {/* IMAGE */}
                     <div className="relative w-full aspect-square bg-gray-50 overflow-hidden">

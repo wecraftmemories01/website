@@ -1,5 +1,6 @@
 export interface Product {
     _id?: string;
+    seoSlug?: string;
     masterCategoryId: string;
     superCategoryId: string;
     categoryId: string;
