@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'pwa_prompt_closed_at'
-
-// show again after 7 days
 const WAIT_TIME = 7 * 24 * 60 * 60 * 1000
 
 export default function PWAInstallPrompt() {
     const [prompt, setPrompt] = useState<any>(null)
     const [visible, setVisible] = useState(false)
+    const [expanded, setExpanded] = useState(false)
 
     const isInCooldown = () => {
         if (typeof window === 'undefined') return true
@@ -28,7 +27,6 @@ export default function PWAInstallPrompt() {
         let eventCaptured = false
         let userEngaged = false
 
-        // Detect engagement
         const onScroll = () => {
             userEngaged = true
             window.removeEventListener('scroll', onScroll)
@@ -36,36 +34,30 @@ export default function PWAInstallPrompt() {
 
         window.addEventListener('scroll', onScroll)
 
-        // Real install prompt event
         const handler = (e: any) => {
-            console.log('beforeinstallprompt fired')
-
             e.preventDefault()
 
             eventCaptured = true
             setPrompt(e)
 
-            // show gently after engagement
             setTimeout(() => {
                 if (userEngaged) {
                     setVisible(true)
                 }
-            }, 15000) // 15 sec
+            }, 15000)
         }
 
         window.addEventListener('beforeinstallprompt', handler)
 
-        // Smart fallback
         const fallback = setTimeout(() => {
             if (
                 !eventCaptured &&
                 !isInCooldown() &&
                 userEngaged
             ) {
-                console.log('Showing fallback install prompt')
                 setVisible(true)
             }
-        }, 45000) // 45 sec
+        }, 45000)
 
         return () => {
             window.removeEventListener(
@@ -73,7 +65,10 @@ export default function PWAInstallPrompt() {
                 handler
             )
 
-            window.removeEventListener('scroll', onScroll)
+            window.removeEventListener(
+                'scroll',
+                onScroll
+            )
 
             clearTimeout(fallback)
         }
@@ -81,27 +76,21 @@ export default function PWAInstallPrompt() {
 
     const install = async () => {
         try {
-            // Real browser prompt
             if (prompt) {
                 prompt.prompt()
 
-                const choice = await prompt.userChoice
-
-                console.log(choice)
+                await prompt.userChoice
 
                 setVisible(false)
                 setPrompt(null)
-
                 return
             }
 
-            // Fallback instructions
             alert(
-                'To install this app:\n\nAndroid: Browser Menu → Add to Home Screen\n\niPhone: Share → Add to Home Screen'
+                'Android: Browser Menu → Add to Home Screen\n\niPhone: Share → Add to Home Screen'
             )
 
             setVisible(false)
-
         } catch (err) {
             console.log(err)
         }
@@ -114,6 +103,7 @@ export default function PWAInstallPrompt() {
         )
 
         setVisible(false)
+        setExpanded(false)
         setPrompt(null)
     }
 
@@ -121,66 +111,128 @@ export default function PWAInstallPrompt() {
 
     return (
         <div
-            className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4"
+            className="fixed right-4 bottom-20 z-40"
             style={{
-                paddingBottom:
-                    'calc(env(safe-area-inset-bottom) + 12px)',
+                paddingBottom: 'env(safe-area-inset-bottom)',
             }}
         >
-            <div
-                className="
-                    mx-auto
-                    max-w-md
-                    rounded-2xl
-                    bg-white/95
-                    backdrop-blur-md
-                    border border-gray-200
-                    shadow-xl
-                    px-4 py-3
-                    flex items-center justify-between gap-3
-                    animate-in slide-in-from-bottom-5 fade-in duration-300
-                "
-            >
-                <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">
-                        Install WeCraftMemories
-                    </p>
+            {!expanded ? (
+                <button
+                    onClick={() => setExpanded(true)}
+                    className="
+                        flex items-center gap-2
+                        bg-[#065975]
+                        text-white
+                        rounded-full
+                        shadow-xl
+                        px-4
+                        py-3
+                        hover:scale-105
+                        transition-all
+                    "
+                >
+                    <span className="text-lg">📱</span>
 
-                    <p className="text-xs text-gray-500 mt-0.5">
-                        Faster browsing & quick checkout
-                    </p>
+                    <span className="text-sm font-medium">
+                        Install App
+                    </span>
+                </button>
+            ) : (
+                <div
+                    className="
+                        w-[320px]
+                        max-w-[calc(100vw-32px)]
+                        bg-white
+                        rounded-3xl
+                        shadow-2xl
+                        border
+                        border-gray-200
+                        overflow-hidden
+                        animate-in
+                        fade-in
+                        slide-in-from-bottom-2
+                    "
+                >
+                    <div className="p-5">
+                        <div className="flex justify-between items-start">
+                            <div className="flex gap-3">
+                                <div
+                                    className="
+                                        h-12
+                                        w-12
+                                        rounded-2xl
+                                        bg-[#065975]/10
+                                        flex
+                                        items-center
+                                        justify-center
+                                        text-xl
+                                    "
+                                >
+                                    📱
+                                </div>
+
+                                <div>
+                                    <h3 className="font-semibold text-gray-900">
+                                        Install App
+                                    </h3>
+
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Enjoy faster browsing,
+                                        quick checkout and
+                                        app-like experience.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={closePrompt}
+                                className="
+                                    text-gray-400
+                                    hover:text-gray-700
+                                    text-lg
+                                    leading-none
+                                "
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="flex gap-2 mt-5">
+                            <button
+                                onClick={() =>
+                                    setExpanded(false)
+                                }
+                                className="
+                                    flex-1
+                                    h-11
+                                    rounded-xl
+                                    border
+                                    border-gray-200
+                                    text-gray-600
+                                    text-sm
+                                "
+                            >
+                                Later
+                            </button>
+
+                            <button
+                                onClick={install}
+                                className="
+                                    flex-1
+                                    h-11
+                                    rounded-xl
+                                    bg-[#065975]
+                                    text-white
+                                    text-sm
+                                    font-medium
+                                "
+                            >
+                                Install
+                            </button>
+                        </div>
+                    </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    <button
-                        onClick={closePrompt}
-                        className="
-                            text-sm
-                            text-gray-500
-                            hover:text-gray-800
-                            transition
-                        "
-                    >
-                        Later
-                    </button>
-
-                    <button
-                        onClick={install}
-                        className="
-                            bg-[#0B5C73]
-                            hover:bg-[#094a5c]
-                            text-white
-                            text-sm
-                            font-medium
-                            px-4 py-2
-                            rounded-xl
-                            transition
-                        "
-                    >
-                        Install
-                    </button>
-                </div>
-            </div>
+            )}
         </div>
     )
 }
