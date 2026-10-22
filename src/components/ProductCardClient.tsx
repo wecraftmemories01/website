@@ -1,4 +1,5 @@
 "use client";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
@@ -131,10 +132,8 @@ export default function ProductCardClient({
     }, [product._id]);
 
     const imageUrl = useMemo(() => {
-        const img = String(product.productImage ?? "");
-        if (img === "" || imgError) return PLACEHOLDER;
-        if (img.startsWith("http")) return img;
-        return img.startsWith("/") ? img : `/${img}`;
+        if (imgError) return PLACEHOLDER;
+        return publicImageUrl(product.productImage) || PLACEHOLDER;
     }, [product.productImage, imgError]);
 
     const actualPrice = product.latestSalePrice?.actualPrice;

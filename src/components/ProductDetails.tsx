@@ -1,4 +1,5 @@
 "use client";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 
 import React, { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
@@ -681,21 +682,8 @@ export default function ProductClient({ product }: { product: Product }) {
     } = product;
 
     // Put primary (product.productImage) first so display image is shown immediately
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
-
-    function normalizeImage(src: any): string | null {
-        if (!src) return null;
-
-        if (typeof src === "string") {
-            const trimmed = src.trim();
-            if (!trimmed) return null;
-
-            if (trimmed.startsWith("http")) return trimmed;
-
-            return `${BASE_URL}/${trimmed}`;
-        }
-
-        return null;
+    function normalizeImage(src: unknown): string | null {
+        return typeof src === "string" ? publicImageUrl(src) : null;
     }
 
     const primaryImage = normalizeImage(product.productImage);

@@ -1,4 +1,5 @@
 "use client";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
@@ -516,7 +517,12 @@ export default function OrderDetails({
                                         <div className="relative h-20 w-20 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-2xl border border-[#e3eff2] bg-[#edf8fa]">
                                             {p.productImage ? (
                                                 <Image
-                                                    src={p.productImage}
+                                                    src={
+                                                        publicImageUrl(
+                                                            p.productImage,
+                                                        ) ||
+                                                        "/no-image-placeholder.png"
+                                                    }
                                                     alt={
                                                         p.productNameSnapshot ||
                                                         "Ordered item"
@@ -571,7 +577,12 @@ export default function OrderDetails({
                                         <div className="relative h-20 w-20 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-2xl border border-[#e3eff2] bg-[#edf8fa]">
                                             {h.hamperImage ? (
                                                 <Image
-                                                    src={h.hamperImage}
+                                                    src={
+                                                        publicImageUrl(
+                                                            h.hamperImage,
+                                                        ) ||
+                                                        "/no-image-placeholder.png"
+                                                    }
                                                     alt={h.hamperNameSnapshot}
                                                     fill
                                                     sizes="112px"
