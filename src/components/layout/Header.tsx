@@ -1,665 +1,368 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import dynamic from "next/dynamic";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
+    ArrowRight,
+    Gift,
     Menu,
     Search,
-    ShoppingCart,
+    ShoppingBag,
+    UserRound,
     X,
-    User as UserIcon,
-    ChevronDown,
-    Tag,
-    Sparkles,
-    House,
-    Store,
-    Headset,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import useAuthGuard from "../../components/useAuthGuard";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { fetchCartCountUtil } from "@/lib/cartCount";
-import { getStoredAccessToken, logout } from "../../lib/auth";
-import api from "../../services/api";
+import { getStoredAccessToken, logout } from "@/lib/auth";
+import DeliveryPincodeInput from "@/components/DeliveryPincodeInput";
 
-/* dynamic import for client-only widget */
-const DeliveryPincodeInput = dynamic(() => import("../../components/DeliveryPincodeInput"), { ssr: false });
-
-/* ---------------- Theme ---------------- */
-const ACCENT = "#065975";
-const ACCENT_LIGHT = "#eaf6f8";
-
-/* ---------------- Types ---------------- */
-type Category = { _id: string; publicName: string; sortNumber?: number;[k: string]: any };
-type SubCategory = { _id: string; publicName: string; sortNumber?: number; categoryId?: string | null;[k: string]: any };
-
-function getStoredCustomerId(): string | null {
-    try {
-        if (typeof window === "undefined") return null;
-        const raw = localStorage.getItem("auth");
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        return parsed?.customerId ?? null;
-    } catch {
-        return null;
-    }
-}
-
-const Spinner: React.FC<{ size?: number }> = ({ size = 14 }) => (
-    <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.12"></circle>
-        <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round"></path>
-    </svg>
-);
-
-/* ---------------- Header ---------------- */
 interface HeaderProps {
     containerClass?: string;
     headerHeight?: string;
 }
+const links = [
+    { label: "Home", href: "/" },
+    { label: "Shop all", href: "/products" },
+    { label: "Gift hampers", href: "/hampers" },
+    { label: "Contact", href: "/contact" },
+];
 
 export default function Header({
-    containerClass = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
-    headerHeight = "h-16",
-}: HeaderProps): React.ReactElement {
-    // split states: mobile menu vs account dropdown
-    const [mobileOpen, setMobileOpen] = useState(false); // mobile menu
-    const [accountOpen, setAccountOpen] = useState(false); // account dropdown
-    const [query, setQuery] = useState("");
-    const [debouncedQuery, setDebouncedQuery] = useState("");
-    const [mounted, setMounted] = useState(false);
-    const [cartCount, setCartCount] = useState<number>(0);
-    const [portalReady, setPortalReady] = useState(false);
-    const [localAuthed, setLocalAuthed] = useState(false);
-
+    containerClass = "w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12",
+}: HeaderProps) {
     const router = useRouter();
-
-    const { ready: authReady, isAuthed } = useAuthGuard({ verifyWithServer: true });
-
-    const isFetchingCartRef = useRef<boolean>(false);
-
-    // account trigger + panel refs
-    const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
-    const accountPanelRef = useRef<HTMLDivElement | null>(null);
-
-    // hover/leave close helpers
-    const CLOSE_DELAY = 200; // ms
+    const pathname = usePathname();
+    const searchId = useId();
+    const reduceMotion = useReducedMotion();
+    const searchRef = useRef<HTMLInputElement>(null);
+    const menuButtonRef = useRef<HTMLButtonElement>(null);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const [cartCount, setCartCount] = useState(0);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
-        setPortalReady(true);
-    }, []);
-
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [categoriesWithSubs, setCategoriesWithSubs] = useState<Set<string>>(new Set());
-    const [loadingCats, setLoadingCats] = useState(false);
-    const [catsError, setCatsError] = useState<string | null>(null);
-
-    const [subsMap, setSubsMap] = useState<Record<string, SubCategory[]>>({});
-    const [loadingSubsMap, setLoadingSubsMap] = useState(false);
-    const [subsMapError, setSubsMapError] = useState<string | null>(null);
-
-    const [selectedCat, setSelectedCat] = useState<string | null>(null);
-
-    const catsAbortRef = useRef<AbortController | null>(null);
-
-    /** auth listener */
-    useEffect(() => {
-
-        function handleAuthChange() {
-            const token = getStoredAccessToken();
-            setLocalAuthed(!!token);
-        }
-
-        handleAuthChange();
-
-        window.addEventListener("authChanged", handleAuthChange);
-        window.addEventListener("storage", handleAuthChange);
-
-        return () => {
-            window.removeEventListener("authChanged", handleAuthChange);
-            window.removeEventListener("storage", handleAuthChange);
+        setReady(true);
+        let active = true;
+        const sync = () => {
+            setIsAuthenticated(Boolean(getStoredAccessToken()));
+            setCartCount(Number(localStorage.getItem("cartCount") || 0));
+            void fetchCartCountUtil().then((count) => {
+                if (active) setCartCount(count);
+            });
         };
-
-    }, []);
-
-    // debounce search locally (kept for parity) - only uses window.setTimeout inside effect (safe)
-    useEffect(() => {
-        const t = (typeof window !== "undefined") ? window.setTimeout(() => setDebouncedQuery(query), 300) : null;
+        sync();
+        window.addEventListener("cartChanged", sync);
+        window.addEventListener("authChanged", sync);
+        window.addEventListener("storage", sync);
         return () => {
-            if (t && typeof window !== "undefined") window.clearTimeout(t);
-        };
-    }, [query]);
-
-    // mounted flag to avoid rendering client-only values server-side
-    useEffect(() => {
-        setMounted(true);
-        setLocalAuthed(!!getStoredAccessToken());
-    }, []);
-
-    const handleLogout = useCallback(async () => {
-        await logout("/");
-    }, []);
-
-    // click / escape / blur handlers: cover collections + account + mobile
-    useEffect(() => {
-        function onDocClick(e: MouseEvent) {
-            const t = e.target as Node | null;
-
-            // account: if click not on account trigger nor account panel -> close
-            const clickedAccountTrigger = accountTriggerRef.current && t && accountTriggerRef.current.contains(t);
-            const clickedAccountPanel = accountPanelRef.current && t && accountPanelRef.current.contains(t);
-            if (!clickedAccountTrigger && !clickedAccountPanel) {
-                setAccountOpen(false);
-            }
-        }
-        function onKey(e: KeyboardEvent) {
-            if (e.key === "Escape") {
-
-                setAccountOpen(false);
-                setMobileOpen(false);
-            }
-        }
-
-        function onWindowBlur() {
-            setAccountOpen(false);
-        }
-
-        function onVisibilityChange() {
-            if (typeof document !== "undefined" && document.hidden) {
-                setAccountOpen(false);
-            }
-        }
-
-        function onWindowMouseOut(e: MouseEvent) {
-            // when the mouse leaves the window, relatedTarget is null
-            // @ts-ignore
-            const related = (e as any).relatedTarget || (e as any).toElement;
-            if (!related) {
-                setAccountOpen(false);
-            }
-        }
-
-        document.addEventListener("click", onDocClick);
-        document.addEventListener("keydown", onKey);
-        if (typeof window !== "undefined") {
-            window.addEventListener("blur", onWindowBlur);
-            window.addEventListener("mouseout", onWindowMouseOut);
-        }
-        document.addEventListener("visibilitychange", onVisibilityChange);
-
-        return () => {
-            document.removeEventListener("click", onDocClick);
-            document.removeEventListener("keydown", onKey);
-            if (typeof window !== "undefined") {
-                window.removeEventListener("blur", onWindowBlur);
-                window.removeEventListener("mouseout", onWindowMouseOut);
-            }
-            document.removeEventListener("visibilitychange", onVisibilityChange);
+            active = false;
+            window.removeEventListener("cartChanged", sync);
+            window.removeEventListener("authChanged", sync);
+            window.removeEventListener("storage", sync);
         };
     }, []);
 
     useEffect(() => {
-        catsAbortRef.current?.abort();
-        const ctrl = new AbortController();
-        catsAbortRef.current = ctrl;
-
-        async function load() {
-            setLoadingCats(true);
-            setCatsError(null);
-            setLoadingSubsMap(true);
-            setSubsMapError(null);
-
-            try {
-                const [catsRes, subsRes] = await Promise.all([
-                    api.get("/category"),
-                    api.get("/sub_category")
-                ]);
-
-                const cats = catsRes.data?.categoryData || [];
-                const allSubsRaw = subsRes.data;
-
-                const allSubs = (allSubsRaw?.subCategoryData || []).map((s: any) => ({
-                    ...s,
-                    categoryId: s.categoryId ?? s.superCategoryId ?? (s.category && s.category._id) ?? null,
-                })) as SubCategory[];
-
-                // build map
-                const map: Record<string, SubCategory[]> = {};
-                allSubs.forEach((s) => {
-                    const cid = s.categoryId ?? "uncategorized";
-                    if (!map[cid]) map[cid] = [];
-                    map[cid].push(s);
-                });
-                setSubsMap(map);
-
-                // categories that have subs
-                const setIds = new Set<string>();
-                allSubs.forEach((s) => {
-                    if (s.categoryId) setIds.add(s.categoryId);
-                });
-                setCategoriesWithSubs(setIds);
-
-                // filter categories to only those with subs for tidy UI
-                const filtered = (cats || []).filter((c: any) => setIds.has(c._id));
-                setCategories(filtered);
-
-                if ((filtered || []).length > 0) setSelectedCat(filtered[0]._id);
-            } catch (err: any) {
-                if (err?.name !== "AbortError") {
-                    console.error("Failed loading categories", err);
-                    setCatsError("Failed to load collections");
-                    setSubsMapError("Failed to load sub-collections");
-                }
-            } finally {
-                setLoadingCats(false);
-                setLoadingSubsMap(false);
-                catsAbortRef.current = null;
-            }
-        }
-
-        // load categories only on client (avoid SSR fetch differences)
-        if (typeof window !== "undefined") load();
-        return () => ctrl.abort();
-    }, []);
-
+        setMenuOpen(false);
+        setSearchOpen(false);
+    }, [pathname]);
     useEffect(() => {
-        if (!mounted) return;
-
-        // instant UI from cache
-        const cached = Number(localStorage.getItem("cartCount") || 0);
-        setCartCount(cached);
-
-        async function loadCart() {
-            if (isFetchingCartRef.current) return;
-            isFetchingCartRef.current = true;
-
-            try {
-                const count = await fetchCartCountUtil();
-                setCartCount(count);
-            } catch (err) {
-                console.error("Header cart load failed", err);
-            } finally {
-                isFetchingCartRef.current = false;
-            }
-        }
-
-        loadCart();
-
-        function handleCartRefresh() {
-            loadCart();
-        }
-
-        window.addEventListener("cartChanged", handleCartRefresh);
-
-        return () => {
-            window.removeEventListener("cartChanged", handleCartRefresh);
+        if (!menuOpen) return;
+        const oldOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        const escape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setMenuOpen(false);
         };
-    }, [mounted]);
-
-    const totalSubCount = useMemo(() => Object.values(subsMap).reduce((s, arr) => s + arr.length, 0), [subsMap]);
-    const selectedSubs = selectedCat ? (subsMap[selectedCat] || []) : [];
-
-    // ----- Search redirect logic -----
-    const doHeaderSearch = useCallback((q: string) => {
-        const trimmed = (q ?? "").trim();
-        if (trimmed.length === 0) {
-            router.replace("/products");
-        } else {
-            const encoded = encodeURIComponent(trimmed);
-            router.push(`/products?q=${encoded}`);
-        }
-    }, [router]);
-
-    // allow Enter key to submit search
-    const onHeaderKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            doHeaderSearch(query);
-        }
-    };
-
+        window.addEventListener("keydown", escape);
+        return () => {
+            document.body.style.overflow = oldOverflow;
+            window.removeEventListener("keydown", escape);
+            menuButtonRef.current?.focus();
+        };
+    }, [menuOpen]);
     useEffect(() => {
-        if (mobileOpen) {
-            document.body.style.overflow = "hidden";
-            document.body.style.touchAction = "none";
-        } else {
-            document.body.style.overflow = "";
-            document.body.style.touchAction = "";
-        }
-    }, [mobileOpen]);
+        if (searchOpen) searchRef.current?.focus();
+    }, [searchOpen]);
+
+    function doSearch(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        router.push(
+            query.trim()
+                ? `/products?q=${encodeURIComponent(query.trim())}`
+                : "/products",
+        );
+        setSearchOpen(false);
+        setMenuOpen(false);
+    }
+
+    const navLink = (label: string, href: string, mobile = false) => (
+        <Link
+            key={href}
+            href={href}
+            onClick={() => setMenuOpen(false)}
+            aria-current={
+                pathname === href ||
+                (href !== "/" && pathname.startsWith(href + "/"))
+                    ? "page"
+                    : undefined
+            }
+            className={`${mobile ? "flex items-center justify-between rounded-2xl px-4 py-4 text-base" : "px-3 py-2.5 text-sm"} font-semibold transition-colors rounded-xl ${pathname === href || (href !== "/" && pathname.startsWith(href + "/")) ? "bg-[#e3f5f8] text-[#086c87]" : "text-slate-700 hover:text-[#086c87] hover:bg-[#eef9fa]"}`}
+        >
+            {label}
+            {mobile && <ArrowRight size={17} aria-hidden />}
+        </Link>
+    );
 
     return (
-        <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-slate-100 mt-1">
-            <div className={containerClass}>
-                <div className="relative">
-                    {/* ================= DESKTOP HEADER ================= */}
-                    <div className="hidden md:flex items-center justify-between gap-6 py-2">
-                        {/* LEFT */}
-                        <div className="flex items-center gap-4">
-                            <Link href="/" className="flex items-center">
-                                <div className="rounded-md p-1" style={{ background: ACCENT_LIGHT }}>
-                                    <Image src="/logo.png" alt="WeCraftMemories" width={64} height={38} style={{ height: "auto" }} priority />
-                                </div>
-                            </Link>
-
-                            <nav className="flex items-center gap-6">
-                                <Link href="/" className="flex items-center gap-1 text-sm font-medium">
-                                    <House size={14} /> Home
-                                </Link>
-                                <Link href="/products" className="flex items-center gap-1 text-sm font-medium">
-                                    <Store size={14} /> Shop
-                                </Link>
-                                <Link href="/contact" className="flex items-center gap-1 text-sm font-medium">
-                                    <Headset size={14} /> Contact
-                                </Link>
-                            </nav>
-                        </div>
-
-                        {/* CENTER SEARCH */}
-                        <div className="flex items-center bg-slate-100 rounded-full px-4 py-2 gap-2 flex-1 max-w-xl">
-                            <Search size={14} className="text-slate-600" />
-                            <input
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                onKeyDown={onHeaderKeyDown}
-                                placeholder="Search products..."
-                                className="bg-transparent outline-none text-sm flex-1"
+        <>
+            <div className="wcm-announcement text-white text-center text-[11px] sm:text-xs tracking-wide px-3 py-2.5">
+                <span className="text-[#ffcb35]" aria-hidden="true">
+                    ✦
+                </span>{" "}
+                Handmade with love <span className="mx-2 opacity-60">•</span>{" "}
+                Gifts as unique as your memories{" "}
+                <span className="text-[#ffcb35]" aria-hidden="true">
+                    ✦
+                </span>
+            </div>
+            <header className="wcm-header sticky top-0 z-50 border-b border-[#e0edf0] bg-white/95 backdrop-blur-xl">
+                <div className={containerClass}>
+                    <div className="flex min-h-[68px] lg:min-h-[82px] items-center gap-2 sm:gap-5">
+                        <button
+                            ref={menuButtonRef}
+                            type="button"
+                            className="site-icon-button lg:hidden"
+                            aria-label="Open menu"
+                            aria-expanded={menuOpen}
+                            aria-controls="mobile-store-menu"
+                            onClick={() => setMenuOpen(true)}
+                        >
+                            <Menu size={23} />
+                        </button>
+                        <Link
+                            href="/"
+                            className="shrink-0 flex items-center gap-2 sm:gap-3 group"
+                            aria-label="We Craft Memories, home"
+                        >
+                            <Image
+                                src="/logo.png"
+                                alt="We Craft Memories"
+                                width={170}
+                                height={87}
+                                className="h-auto max-h-[70px] w-[88px] min-[350px]:w-[100px] min-[390px]:w-[122px] sm:w-[145px] lg:w-[165px] object-contain"
+                                priority
                             />
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => doHeaderSearch(query)}
-                                    className="px-3 py-1 text-sm rounded-md bg-white border border-slate-200 hover:bg-slate-200 transition"
-                                >
-                                    Search
-                                </button>
-
-                                {query.trim().length > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            setQuery("")
-                                            router.push("/products")
-                                        }}
-                                        className="px-3 py-1 text-sm rounded-md bg-white border border-slate-200 hover:bg-slate-200 transition"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
+                        </Link>
+                        <nav
+                            aria-label="Main navigation"
+                            className="hidden lg:flex items-center gap-1 ml-4"
+                        >
+                            {links.map((link) =>
+                                navLink(link.label, link.href),
+                            )}
+                        </nav>
+                        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+                            <button
+                                className="site-icon-button"
+                                aria-label="Search products"
+                                aria-expanded={searchOpen}
+                                aria-controls="site-search-panel"
+                                onClick={() => setSearchOpen((v) => !v)}
+                                type="button"
+                            >
+                                <Search size={21} />
+                            </button>
+                            <div className="hidden xl:block px-2">
+                                <DeliveryPincodeInput />
                             </div>
-                        </div>
-
-                        {/* RIGHT */}
-                        <div className="flex items-center gap-3">
-                            {mounted && <DeliveryPincodeInput />}
-
-                            <Link href="/cart" className="relative">
-                                <ShoppingCart size={18} />
-                                <span
-                                    className="absolute -top-2 -right-2 min-w-[18px] h-[18px] text-xs bg-amber-400 rounded-full flex items-center justify-center"
-                                    style={{ visibility: cartCount > 0 ? "visible" : "hidden" }}
-                                >
-                                    {cartCount}
-                                </span>
+                            <Link
+                                href="/cart"
+                                aria-label={`Shopping cart, ${cartCount} items`}
+                                className="site-icon-button relative"
+                            >
+                                <ShoppingBag size={22} />
+                                {ready && cartCount > 0 && (
+                                    <span className="absolute -right-1 -top-1 min-w-5 h-5 px-1 rounded-full bg-[#ce3b49] text-white text-[10px] font-bold grid place-items-center">
+                                        {cartCount > 99 ? "99+" : cartCount}
+                                    </span>
+                                )}
                             </Link>
-
-                            {mounted && !localAuthed ? (
-                                <>
-                                    <Link href="/login">Login</Link>
-                                    <Link
-                                        href="/register"
-                                        className="px-3 py-1 rounded-md text-white"
-                                        style={{ background: ACCENT }}
-                                    >
-                                        Register
-                                    </Link>
-                                </>
-                            ) : mounted ? (
-                                <div className="relative">
-                                    <button
-                                        ref={accountTriggerRef}
-                                        onClick={() => setAccountOpen((v) => !v)}
-                                        className="flex items-center gap-1 text-sm font-medium ml-2"
-                                    >
-                                        <UserIcon size={16} />
-                                        Account
-                                        <ChevronDown size={14} />
-                                    </button>
-
-                                    <AnimatePresence>
-                                        {accountOpen && (
-                                            <motion.div
-                                                ref={accountPanelRef}
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: 6 }}
-                                                className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border z-50"
-                                            >
-                                                <Link
-                                                    href="/profile"
-                                                    onClick={() => setAccountOpen(false)}
-                                                    className="block px-4 py-2 text-sm hover:bg-slate-100 rounded-t-xl"
-                                                >
-                                                    Profile
-                                                </Link>
-
-                                                <button
-                                                    onClick={handleLogout}
-                                                    className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-slate-100 rounded-b-xl"
-                                                >
-                                                    Logout
-                                                </button>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    {/* ================= MOBILE HEADER ================= */}
-                    <div className="md:hidden flex flex-col gap-3 py-2">
-                        {/* ROW 1 */}
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => setMobileOpen(true)}>
-                                    <Menu size={20} />
-                                </button>
-
-                                <Link href="/" className="flex items-center">
-                                    <div className="relative w-[110px] h-[40px] sm:w-[120px] sm:h-[44px]">
-                                        <Image
-                                            src="/logo.png"
-                                            alt="WeCraftMemories"
-                                            fill
-                                            priority
-                                            className="object-contain"
-                                        />
-                                    </div>
-                                </Link>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <Link href="/cart" className="relative mr-2">
-                                    <ShoppingCart size={18} />
-
-                                    {mounted && cartCount > 0 && (
-                                        <span className="absolute -top-2 -right-2 min-w-[16px] h-[16px] text-[10px] bg-amber-400 rounded-full flex items-center justify-center font-semibold">
-                                            {cartCount}
-                                        </span>
-                                    )}
-                                </Link>
-                                {mounted && !localAuthed ? (
-                                    <div className="flex items-center gap-2">
-                                        <Link
-                                            href="/login"
-                                            className="text-xs px-2 py-1 border rounded-md"
-                                        >
-                                            Login
-                                        </Link>
-
-                                        <Link
-                                            href="/register"
-                                            className="text-xs px-3 py-1.5 rounded-md text-white font-medium"
-                                            style={{ background: ACCENT }}
-                                        >
-                                            Register
-                                        </Link>
-                                    </div>
-                                ) : mounted ? (
-                                    <button onClick={() => router.push("/profile")}>
-                                        <UserIcon size={18} />
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
-
-                        {/* ROW 2 – SEARCH */}
-                        <div className="mt-2">
-                            <div className="flex items-center bg-slate-100 rounded-full px-3 py-2 gap-2">
-                                <Search size={16} />
-                                <input
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    onKeyDown={onHeaderKeyDown}
-                                    placeholder="Search products..."
-                                    className="bg-transparent outline-none text-sm w-full"
-                                />
-
+                            <Link
+                                href={
+                                    ready && isAuthenticated
+                                        ? "/profile"
+                                        : "/login"
+                                }
+                                className="site-icon-button"
+                                aria-label={
+                                    ready && isAuthenticated
+                                        ? "My account"
+                                        : "Sign in"
+                                }
+                            >
+                                <UserRound size={21} />
+                            </Link>
+                            {ready && isAuthenticated && (
                                 <button
-                                    onClick={() => doHeaderSearch(query)}
-                                    className="px-2 py-1 text-xs rounded bg-white border border-slate-200"
+                                    className="hidden md:inline-flex site-text-link text-xs"
+                                    type="button"
+                                    onClick={() => void logout("/")}
                                 >
-                                    Search
+                                    Sign out
                                 </button>
-
-                                {query.trim().length > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            setQuery("")
-                                            router.push("/products")
-                                        }}
-                                        className="px-2 py-1 text-xs rounded bg-white border border-slate-200"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
-
-            </div>
-
-            {/* ================= MOBILE DRAWER (PORTAL) ================= */}
-            {portalReady &&
-                createPortal(
-                    <AnimatePresence>
-                        {mobileOpen && (
-                            <>
-                                {/* BACKDROP */}
-                                <motion.div
-                                    className="fixed inset-0 bg-black/50 z-[1000]"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    onClick={() => setMobileOpen(false)}
+                <AnimatePresence initial={false}>
+                    {searchOpen && (
+                        <motion.div
+                            id="site-search-panel"
+                            initial={
+                                reduceMotion ? false : { height: 0, opacity: 0 }
+                            }
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden border-t border-slate-100 bg-white"
+                        >
+                            <form
+                                className={`${containerClass} flex items-center gap-3 py-3`}
+                                onSubmit={doSearch}
+                                role="search"
+                            >
+                                <label className="sr-only" htmlFor={searchId}>
+                                    Search products
+                                </label>
+                                <Search
+                                    className="text-slate-400 shrink-0"
+                                    size={19}
                                 />
-
-                                {/* DRAWER */}
-                                <motion.aside
-                                    initial={{ x: "-100%" }}
-                                    animate={{ x: 0 }}
-                                    exit={{ x: "-100%" }}
-                                    transition={{ type: "spring", stiffness: 260, damping: 28 }}
-                                    className="fixed top-0 left-0 h-full w-[85%] max-w-sm bg-white z-[1001] flex flex-col"
+                                <input
+                                    id={searchId}
+                                    ref={searchRef}
+                                    type="search"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    placeholder="Try sunflower, crochet, gifts…"
+                                    className="min-w-0 grow py-2.5 outline-none text-sm"
+                                />
+                                <button
+                                    type="submit"
+                                    className="site-button-primary !min-h-10 !px-5"
                                 >
-                                    {/* HEADER */}
-                                    <div className="h-14 px-4 flex items-center justify-between border-b">
-                                        <span className="text-lg font-semibold">Menu</span>
-                                        <button onClick={() => setMobileOpen(false)}>
-                                            <X size={20} />
-                                        </button>
-                                    </div>
-
-                                    {/* SEARCH */}
-                                    <div className="px-4 py-3">
-                                        <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2">
-                                            <Search size={16} />
-                                            <input
-                                                value={query}
-                                                onChange={(e) => setQuery(e.target.value)}
-                                                onKeyDown={(e) => e.key === "Enter" && doHeaderSearch(query)}
-                                                placeholder="Search products"
-                                                className="bg-transparent outline-none w-full text-sm"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* NAV */}
-                                    <nav className="px-4 space-y-1">
-                                        <Link
-                                            href="/"
-                                            onClick={() => setMobileOpen(false)}
-                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
-                                        >
-                                            Home
-                                        </Link>
-                                        <Link
-                                            href="/products"
-                                            onClick={() => setMobileOpen(false)}
-                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
-                                        >
-                                            Shop
-                                        </Link>
-                                        <Link
-                                            href="/contact"
-                                            onClick={() => setMobileOpen(false)}
-                                            className="block px-3 py-3 rounded-xl hover:bg-slate-100"
-                                        >
-                                            Contact
-                                        </Link>
-                                    </nav>
-
-                                    {/* PINCODE */}
-                                    <div className="px-4 py-4 border-t">
-                                        <div className="text-sm font-medium mb-2">Delivery Pincode</div>
-                                        {mounted ? <DeliveryPincodeInput /> : <div className="h-10 bg-slate-100 rounded" />}
-                                    </div>
-
-                                    {/* FOOTER */}
-                                    <div className="mt-auto px-4 py-4 border-t">
-                                        {!authReady ? (
-                                            <div className="text-center py-3 bg-slate-100 rounded-xl">
-                                                Checking…
-                                            </div>
-                                        ) : !localAuthed ? (
-                                            <Link
-                                                href="/login"
-                                                onClick={() => setMobileOpen(false)}
-                                                className="block text-center py-3 rounded-xl text-white font-semibold"
-                                                style={{ background: ACCENT }}
-                                            >
-                                                Login / Register
-                                            </Link>
-                                        ) : (
-                                            <button
-                                                onClick={async () => {
-                                                    await logout("/");
-                                                }}
-                                                className="w-full py-3 rounded-xl bg-rose-600 text-white font-semibold"
-                                            >
-                                                Logout
-                                            </button>
-                                        )}
-                                    </div>
-                                </motion.aside>
-                            </>
-                        )}
-                    </AnimatePresence>,
-                    document.body
+                                    Search
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchOpen(false)}
+                                    aria-label="Close search"
+                                    className="site-icon-button"
+                                >
+                                    <X size={19} />
+                                </button>
+                            </form>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </header>
+            <AnimatePresence>
+                {menuOpen && (
+                    <div
+                        className="fixed inset-0 z-[100] lg:hidden"
+                        id="mobile-store-menu"
+                    >
+                        <motion.button
+                            type="button"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-[#0c3241]/55"
+                            aria-label="Close menu"
+                            onClick={() => setMenuOpen(false)}
+                        />
+                        <motion.div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label="Navigation menu"
+                            initial={reduceMotion ? false : { x: "-100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "-100%" }}
+                            transition={{ type: "tween", duration: 0.23 }}
+                            className="relative h-full w-[min(88vw,360px)] bg-white shadow-2xl flex flex-col overflow-y-auto"
+                        >
+                            <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                                <span className="font-bold text-xl text-[#065975]">
+                                    Explore
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setMenuOpen(false)}
+                                    aria-label="Close menu"
+                                    className="site-icon-button"
+                                >
+                                    <X size={23} />
+                                </button>
+                            </div>
+                            <nav
+                                aria-label="Mobile navigation"
+                                className="p-3 space-y-1"
+                            >
+                                {links.map((link) =>
+                                    navLink(link.label, link.href, true),
+                                )}
+                            </nav>
+                            <div className="mx-4 border-t border-slate-100 pt-5 space-y-3">
+                                <p className="text-xs uppercase tracking-wider font-bold text-slate-400">
+                                    Your account
+                                </p>
+                                <Link
+                                    href={
+                                        isAuthenticated ? "/profile" : "/login"
+                                    }
+                                    onClick={() => setMenuOpen(false)}
+                                    className="flex gap-3 items-center text-sm font-semibold py-2 text-[#065975]"
+                                >
+                                    <UserRound size={18} />
+                                    {isAuthenticated
+                                        ? "My account & orders"
+                                        : "Sign in or create an account"}
+                                </Link>
+                                <Link
+                                    href="/cart"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="flex gap-3 items-center text-sm font-semibold py-2 text-[#065975]"
+                                >
+                                    <ShoppingBag size={18} />
+                                    Shopping bag ({cartCount})
+                                </Link>
+                                {isAuthenticated && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMenuOpen(false);
+                                            void logout("/");
+                                        }}
+                                        className="text-sm text-rose-600 py-2 font-medium"
+                                    >
+                                        Sign out
+                                    </button>
+                                )}
+                            </div>
+                            <div className="mx-4 mt-auto pt-8 pb-6">
+                                <p className="text-xs text-slate-500 mb-3">
+                                    Check delivery to your location
+                                </p>
+                                <DeliveryPincodeInput />
+                            </div>
+                        </motion.div>
+                    </div>
                 )}
-        </header>
+            </AnimatePresence>
+        </>
     );
 }

@@ -2,11 +2,20 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
-import { Plus, CreditCard, Wallet } from "lucide-react";
+import Link from "next/link";
+import {
+    Plus,
+    CreditCard,
+    Wallet,
+    TicketPercent,
+    LoaderCircle,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // adjust this import to match where you placed AddressModal
 import AddressModal, { Address } from "./AddressModal";
+import { cartHamperLines } from "@/lib/hampers";
+import { getStoredAccessToken } from "@/lib/auth";
 
 const TOKEN_KEY = "accessToken";
 
@@ -17,6 +26,8 @@ export type CartItem = {
     price: number;
     qty: number;
     img?: string;
+    type?: "SELL" | "HAMPER";
+    available?: boolean;
 };
 
 type Props = {
@@ -29,23 +40,41 @@ function isValidIndianPincode(pin: string) {
     return /^[1-9][0-9]{5}$/.test(pin);
 }
 
-export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
+export default function CheckoutPanel({
+    initialAddresses,
+    initialCart,
+}: Props) {
     const router = useRouter();
     const placeOrderLockRef = useRef(false);
     const isFirstCartLoadRef = useRef(true);
-    const couponInitRef = useRef(false);
+    const couponRequestRef = useRef(0);
 
     const [checkingAuth, setCheckingAuth] = useState(true);
 
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartLoaded, setCartLoaded] = useState<boolean>(false);
-    const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
+    // Compute before coupon effects: dependencies are evaluated during render.
+    const subtotal = useMemo(
+        () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
+        [cart],
+    );
+    const couponCartKey = useMemo(
+        () => cart.map((item) => `${item.type || "SELL"}:${item.id}:${item.qty}:${item.price}`).join("|"),
+        [cart],
+    );
+    const couponOverrideRef = useRef(false);
+    const autoCouponAttemptRef = useRef("");
+    const [selectedAddressId, setSelectedAddressId] = useState<
+        string | number | null
+    >(null);
     const [showModal, setShowModal] = useState(false);
 
     // NEW: billing state
     const [billingSame, setBillingSame] = useState<boolean>(true);
-    const [billingAddressId, setBillingAddressId] = useState<string | number | null>(null);
+    const [billingAddressId, setBillingAddressId] = useState<
+        string | number | null
+    >(null);
 
     const [creating, setCreating] = useState(false);
     const [paymentInProgress, setPaymentInProgress] = useState(false);
@@ -58,8 +87,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const [couponError, setCouponError] = useState<string | null>(null);
     const [discountAmount, setDiscountAmount] = useState(0);
-    const [discountedSubtotal, setDiscountedSubtotal] = useState<number | null>(null);
+    const [couponFreeShipping, setCouponFreeShipping] = useState(false);
+    const [discountedSubtotal, setDiscountedSubtotal] = useState<number | null>(
+        null,
+    );
     const [couponLoading, setCouponLoading] = useState(false);
+    const [couponSuggestionsLoading, setCouponSuggestionsLoading] =
+        useState(false);
+    const [couponCodeInput, setCouponCodeInput] = useState("");
+    const [couponReady, setCouponReady] = useState(false);
 
     const blankAddress: Address = {
         id: `local_${Date.now()}`,
@@ -80,11 +116,23 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const [loadingAddresses, setLoadingAddresses] = useState(false);
 
-    type ServiceEntry = { checking: boolean; prepaid: boolean | null; error?: string };
-    const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>({});
+    type ServiceEntry = {
+        checking: boolean;
+        prepaid: boolean | null;
+        error?: string;
+    };
+    const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>(
+        {},
+    );
 
-    type DeliveryEntry = { checking: boolean; value: number | null; error?: string };
-    const [deliveryMap, setDeliveryMap] = useState<Record<string, DeliveryEntry>>({});
+    type DeliveryEntry = {
+        checking: boolean;
+        value: number | null;
+        error?: string;
+    };
+    const [deliveryMap, setDeliveryMap] = useState<
+        Record<string, DeliveryEntry>
+    >({});
 
     const mountedRef = useRef(true);
 
@@ -98,9 +146,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     useEffect(() => {
         try {
             if (typeof window === "undefined") return;
-            const serverOnly = addresses.filter(a => a.serverId);
+            const serverOnly = addresses.filter((a) => a.serverId);
             localStorage.setItem("wcm_addresses", JSON.stringify(serverOnly));
-        } catch { }
+        } catch {}
     }, [addresses]);
 
     const prevCartRef = useRef(cart);
@@ -119,87 +167,164 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         const changed =
             prev.length !== cart.length ||
-            prev.some((p, i) =>
-                p.id !== cart[i]?.id ||
-                p.qty !== cart[i]?.qty ||
-                p.price !== cart[i]?.price
+            prev.some(
+                (p, i) =>
+                    p.id !== cart[i]?.id ||
+                    p.qty !== cart[i]?.qty ||
+                    p.price !== cart[i]?.price,
             );
 
-        if (changed && appliedCoupon) {
-            setAppliedCoupon(null);
-            setDiscountAmount(0);
-            setDiscountedSubtotal(null);
-            setIsCouponLocked(false);
-
-            try {
-                localStorage.removeItem("wcm_coupon");
-            } catch { }
+        if (changed) {
+            // A changed cart needs fresh suggestions and validation.
+            autoCouponAttemptRef.current = "";
+            couponOverrideRef.current = false;
+            if (appliedCoupon) {
+                removeCoupon(false);
+                setCouponError(
+                    "Your cart changed. We’ll check the available offers again.",
+                );
+            }
         }
 
         prevCartRef.current = cart;
     }, [cart, cartLoaded]);
 
-    /** Save coupon to localStorage */
+    // Do not erase a saved coupon before the cart is loaded and it has been
+    // revalidated against the live cart. Client-side savings are display only;
+    // the order API still calculates the final payable amount.
     useEffect(() => {
+        if (!cartLoaded) return;
+        let active = true;
+        let storedCode = "";
         try {
-            if (typeof window === "undefined") return;
+            const raw = localStorage.getItem("wcm_coupon");
+            storedCode = raw
+                ? String(JSON.parse(raw)?.appliedCoupon || "")
+                : "";
+        } catch {
+            /* invalid/old storage */
+        }
 
-            // skip first run (initial mount)
-            if (!couponInitRef.current) {
-                couponInitRef.current = true;
-                return;
-            }
+        if (!storedCode) {
+            setCouponReady(true);
+            return;
+        }
 
-            const data = {
-                appliedCoupon,
-                discountAmount,
-                isCouponLocked,
-            };
+        const requestId = ++couponRequestRef.current;
+        setCouponLoading(true);
+        validateCoupon(storedCode)
+            .then((res) => {
+                if (!active || couponRequestRef.current !== requestId) return;
+                if (res.valid) {
+                    const savings = Math.min(
+                        subtotal,
+                        Math.max(0, Number(res.discountAmount) || 0),
+                    );
+                    setAppliedCoupon(storedCode);
+                    setCouponCodeInput("");
+                    setDiscountAmount(savings);
+                    setCouponFreeShipping(Boolean(res.isFreeShipping));
+                    setDiscountedSubtotal(Math.max(0, subtotal - savings));
+                    setIsCouponLocked(true);
+                } else {
+                    setAppliedCoupon(null);
+                    setDiscountAmount(0);
+                    setCouponFreeShipping(false);
+                    setDiscountedSubtotal(null);
+                    setIsCouponLocked(false);
+                    setCouponError(
+                        res.message ||
+                            "This offer is no longer valid for your cart.",
+                    );
+                }
+            })
+            .finally(() => {
+                if (!active || couponRequestRef.current !== requestId) return;
+                setCouponReady(true);
+                setCouponLoading(false);
+            });
 
+        return () => {
+            active = false;
+        };
+    }, [cartLoaded]);
+
+    useEffect(() => {
+        if (!couponReady) return;
+        try {
             if (appliedCoupon) {
-                localStorage.setItem("wcm_coupon", JSON.stringify(data));
+                localStorage.setItem(
+                    "wcm_coupon",
+                    JSON.stringify({
+                        appliedCoupon,
+                        discountAmount,
+                        isCouponLocked,
+                        subtotal,
+                        couponFreeShipping,
+                    }),
+                );
             } else {
                 localStorage.removeItem("wcm_coupon");
             }
-        } catch { }
-    }, [appliedCoupon, discountAmount, isCouponLocked]);
+        } catch {
+            /* storage unavailable */
+        }
+    }, [
+        couponReady,
+        appliedCoupon,
+        discountAmount,
+        isCouponLocked,
+        subtotal,
+        couponFreeShipping,
+    ]);
 
-    /** Restore coupon on page load */
-    useEffect(() => {
-        if (!cartLoaded) return;
-
+    function removeCoupon(manual = true) {
+        if (manual) couponOverrideRef.current = true;
+        ++couponRequestRef.current;
+        setAppliedCoupon(null);
+        setDiscountAmount(0);
+        setCouponFreeShipping(false);
+        setDiscountedSubtotal(null);
+        setIsCouponLocked(false);
+        setCouponError(null);
+        setCouponCodeInput("");
+        setCouponLoading(false);
         try {
-            if (typeof window === "undefined") return;
+            localStorage.removeItem("wcm_coupon");
+        } catch {}
+    }
 
-            const raw = localStorage.getItem("wcm_coupon");
-            if (!raw) return;
-
-            const parsed = JSON.parse(raw);
-
-            if (parsed?.appliedCoupon) {
-                const code = parsed.appliedCoupon;
-
-                setCouponLoading(true);
-
-                validateCoupon(code)
-                    .then((res) => {
-                        if (!res.valid) {
-                            setAppliedCoupon(null);
-                            setDiscountAmount(0);
-                            setIsCouponLocked(false);
-                            localStorage.removeItem("wcm_coupon");
-                        } else {
-                            setAppliedCoupon(code);
-                            setDiscountAmount(res.discountAmount || 0);
-                            setIsCouponLocked(true);
-                        }
-                    })
-                    .finally(() => {
-                        setCouponLoading(false);
-                    });
-            }
-        } catch { }
-    }, [cartLoaded]);
+    async function applyCouponCode(code: string, automatic = false) {
+        if (!automatic) couponOverrideRef.current = true;
+        const normalized = code.trim().toUpperCase();
+        if (!normalized) {
+            setCouponError("Enter a discount code to apply.");
+            return;
+        }
+        if (!cartLoaded || cart.length === 0) return;
+        const requestId = ++couponRequestRef.current;
+        setCouponError(null);
+        setCouponLoading(true);
+        const res = await validateCoupon(normalized);
+        if (couponRequestRef.current !== requestId) return;
+        setCouponLoading(false);
+        if (!res.valid) {
+            setCouponError(
+                res.message || "This discount code is not valid for your cart.",
+            );
+            return;
+        }
+        const savings = Math.min(
+            subtotal,
+            Math.max(0, Number(res.discountAmount) || 0),
+        );
+        setAppliedCoupon(normalized);
+        setDiscountAmount(savings);
+        setCouponFreeShipping(Boolean(res.isFreeShipping));
+        setDiscountedSubtotal(Math.max(0, subtotal - savings));
+        setIsCouponLocked(true);
+        setCouponCodeInput("");
+    }
 
     function getStoredCustomerId(): string | null {
         if (typeof window === "undefined") return null;
@@ -216,7 +341,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     // --- API helpers ---
     function getApiBase(): string {
         if (typeof window === "undefined") return "";
-        return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
+        return process.env.NEXT_PUBLIC_API_BASE
+            ? String(process.env.NEXT_PUBLIC_API_BASE)
+            : "";
     }
 
     function buildUrl(path: string) {
@@ -226,12 +353,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     function getAuthToken(): string | null {
-        try {
-            if (typeof window === "undefined") return null;
-            return localStorage.getItem(TOKEN_KEY);
-        } catch {
-            return null;
-        }
+        return getStoredAccessToken();
     }
 
     function handleUnauthorized() {
@@ -258,7 +380,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             const url = buildUrl("/coupon/validate");
 
             const headers: Record<string, string> = {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             };
 
             const token = getAuthToken();
@@ -270,27 +392,45 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 body: JSON.stringify({
                     code,
                     customerId,
-                    cartItems: cart.map(it => ({
-                        productId: it.id,
-                        qty: it.qty,
-                        price: it.price
+                    // Include hampers and use `quantity` as required by the
+                    // coupon engine's minimum-quantity condition.
+                    cartItems: cart.map((it) => ({
+                        ...(it.type === "HAMPER"
+                            ? { hamperId: it.id }
+                            : { productId: it.id }),
+                        quantity: it.qty,
+                        qty: it.qty, // compatibility with older API consumers
+                        price: it.price,
                     })),
-                    subtotal
-                })
+                    subtotal,
+                }),
             });
 
             const json = await safeJson(res);
 
-            if (!res.ok || !json?.valid) {
-                return { valid: false, message: json?.message || "Invalid coupon" };
+            const payload =
+                json?.data && typeof json.data === "object" ? json.data : json;
+            if (!res.ok || payload?.valid !== true) {
+                return {
+                    valid: false,
+                    message:
+                        payload?.message ||
+                        payload?.error?.message ||
+                        json?.message ||
+                        "Invalid coupon",
+                };
             }
 
             return {
                 valid: true,
-                discountAmount: json.discountAmount,
-                finalTotal: json.finalTotal
+                discountAmount: payload.discountAmount,
+                finalTotal: payload.finalTotal,
+                isFreeShipping: Boolean(
+                    payload.isFreeShipping ||
+                    payload.coupon?.isFreeShipping ||
+                    payload.coupon?.type === "FREE_SHIPPING",
+                ),
             };
-
         } catch (err: any) {
             return { valid: false, message: err.message };
         }
@@ -298,7 +438,19 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     async function fetchCouponSuggestions() {
         try {
-            const url = buildUrl(`/coupon/suggestions?subtotal=${subtotal}`);
+            const params = new URLSearchParams({
+                subtotal: String(subtotal),
+                cartItems: JSON.stringify(
+                    cart.map((it) => ({
+                        ...(it.type === "HAMPER"
+                            ? { hamperId: it.id }
+                            : { productId: it.id }),
+                        quantity: it.qty,
+                        price: it.price,
+                    })),
+                ),
+            });
+            const url = buildUrl(`/coupon/suggestions?${params.toString()}`);
 
             const headers: Record<string, string> = {};
             const token = getAuthToken();
@@ -306,14 +458,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             const res = await fetch(url, {
                 method: "GET",
-                headers
+                headers,
             });
 
             const json = await safeJson(res);
 
-            if (!res.ok || !json?.success) return null;
+            if (!res.ok || json?.success === false || json?.ack === "failure")
+                return null;
 
-            return json;
+            return json?.data && typeof json.data === "object"
+                ? json.data
+                : json;
         } catch (err) {
             console.error("Coupon suggestion error", err);
             return null;
@@ -338,7 +493,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     async function apiGetCart(customerId: string): Promise<CartItem[]> {
-        const url = buildUrl(`/cart?customerId=${encodeURIComponent(customerId)}`);
+        const url = buildUrl(
+            `/cart?customerId=${encodeURIComponent(customerId)}`,
+        );
         const headers = new Headers();
         const token = getAuthToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -350,11 +507,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
         if (!res.ok) {
             const payload = await safeJson(res);
-            throw new Error(payload?.message || payload?.error || `Failed to fetch cart (${res.status})`);
+            throw new Error(
+                payload?.message ||
+                    payload?.error ||
+                    `Failed to fetch cart (${res.status})`,
+            );
         }
         const json = (await safeJson(res)) || {};
 
-        const cartData = Array.isArray((json as any).cartData) ? (json as any).cartData : [];
+        const cartData = Array.isArray((json as any).cartData)
+            ? (json as any).cartData
+            : [];
         if (cartData.length === 0) return [];
 
         const entry = cartData[0];
@@ -362,25 +525,48 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         const mapped: CartItem[] = sellItems.map((si: any) => {
             const product = si.product || {};
             const priceObj = product.price || {};
-            const price = priceObj.discountedPrice ?? priceObj.actualPrice ?? priceObj.price ?? 0;
+            const price =
+                priceObj.discountedPrice ??
+                priceObj.actualPrice ??
+                priceObj.price ??
+                0;
             const rawImg = product.productImage ?? product.productImg ?? "";
             const img = normalizeImageUrl(rawImg);
 
             return {
-                id: String(product.productId ?? si.productId ?? si.product_id ?? si._id ?? ""),
-                title: String(product.productName ?? product.name ?? "Untitled"),
+                id: String(
+                    product.productId ??
+                        si.productId ??
+                        si.product_id ??
+                        si._id ??
+                        "",
+                ),
+                title: String(
+                    product.productName ?? product.name ?? "Untitled",
+                ),
                 price: Number(price),
                 qty: Number(si.quantity ?? si.qty ?? 1),
                 img: img ?? undefined,
             };
         });
 
-        return mapped;
+        const hamperMapped: CartItem[] = cartHamperLines(entry).map((line) => ({
+            id: line.hamperId,
+            title: line.hamper?.hamperName || "Unavailable gift hamper",
+            price: Number(line.hamper?.price || 0),
+            qty: line.quantity,
+            img: line.hamper?.hamperImage || undefined,
+            type: "HAMPER",
+            available: line.isAvailable === true && Boolean(line.hamper),
+        }));
+        return [...mapped, ...hamperMapped];
     }
 
     function mapServerAddressToLocal(serverRec: any): Address {
         const serverId = serverRec._id ? String(serverRec._id) : null;
-        const localId = serverId ? `srv_${serverId}` : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
+        const localId = serverId
+            ? `srv_${serverId}`
+            : `local_${Date.now() + Math.floor(Math.random() * 1000)}`;
 
         return {
             id: localId,
@@ -401,7 +587,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     async function apiFetchAddresses(customerId: string): Promise<any[]> {
-        const url = buildUrl(`/customer/${encodeURIComponent(customerId)}/address`);
+        const url = buildUrl(
+            `/customer/${encodeURIComponent(customerId)}/address`,
+        );
         const headers = new Headers();
         const token = getAuthToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -413,10 +601,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
         if (!res.ok) {
             const payload = await safeJson(res);
-            throw new Error(payload?.message || payload?.error || `Failed to fetch addresses (${res.status})`);
+            throw new Error(
+                payload?.message ||
+                    payload?.error ||
+                    `Failed to fetch addresses (${res.status})`,
+            );
         }
         const json = (await safeJson(res)) || {};
-        const addressData = Array.isArray((json as any).addressData) ? (json as any).addressData : [];
+        const addressData = Array.isArray((json as any).addressData)
+            ? (json as any).addressData
+            : [];
         return addressData;
     }
 
@@ -437,7 +631,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             localStorage.setItem("wcm_addresses", JSON.stringify(mapped));
 
             // select latest/default
-            const def = mapped.find(a => a.isDefault) || mapped[0];
+            const def = mapped.find((a) => a.isDefault) || mapped[0];
             if (def) setSelectedAddressId(def.id);
         } catch (err) {
             console.warn("Failed to refresh addresses", err);
@@ -446,8 +640,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }
     }
 
-    async function apiCreateAddress(customerId: string, addr: Address): Promise<any> {
-        const url = buildUrl(`/customer/${encodeURIComponent(customerId)}/address`);
+    async function apiCreateAddress(
+        customerId: string,
+        addr: Address,
+    ): Promise<any> {
+        const url = buildUrl(
+            `/customer/${encodeURIComponent(customerId)}/address`,
+        );
         const headers = new Headers({ "Content-Type": "application/json" });
         const token = getAuthToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -467,7 +666,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             isDefault: !!addr.isDefault,
         };
 
-        const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
+        const res = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+        });
         if (res.status === 401) {
             handleUnauthorized();
             throw new Error("Unauthorized");
@@ -477,9 +680,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             const msg =
                 typeof json?.error === "string"
                     ? json.error
-                    : json?.error?.message
-                    || json?.message
-                    || `Failed to create address (${res.status})`;
+                    : json?.error?.message ||
+                      json?.message ||
+                      `Failed to create address (${res.status})`;
 
             throw new Error(msg);
         }
@@ -487,12 +690,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     async function fetchPincodeServiceability(pincode: string) {
-        const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
+        const url = buildUrl(
+            `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`,
+        );
         try {
-            const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
+            const res = await fetch(url, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+            });
             if (!res.ok) {
                 const json = await safeJson(res);
-                return { ok: false, message: json?.error || json?.message || `HTTP ${res.status}` };
+                return {
+                    ok: false,
+                    message:
+                        json?.error || json?.message || `HTTP ${res.status}`,
+                };
             }
             const json = await safeJson(res);
             const data = json?.data ?? null;
@@ -508,29 +720,59 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (!key || !isValidIndianPincode(key)) return;
 
         const prev = serviceMap[key];
-        if (prev && prev.checking === false && typeof prev.prepaid === "boolean") return;
+        if (
+            prev &&
+            prev.checking === false &&
+            typeof prev.prepaid === "boolean"
+        )
+            return;
         if (prev && prev.checking === true) return;
 
-        setServiceMap((m) => ({ ...m, [key]: { checking: true, prepaid: null } }));
+        setServiceMap((m) => ({
+            ...m,
+            [key]: { checking: true, prepaid: null },
+        }));
         try {
             const result = await fetchPincodeServiceability(key);
             if (!mountedRef.current) return;
             if (result.ok) {
-                setServiceMap((m) => ({ ...m, [key]: { checking: false, prepaid: !!result.prepaid } }));
+                setServiceMap((m) => ({
+                    ...m,
+                    [key]: { checking: false, prepaid: !!result.prepaid },
+                }));
             } else {
-                setServiceMap((m) => ({ ...m, [key]: { checking: false, prepaid: null, error: result.message || "Service check failed" } }));
+                setServiceMap((m) => ({
+                    ...m,
+                    [key]: {
+                        checking: false,
+                        prepaid: null,
+                        error: result.message || "Service check failed",
+                    },
+                }));
             }
         } catch (err: any) {
             if (!mountedRef.current) return;
-            setServiceMap((m) => ({ ...m, [key]: { checking: false, prepaid: null, error: (err?.message ?? String(err)) } }));
+            setServiceMap((m) => ({
+                ...m,
+                [key]: {
+                    checking: false,
+                    prepaid: null,
+                    error: err?.message ?? String(err),
+                },
+            }));
         }
     }
 
-    async function apiFetchDeliveryCharge(pincode: string): Promise<{ ok: boolean; charge?: number; message?: string }> {
+    async function apiFetchDeliveryCharge(
+        pincode: string,
+    ): Promise<{ ok: boolean; charge?: number; message?: string }> {
         try {
-            const customerId = typeof window !== "undefined" ? getStoredCustomerId() : null;
+            const customerId =
+                typeof window !== "undefined" ? getStoredCustomerId() : null;
             const token = getAuthToken();
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
             if (token) headers["Authorization"] = `Bearer ${token}`;
 
             const path = `/logistic_partner/get_delivery_charge/${encodeURIComponent(pincode)}${customerId ? `?customerId=${encodeURIComponent(customerId)}` : ""}`;
@@ -543,7 +785,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             if (!res.ok) {
                 const payload = await safeJson(res);
-                const msg = payload?.message || payload?.error || `HTTP ${res.status}`;
+                const msg =
+                    payload?.message || payload?.error || `HTTP ${res.status}`;
                 return { ok: false, message: msg };
             }
 
@@ -553,10 +796,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 return { ok: true, charge };
             }
 
-            const alt = json?.data?.totalDeliveryCharge ?? json?.totalDeliveryCharge;
+            const alt =
+                json?.data?.totalDeliveryCharge ?? json?.totalDeliveryCharge;
             if (typeof alt === "number") return { ok: true, charge: alt };
 
-            return { ok: false, message: "Delivery charge not found in response" };
+            return {
+                ok: false,
+                message: "Delivery charge not found in response",
+            };
         } catch (err: any) {
             return { ok: false, message: err?.message ?? String(err) };
         }
@@ -567,28 +814,50 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (!key || !isValidIndianPincode(key)) return;
 
         const prev = deliveryMap[key];
-        if (prev && prev.checking === false && typeof prev.value === "number") return;
+        if (prev && prev.checking === false && typeof prev.value === "number")
+            return;
         if (prev && prev.checking === true) return;
 
-        setDeliveryMap((d) => ({ ...d, [key]: { checking: true, value: null } }));
+        setDeliveryMap((d) => ({
+            ...d,
+            [key]: { checking: true, value: null },
+        }));
         try {
             const res = await apiFetchDeliveryCharge(key);
             if (!mountedRef.current) return;
             if (res.ok) {
-                setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: res.charge ?? null } }));
+                setDeliveryMap((d) => ({
+                    ...d,
+                    [key]: { checking: false, value: res.charge ?? null },
+                }));
             } else {
-                setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: null, error: res.message || "Failed to fetch" } }));
+                setDeliveryMap((d) => ({
+                    ...d,
+                    [key]: {
+                        checking: false,
+                        value: null,
+                        error: res.message || "Failed to fetch",
+                    },
+                }));
             }
         } catch (err: any) {
             if (!mountedRef.current) return;
-            setDeliveryMap((d) => ({ ...d, [key]: { checking: false, value: null, error: err?.message ?? String(err) } }));
+            setDeliveryMap((d) => ({
+                ...d,
+                [key]: {
+                    checking: false,
+                    value: null,
+                    error: err?.message ?? String(err),
+                },
+            }));
         }
     }
 
     // ---------- RAZORPAY HELPERS ----------
     function loadRazorpayScript(): Promise<void> {
         return new Promise((resolve, reject) => {
-            if (typeof window === "undefined") return reject(new Error("window is undefined"));
+            if (typeof window === "undefined")
+                return reject(new Error("window is undefined"));
             if ((window as any).Razorpay) return resolve();
             const id = "razorpay-js";
             if (document.getElementById(id)) {
@@ -672,69 +941,133 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     };
 
                     const payloadWithOrder =
-                        orderId && String(orderId).trim() ? { ...basePayload, orderId: String(orderId).trim() } : basePayload;
+                        orderId && String(orderId).trim()
+                            ? {
+                                  ...basePayload,
+                                  orderId: String(orderId).trim(),
+                              }
+                            : basePayload;
 
-                    const headers: Record<string, string> = { "Content-Type": "application/json" };
+                    const headers: Record<string, string> = {
+                        "Content-Type": "application/json",
+                    };
                     const token = getAuthToken();
                     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-                    let res = await fetch(verifyUrl, { method: "POST", headers, body: JSON.stringify(payloadWithOrder) });
+                    let res = await fetch(verifyUrl, {
+                        method: "POST",
+                        headers,
+                        body: JSON.stringify(payloadWithOrder),
+                    });
                     let body = await safeJson(res);
 
                     // retry without orderId if server couldn't find it
                     if (!res.ok && payloadWithOrder.orderId) {
                         const msg = body?.message || body?.error || "";
-                        if (msg === "order_not_found" || msg === "order_not_found_from_notes") {
-                            console.warn("verify_payment returned order_not_found; retrying without orderId");
-                            res = await fetch(verifyUrl, { method: "POST", headers, body: JSON.stringify(basePayload) });
+                        if (
+                            msg === "order_not_found" ||
+                            msg === "order_not_found_from_notes"
+                        ) {
+                            console.warn(
+                                "verify_payment returned order_not_found; retrying without orderId",
+                            );
+                            res = await fetch(verifyUrl, {
+                                method: "POST",
+                                headers,
+                                body: JSON.stringify(basePayload),
+                            });
                             body = await safeJson(res);
                         }
                     }
 
                     if (res.ok) {
-                        if (body?.ack === "success" || body?.status === "success") {
+                        if (
+                            body?.ack === "success" ||
+                            body?.status === "success"
+                        ) {
                             // Prefer explicit numeric orderNumber field, otherwise try numeric orderId.
                             const numericOrderNumber =
-                                body?.orderNumber ?? (typeof body?.orderId === "number" || (/^\d+$/).test(String(body?.orderId)) ? body.orderId : null);
+                                body?.orderNumber ??
+                                (typeof body?.orderId === "number" ||
+                                /^\d+$/.test(String(body?.orderId))
+                                    ? body.orderId
+                                    : null);
 
                             // Prefer _id / object id, then fallback to payload's orderId (if it was objectId)
-                            const objectOrderId = body?._id && looksLikeObjectId(body._id)
-                                ? String(body._id)
-                                : (body?.orderId && looksLikeObjectId(body.orderId) ? String(body.orderId) : (payloadWithOrder.orderId && looksLikeObjectId(payloadWithOrder.orderId) ? String(payloadWithOrder.orderId) : null));
+                            const objectOrderId =
+                                body?._id && looksLikeObjectId(body._id)
+                                    ? String(body._id)
+                                    : body?.orderId &&
+                                        looksLikeObjectId(body.orderId)
+                                      ? String(body.orderId)
+                                      : payloadWithOrder.orderId &&
+                                          looksLikeObjectId(
+                                              payloadWithOrder.orderId,
+                                          )
+                                        ? String(payloadWithOrder.orderId)
+                                        : null;
 
                             const qp: string[] = [];
-                            if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
-                            if (objectOrderId) qp.push(`orderId=${encodeURIComponent(String(objectOrderId))}`);
+                            if (
+                                numericOrderNumber !== null &&
+                                numericOrderNumber !== undefined
+                            )
+                                qp.push(
+                                    `orderNumber=${encodeURIComponent(String(numericOrderNumber))}`,
+                                );
+                            if (objectOrderId)
+                                qp.push(
+                                    `orderId=${encodeURIComponent(String(objectOrderId))}`,
+                                );
 
                             if (qp.length > 0) {
-                                router.replace(`/order-success?${qp.join("&")}`);
+                                router.replace(
+                                    `/order-success?${qp.join("&")}`,
+                                );
                             } else {
-                                const fallback = payloadWithOrder.orderId ? `?orderId=${encodeURIComponent(String(payloadWithOrder.orderId))}` : "";
+                                const fallback = payloadWithOrder.orderId
+                                    ? `?orderId=${encodeURIComponent(String(payloadWithOrder.orderId))}`
+                                    : "";
                                 router.replace(`/order-success${fallback}`);
                             }
                             return;
                         } else {
-                            const reason = body?.message || body?.error || "Payment verification failed";
-                            const serverOrderId = body?.orderId ?? payloadWithOrder.orderId ?? "";
+                            const reason =
+                                body?.message ||
+                                body?.error ||
+                                "Payment verification failed";
+                            const serverOrderId =
+                                body?.orderId ?? payloadWithOrder.orderId ?? "";
                             router.replace(
-                                `/order-failed?reason=${encodeURIComponent(String(reason))}${serverOrderId ? `&orderId=${encodeURIComponent(String(serverOrderId))}` : ""}`
+                                `/order-failed?reason=${encodeURIComponent(String(reason))}${serverOrderId ? `&orderId=${encodeURIComponent(String(serverOrderId))}` : ""}`,
                             );
                             return;
                         }
                     }
 
                     // non-ok HTTP
-                    const finalReason = body?.message || body?.error || `Verification HTTP ${res.status}`;
-                    const finalOrderId = body?.orderId ?? payloadWithOrder.orderId ?? "";
-                    console.warn("Payment verification failed:", res.status, body);
+                    const finalReason =
+                        body?.message ||
+                        body?.error ||
+                        `Verification HTTP ${res.status}`;
+                    const finalOrderId =
+                        body?.orderId ?? payloadWithOrder.orderId ?? "";
+                    console.warn(
+                        "Payment verification failed:",
+                        res.status,
+                        body,
+                    );
                     router.replace(
-                        `/order-failed?reason=${encodeURIComponent(String(finalReason))}${finalOrderId ? `&orderId=${encodeURIComponent(String(finalOrderId))}` : ""}`
+                        `/order-failed?reason=${encodeURIComponent(String(finalReason))}${finalOrderId ? `&orderId=${encodeURIComponent(String(finalOrderId))}` : ""}`,
                     );
                     return;
                 } catch (err: any) {
                     console.error("Verify request threw:", err);
-                    const reason = err?.message || "Verification request failed";
-                    router.replace(`/order-failed?reason=${encodeURIComponent(String(reason))}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`);
+                    const reason =
+                        err?.message || "Verification request failed";
+                    router.replace(
+                        `/order-failed?reason=${encodeURIComponent(String(reason))}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`,
+                    );
                     return;
                 }
             },
@@ -746,12 +1079,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     placeOrderLockRef.current = false;
                     setPaymentInProgress(false);
                     setCreating(false);
-                }
+                },
             },
             prefill: prefillCustomer,
             notes: orderId ? { orderId: String(orderId) } : undefined,
             display: {
-                hide: [{ method: "paylater" }, { method: "emi" }, { method: "cardless_emi" }],
+                hide: [
+                    { method: "paylater" },
+                    { method: "emi" },
+                    { method: "cardless_emi" },
+                ],
                 preferences: { show_default_blocks: false },
                 sequence: [],
             },
@@ -791,12 +1128,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     const parsed: Address[] = JSON.parse(raw);
                     if (Array.isArray(parsed) && parsed.length > 0) {
                         setAddresses(parsed);
-                        if (selectedAddressId === null) setSelectedAddressId(parsed[0].id);
+                        if (selectedAddressId === null)
+                            setSelectedAddressId(parsed[0].id);
                     }
                 } catch {
                     // ignore parse err
                 }
-            } else if (initialAddresses && initialAddresses.length && selectedAddressId === null) {
+            } else if (
+                initialAddresses &&
+                initialAddresses.length &&
+                selectedAddressId === null
+            ) {
                 setAddresses(initialAddresses);
                 setSelectedAddressId(initialAddresses[0].id);
             }
@@ -812,9 +1154,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     const server = await apiFetchAddresses(cust);
                     if (!mountedRef.current) return;
                     if (Array.isArray(server) && server.length > 0) {
-                        const mapped = server.map((s) => mapServerAddressToLocal(s));
+                        const mapped = server.map((s) =>
+                            mapServerAddressToLocal(s),
+                        );
                         setAddresses(mapped);
-                        if (selectedAddressId === null && mapped.length > 0) setSelectedAddressId(mapped[0].id);
+                        if (selectedAddressId === null && mapped.length > 0)
+                            setSelectedAddressId(mapped[0].id);
 
                         const first = mapped[0];
                     }
@@ -831,7 +1176,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 }
             })();
         } catch {
-            if (initialAddresses && initialAddresses.length && selectedAddressId === null) {
+            if (
+                initialAddresses &&
+                initialAddresses.length &&
+                selectedAddressId === null
+            ) {
                 setAddresses(initialAddresses);
                 setSelectedAddressId(initialAddresses[0].id);
             }
@@ -860,7 +1209,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             setBillingAddressId(selectedAddressId);
         } else {
             const found = addresses.find((a) => a.id === billingAddressId);
-            if (!found) setBillingAddressId(selectedAddressId ?? (addresses.length ? addresses[0].id : null));
+            if (!found)
+                setBillingAddressId(
+                    selectedAddressId ??
+                        (addresses.length ? addresses[0].id : null),
+                );
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [addresses]);
@@ -876,33 +1229,50 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         setAddresses((prev) => {
             // if incoming contains serverId, prefer to match/replace by serverId
             if (incoming.serverId) {
-                const idxByServer = prev.findIndex((a) => a.serverId === incoming.serverId || a.id === `srv_${incoming.serverId}`);
+                const idxByServer = prev.findIndex(
+                    (a) =>
+                        a.serverId === incoming.serverId ||
+                        a.id === `srv_${incoming.serverId}`,
+                );
                 if (idxByServer >= 0) {
                     const next = [...prev];
                     next[idxByServer] = { ...next[idxByServer], ...incoming };
                     try {
-                        if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
-                    } catch { }
+                        if (typeof window !== "undefined")
+                            localStorage.setItem(
+                                "wcm_addresses",
+                                JSON.stringify(next),
+                            );
+                    } catch {}
                     return next;
                 }
             }
 
             // match optimistic id (local_...)
-            const isLocalId = typeof incoming.id === "string" && incoming.id.startsWith("local_");
-            const idxByLocal = isLocalId ? prev.findIndex((a) => a.id === incoming.id) : -1;
+            const isLocalId =
+                typeof incoming.id === "string" &&
+                incoming.id.startsWith("local_");
+            const idxByLocal = isLocalId
+                ? prev.findIndex((a) => a.id === incoming.id)
+                : -1;
             if (idxByLocal >= 0) {
                 const next = [...prev];
                 next[idxByLocal] = { ...next[idxByLocal], ...incoming };
                 try {
-                    if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
-                } catch { }
+                    if (typeof window !== "undefined")
+                        localStorage.setItem(
+                            "wcm_addresses",
+                            JSON.stringify(next),
+                        );
+                } catch {}
                 return next;
             }
 
             const next = [incoming, ...prev];
             try {
-                if (typeof window !== "undefined") localStorage.setItem("wcm_addresses", JSON.stringify(next));
-            } catch { }
+                if (typeof window !== "undefined")
+                    localStorage.setItem("wcm_addresses", JSON.stringify(next));
+            } catch {}
             return next;
         });
 
@@ -911,7 +1281,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     useEffect(() => {
         try {
-            const cust = typeof window !== "undefined" ? getStoredCustomerId() : null;
+            const cust =
+                typeof window !== "undefined" ? getStoredCustomerId() : null;
             if (!cust) {
                 router.replace("/login");
                 return;
@@ -922,7 +1293,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     const serverCart = await apiGetCart(cust);
                     setCart(Array.isArray(serverCart) ? serverCart : []);
                 } catch (err) {
-                    console.warn("Could not load server cart, keeping current cart state", err);
+                    console.warn(
+                        "Could not load server cart, keeping current cart state",
+                        err,
+                    );
                 } finally {
                     setCartLoaded(true);
                     setCheckingAuth(false);
@@ -939,11 +1313,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         try {
             const count = cart.reduce((s, it) => s + (Number(it.qty) || 1), 0);
             try {
-                if (typeof window !== "undefined") localStorage.setItem("cartCount", String(count));
+                if (typeof window !== "undefined")
+                    localStorage.setItem("cartCount", String(count));
             } catch {
                 /* ignore */
             }
-            if (typeof window !== "undefined") window.dispatchEvent(new Event("cartChanged"));
+            if (typeof window !== "undefined")
+                window.dispatchEvent(new Event("cartChanged"));
         } catch (err) {
             console.error("[CheckoutPanel] update cartCount error", err);
         }
@@ -954,9 +1330,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (checkingAuth) return;
         if (creating) return;
 
-        if (typeof total === "number" && total <= 0) {
+        // Zero-cost orders can be legitimate (e.g. full discount); check cart lines instead.
+        if (cart.length === 0) {
             try {
-                if (typeof window !== "undefined" && !window.location.pathname.startsWith("/cart")) {
+                if (
+                    typeof window !== "undefined" &&
+                    !window.location.pathname.startsWith("/cart")
+                ) {
                     router.replace("/cart");
                 }
             } catch (err) {
@@ -981,14 +1361,17 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             return;
         }
 
-        if (!cart.length) {
+        if (!cart.length || cart.some((it) => it.available === false)) {
+            if (cart.some((it) => it.available === false))
+                alert(
+                    "Remove or update unavailable gift hampers in your cart.",
+                );
             unlock();
             return;
         }
 
-        const cust = typeof window !== "undefined"
-            ? getStoredCustomerId()
-            : null;
+        const cust =
+            typeof window !== "undefined" ? getStoredCustomerId() : null;
 
         if (!cust) {
             unlock();
@@ -1025,7 +1408,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         (async () => {
             try {
                 await createOrderAndRedirect(cust, addr);
-
             } catch (err) {
                 console.error(err);
                 unlock();
@@ -1069,14 +1451,19 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 billingAddressIdToSend = usedAddr.serverId;
             } else {
                 const localBilling = addresses.find(
-                    (a) => a.id === billingAddressId || a.serverId === billingAddressId
+                    (a) =>
+                        a.id === billingAddressId ||
+                        a.serverId === billingAddressId,
                 );
 
                 const usedBillingAddr = localBilling
                     ? ensureServerAddress(localBilling)
                     : null;
 
-                if (!usedBillingAddr?.serverId || !looksLikeObjectId(usedBillingAddr.serverId)) {
+                if (
+                    !usedBillingAddr?.serverId ||
+                    !looksLikeObjectId(usedBillingAddr.serverId)
+                ) {
                     alert("Failed to save billing address. Please try again.");
                     setCreating(false);
                     return;
@@ -1086,7 +1473,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             }
 
             const url = buildUrl("/sell_order/create");
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
             const token = getAuthToken();
             if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -1095,14 +1484,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 deliveryAddressId,
                 billingAddressId: billingAddressIdToSend,
                 couponCode: appliedCoupon || null,
-                cart: cart.map(it => ({
-                    productId: it.id,
-                    qty: it.qty,
-                    price: it.price,
-                })),
+                // The API loads ALL product and hamper lines from the persisted cart.
+                // Never submit browser-owned prices or hamper component data.
             };
 
-            console.debug("[createOrder] POST", url, body);
             const res = await fetch(url, {
                 method: "POST",
                 headers,
@@ -1126,61 +1511,122 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 }
             }
 
-            if (res.ok && (json?.ack === "success" || json?.ack === "SUCCESS" || json?.orderId || json?.data)) {
+            if (
+                res.ok &&
+                (json?.ack === "success" ||
+                    json?.ack === "SUCCESS" ||
+                    json?.orderId ||
+                    json?.data)
+            ) {
                 const numericOrderNumber =
-                    (typeof json.orderId === "number" ? json.orderId : (typeof json.orderId === "string" && /^\d+$/.test(json.orderId) ? Number(json.orderId) : null))
-                    ?? (json?.data && (typeof json.data.orderNumber === "number" ? json.data.orderNumber : (typeof json.data.orderNumber === "string" && /^\d+$/.test(json.data.orderNumber) ? Number(json.data.orderNumber) : null)))
-                    ?? null;
+                    (typeof json.orderId === "number"
+                        ? json.orderId
+                        : typeof json.orderId === "string" &&
+                            /^\d+$/.test(json.orderId)
+                          ? Number(json.orderId)
+                          : null) ??
+                    (json?.data &&
+                        (typeof json.data.orderNumber === "number"
+                            ? json.data.orderNumber
+                            : typeof json.data.orderNumber === "string" &&
+                                /^\d+$/.test(json.data.orderNumber)
+                              ? Number(json.data.orderNumber)
+                              : null)) ??
+                    null;
 
                 const maybeObjectId =
-                    (json && json._id && typeof json._id === "string" && /^[0-9a-fA-F]{24}$/.test(json._id) ? String(json._id)
-                        : (json?.data && json.data._id && typeof json.data._id === "string" && /^[0-9a-fA-F]{24}$/.test(json.data._id) ? String(json.data._id)
-                            : null));
+                    json &&
+                    json._id &&
+                    typeof json._id === "string" &&
+                    /^[0-9a-fA-F]{24}$/.test(json._id)
+                        ? String(json._id)
+                        : json?.data &&
+                            json.data._id &&
+                            typeof json.data._id === "string" &&
+                            /^[0-9a-fA-F]{24}$/.test(json.data._id)
+                          ? String(json.data._id)
+                          : null;
 
                 const serverObjectIdForCheckout =
-                    maybeObjectId
-                    ?? (json?.data && json.data.orderId && typeof json.data.orderId === "string" && /^[0-9a-fA-F]{24}$/.test(json.data.orderId) ? String(json.data.orderId) : null)
-                    ?? (json && json.orderId && typeof json.orderId === "string" && /^[0-9a-fA-F]{24}$/.test(json.orderId) ? String(json.orderId) : null);
+                    maybeObjectId ??
+                    (json?.data &&
+                    json.data.orderId &&
+                    typeof json.data.orderId === "string" &&
+                    /^[0-9a-fA-F]{24}$/.test(json.data.orderId)
+                        ? String(json.data.orderId)
+                        : null) ??
+                    (json &&
+                    json.orderId &&
+                    typeof json.orderId === "string" &&
+                    /^[0-9a-fA-F]{24}$/.test(json.orderId)
+                        ? String(json.orderId)
+                        : null);
 
-                const razorpayOrder = json.razorpayOrder ?? json?.data?.razorpayOrder ?? null;
+                const razorpayOrder =
+                    json.razorpayOrder ?? json?.data?.razorpayOrder ?? null;
                 const rzpKey = json.key ?? json?.data?.key ?? null;
 
                 if (razorpayOrder && rzpKey) {
                     try {
-                        await openRazorpayCheckout({ key: rzpKey, razorpayOrder, orderId: serverObjectIdForCheckout ?? null });
+                        await openRazorpayCheckout({
+                            key: rzpKey,
+                            razorpayOrder,
+                            orderId: serverObjectIdForCheckout ?? null,
+                        });
                         return;
                     } catch (err: any) {
                         console.error("Failed to open Razorpay", err);
-                        router.replace(`/order-failed?reason=${encodeURIComponent("Failed to open Razorpay checkout")}`);
+                        router.replace(
+                            `/order-failed?reason=${encodeURIComponent("Failed to open Razorpay checkout")}`,
+                        );
                         return;
                     }
                 }
 
                 const subtotalLocal = subtotal;
                 const deliveryChargeVal = Number(currentDeliveryCharge || 0);
-                const totalLocal = subtotalLocal + deliveryChargeVal - discountAmount;
+                const totalLocal =
+                    subtotalLocal + deliveryChargeVal - discountAmount;
 
                 const qp: string[] = [];
-                if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
-                if (serverObjectIdForCheckout) qp.push(`orderId=${encodeURIComponent(String(serverObjectIdForCheckout))}`);
+                if (
+                    numericOrderNumber !== null &&
+                    numericOrderNumber !== undefined
+                )
+                    qp.push(
+                        `orderNumber=${encodeURIComponent(String(numericOrderNumber))}`,
+                    );
+                if (serverObjectIdForCheckout)
+                    qp.push(
+                        `orderId=${encodeURIComponent(String(serverObjectIdForCheckout))}`,
+                    );
 
                 if (qp.length > 0) {
                     router.replace(`/order-success?${qp.join("&")}`);
                 } else {
-                    router.replace(`/order-success?total=${encodeURIComponent(String(totalLocal))}`);
+                    router.replace(
+                        `/order-success?total=${encodeURIComponent(String(totalLocal))}`,
+                    );
                 }
             } else {
-                const msg = json?.message || json?.error || `Order creation failed (${res.status})`;
+                const msg =
+                    json?.message ||
+                    json?.error ||
+                    `Order creation failed (${res.status})`;
                 console.warn("[createOrder] failed", msg, json);
 
                 const orderId = json?.orderId ?? json?.data?.orderId ?? null;
                 const reason = String(msg || "Unknown error");
 
-                router.replace(`/order-failed?reason=${encodeURIComponent(reason)}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`);
+                router.replace(
+                    `/order-failed?reason=${encodeURIComponent(reason)}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`,
+                );
             }
         } catch (err: any) {
             console.error("[createOrder] network error", err);
-            router.replace(`/order-failed?reason=${encodeURIComponent(String(err?.message ?? err ?? "Network error"))}`);
+            router.replace(
+                `/order-failed?reason=${encodeURIComponent(String(err?.message ?? err ?? "Network error"))}`,
+            );
         } finally {
             if (!mountedRef.current) return;
 
@@ -1203,16 +1649,27 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (str === "") return null;
 
         try {
-            const u = new URL(str, typeof window !== "undefined" ? window.location.origin : undefined);
+            const u = new URL(
+                str,
+                typeof window !== "undefined"
+                    ? window.location.origin
+                    : undefined,
+            );
 
-            if (typeof window !== "undefined" && u.hostname === window.location.hostname && u.port === window.location.port) {
+            if (
+                typeof window !== "undefined" &&
+                u.hostname === window.location.hostname &&
+                u.port === window.location.port
+            ) {
                 return u.pathname + u.search + u.hash;
             }
             return u.toString();
         } catch {
             const apiBase = getApiBase().replace(/\/$/, "");
             if (str.startsWith("/")) return apiBase ? `${apiBase}${str}` : str;
-            return apiBase ? `${apiBase}/${str.replace(/^\/+/, "")}` : `/${str.replace(/^\/+/, "")}`;
+            return apiBase
+                ? `${apiBase}/${str.replace(/^\/+/, "")}`
+                : `/${str.replace(/^\/+/, "")}`;
         }
     }
 
@@ -1221,30 +1678,49 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return norm ?? "/images/placeholder.png";
     }
 
-    const subtotal = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
-
     useEffect(() => {
-        if (!cartLoaded) return;
-
+        if (!cartLoaded || subtotal <= 0) {
+            setSuggestedCoupons([]);
+            setLockedCoupons([]);
+            setBestCouponData(null);
+            setCouponSuggestionsLoading(false);
+            return;
+        }
+        let active = true;
+        setBestCouponData(null);
+        setCouponSuggestionsLoading(true);
         (async () => {
             const data = await fetchCouponSuggestions();
-            if (!data) return;
+            if (!active) return;
+            setSuggestedCoupons(
+                Array.isArray(data?.coupons) ? data.coupons : [],
+            );
+            setLockedCoupons(
+                Array.isArray(data?.lockedCoupons) ? data.lockedCoupons : [],
+            );
+            // Keep the offer attached to the cart it was checked against.
+            setBestCouponData({ cartKey: couponCartKey, offer: data?.bestCoupon || null });
+        })().finally(() => {
+            if (active) setCouponSuggestionsLoading(false);
+        });
+        return () => {
+            active = false;
+        };
+    }, [subtotal, cartLoaded, couponCartKey]);
 
-            setSuggestedCoupons(data.coupons || []);
-            setLockedCoupons(data.lockedCoupons || []);
-            setBestCouponData(data.bestCoupon || null);
-
-            // only auto apply if nothing applied
-            if (!appliedCoupon && data.bestCoupon) {
-                const best = data.bestCoupon;
-
-                setAppliedCoupon(best.coupon.code);
-                setDiscountAmount(best.discountAmount || 0);
-                setDiscountedSubtotal(best.finalTotal || null);
-                setIsCouponLocked(true);
-            }
-        })();
-    }, [subtotal, cartLoaded]);
+    // Production-style checkout: automatically verify/apply the best offer,
+    // without replacing a previously saved or manually chosen coupon.
+    useEffect(() => {
+        if (!cartLoaded || !couponReady || appliedCoupon || couponLoading || couponOverrideRef.current) return;
+        if (bestCouponData?.cartKey !== couponCartKey) return;
+        const offer = bestCouponData?.offer;
+        const code = offer?.valid === true ? String(offer?.coupon?.code || "").trim() : "";
+        if (!code) return;
+        const attemptKey = `${couponCartKey}:${code}`;
+        if (autoCouponAttemptRef.current === attemptKey) return;
+        autoCouponAttemptRef.current = attemptKey;
+        void applyCouponCode(code, true);
+    }, [cartLoaded, couponReady, appliedCoupon, couponLoading, bestCouponData, couponCartKey]);
 
     const hasAddress = addresses.length > 0 && selectedAddressId !== null;
 
@@ -1261,8 +1737,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const total = Math.max(
         0,
-        (discountedSubtotal !== null ? discountedSubtotal : subtotal)
-        + (Number(currentDeliveryCharge) || 0)
+        Math.max(0, subtotal - (appliedCoupon ? discountAmount : 0)) +
+            (appliedCoupon && couponFreeShipping
+                ? 0
+                : Number(currentDeliveryCharge) || 0),
     );
 
     useEffect(() => {
@@ -1277,10 +1755,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         const svc = serviceMap[current.pincode];
         if (svc && svc.prepaid === false) {
-            const firstGood = addresses.find((a) => {
-                const s = serviceMap[a.pincode];
-                return !(s && s.prepaid === false);
-            }) ?? null;
+            const firstGood =
+                addresses.find((a) => {
+                    const s = serviceMap[a.pincode];
+                    return !(s && s.prepaid === false);
+                }) ?? null;
             if (firstGood && firstGood.id !== selectedAddressId) {
                 setSelectedAddressId(firstGood.id);
             } else if (!firstGood && selectedAddressId !== null) {
@@ -1291,7 +1770,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         if (current.pincode && isValidIndianPincode(current.pincode)) {
             checkAndCacheServiceability(current.pincode);
-            fetchAndCacheDeliveryCharge(current.pincode).catch(() => { });
+            fetchAndCacheDeliveryCharge(current.pincode).catch(() => {});
         }
     }, [selectedAddressId, addresses]);
 
@@ -1307,28 +1786,35 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     return (
-        <div className="min-h-screen from-[#f8fbfb] to-white p-4 md:p-8 font-sans pb-32 md:pb-10">
-            <div className="max-w-6xl mx-auto">
+        <div className="min-h-screen font-sans pb-24 md:pb-12">
+            <div className="w-full max-w-[1520px] mx-auto">
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#065975]">Checkout</h1>
-                        <p className="text-sm text-slate-500 mt-1">Simple, safe and delightful checkout experience</p>
+                        <h1 className="site-section-title">Checkout</h1>
+                        <p className="text-sm text-slate-500 mt-1">
+                            A few quick details, then your handmade gifts are on
+                            their way
+                        </p>
                     </div>
                 </header>
 
                 <main className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
                     {/* Left panel: addresses + billing checkbox (cart removed from here) */}
-                    <section className="bg-white rounded-2xl shadow-sm p-5 md:p-6 space-y-6">
+                    <section className="site-card p-4 sm:p-6 space-y-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                             <div>
-                                <h2 className="text-lg font-semibold">Delivery address</h2>
-                                <p className="text-sm text-slate-500">Select where you'd like us to deliver</p>
+                                <h2 className="text-lg font-semibold">
+                                    Delivery address
+                                </h2>
+                                <p className="text-sm text-slate-500">
+                                    Select where you'd like us to deliver
+                                </p>
                             </div>
                             <div className="flex gap-2">
                                 <button
                                     onClick={openAdd}
                                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl 
-                                        bg-linear-to-r from-[#065975] to-[#0ea5a0] 
+                                        bg-linear-to-r from-[#065975] to-[#19839a] 
                                         text-white text-sm font-medium
                                         shadow-md hover:shadow-lg hover:brightness-105
                                         transition-all duration-200 active:scale-[0.97]"
@@ -1341,11 +1827,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                         <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
                             {loadingAddresses && addresses.length === 0 && (
-                                <div className="col-span-full text-center text-slate-500 p-6 border rounded-lg">Loading addresses…</div>
+                                <div className="col-span-full text-center text-slate-500 p-6 border rounded-lg">
+                                    Loading addresses…
+                                </div>
                             )}
 
                             {addresses.length === 0 && !loadingAddresses && (
-                                <div className="col-span-full text-center text-slate-500 p-6 border rounded-lg">No saved addresses. Add one to continue.</div>
+                                <div className="col-span-full text-center text-slate-500 p-6 border rounded-lg">
+                                    No saved addresses. Add one to continue.
+                                </div>
                             )}
 
                             {addresses.map((a) => {
@@ -1359,9 +1849,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     <label
                                         key={String(a.id)}
                                         className={`relative flex flex-col gap-4 p-5 rounded-2xl border transition-all duration-200 cursor-pointer
-                                            ${selectedAddressId === a.id
-                                                ? "border-[#065975] bg-[#f8fcfc] shadow-md"
-                                                : "border-slate-200 bg-white hover:shadow-sm"}
+                                            ${
+                                                selectedAddressId === a.id
+                                                    ? "border-[#065975] bg-[#f9fbf8] shadow-md"
+                                                    : "border-slate-200 bg-white hover:shadow-sm"
+                                            }
                                             ${isDisabled ? "opacity-60 cursor-not-allowed" : ""}
                                         `}
                                     >
@@ -1371,7 +1863,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                 <div className="w-9 h-9 rounded-full bg-[#065975]/90 text-white text-sm grid place-items-center font-semibold">
                                                     {a.recipientName
                                                         .split(" ")
-                                                        .map((s) => s?.[0] ?? "")
+                                                        .map(
+                                                            (s) => s?.[0] ?? "",
+                                                        )
                                                         .slice(0, 2)
                                                         .join("")}
                                                 </div>
@@ -1388,8 +1882,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                             <input
                                                 type="radio"
-                                                checked={selectedAddressId === a.id}
-                                                onChange={() => !isDisabled && setSelectedAddressId(a.id)}
+                                                checked={
+                                                    selectedAddressId === a.id
+                                                }
+                                                onChange={() =>
+                                                    !isDisabled &&
+                                                    setSelectedAddressId(a.id)
+                                                }
                                                 className="w-5 h-5 accent-[#065975]"
                                             />
                                         </div>
@@ -1397,11 +1896,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         {/* Address Text */}
                                         <div className="text-sm text-slate-600 leading-relaxed">
                                             {a.addressLine1}
-                                            {a.addressLine2 && `, ${a.addressLine2}`}
+                                            {a.addressLine2 &&
+                                                `, ${a.addressLine2}`}
                                             {a.city && `, ${a.city}`}
                                             {a.district && `, ${a.district}`}
                                             {a.state && `, ${a.state}`}
-                                            {a.country && `, ${a.country}`} — {a.pincode}
+                                            {a.country &&
+                                                `, ${a.country}`} — {a.pincode}
                                         </div>
 
                                         {/* Badge */}
@@ -1426,20 +1927,39 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             setBillingSame(true);
                                             return;
                                         }
-                                        setBillingSame(Boolean(e.target.checked));
+                                        setBillingSame(
+                                            Boolean(e.target.checked),
+                                        );
                                         if (e.target.checked) {
-                                            setBillingAddressId(selectedAddressId);
+                                            setBillingAddressId(
+                                                selectedAddressId,
+                                            );
                                         } else {
-                                            setBillingAddressId(selectedAddressId ?? (addresses.length ? addresses[0].id : null));
+                                            setBillingAddressId(
+                                                selectedAddressId ??
+                                                    (addresses.length
+                                                        ? addresses[0].id
+                                                        : null),
+                                            );
                                         }
                                     }}
                                     disabled={addresses.length <= 1 || creating}
                                     className="w-4 h-4"
-                                    title={addresses.length <= 1 ? "Only one saved address — billing will be same as delivery" : undefined}
+                                    title={
+                                        addresses.length <= 1
+                                            ? "Only one saved address — billing will be same as delivery"
+                                            : undefined
+                                    }
                                 />
                                 <div>
-                                    <div className="text-sm font-medium">Billing address same as delivery</div>
-                                    <div className="text-xs text-slate-500">{addresses.length <= 1 ? "Only one saved address" : "Uncheck to choose a different billing address"}</div>
+                                    <div className="text-sm font-medium">
+                                        Billing address same as delivery
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                        {addresses.length <= 1
+                                            ? "Only one saved address"
+                                            : "Uncheck to choose a different billing address"}
+                                    </div>
                                 </div>
                             </label>
 
@@ -1450,19 +1970,41 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             <label
                                                 key={`billing-${String(b.id)}`}
                                                 htmlFor={`billing-${String(b.id)}`}
-                                                className={`flex items-start gap-3 p-3 rounded-lg border ${billingAddressId === b.id ? "border-[#065975] bg-[#f6fbfb]" : "border-slate-100"} cursor-pointer`}
+                                                className={`flex items-start gap-3 p-3 rounded-lg border ${billingAddressId === b.id ? "border-[#065975] bg-[#f5f9f3]" : "border-slate-100"} cursor-pointer`}
                                             >
                                                 <div className="flex-1">
-                                                    <div className="font-medium">{b.recipientName} <span className="text-xs text-slate-500">({b.recipientContact})</span></div>
+                                                    <div className="font-medium">
+                                                        {b.recipientName}{" "}
+                                                        <span className="text-xs text-slate-500">
+                                                            (
+                                                            {b.recipientContact}
+                                                            )
+                                                        </span>
+                                                    </div>
                                                     <div className="text-sm text-slate-600 leading-snug mt-1">
                                                         {b.addressLine1}
-                                                        {b.addressLine2 ? `, ${b.addressLine2}` : ""}
-                                                        {b.addressLine3 ? `, ${b.addressLine3}` : ""}
-                                                        {b.landmark ? `, ${b.landmark}` : ""}
-                                                        {b.city ? `, ${b.city}` : ""}
-                                                        {b.district ? `, ${b.district}` : ""}
-                                                        {b.state ? `, ${b.state}` : ""}
-                                                        {b.country ? `, ${b.country}` : ""} — {b.pincode}
+                                                        {b.addressLine2
+                                                            ? `, ${b.addressLine2}`
+                                                            : ""}
+                                                        {b.addressLine3
+                                                            ? `, ${b.addressLine3}`
+                                                            : ""}
+                                                        {b.landmark
+                                                            ? `, ${b.landmark}`
+                                                            : ""}
+                                                        {b.city
+                                                            ? `, ${b.city}`
+                                                            : ""}
+                                                        {b.district
+                                                            ? `, ${b.district}`
+                                                            : ""}
+                                                        {b.state
+                                                            ? `, ${b.state}`
+                                                            : ""}
+                                                        {b.country
+                                                            ? `, ${b.country}`
+                                                            : ""}{" "}
+                                                        — {b.pincode}
                                                     </div>
                                                 </div>
 
@@ -1471,9 +2013,14 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                         id={`billing-${String(b.id)}`}
                                                         type="radio"
                                                         name="billingAddr"
-                                                        checked={billingAddressId === b.id}
+                                                        checked={
+                                                            billingAddressId ===
+                                                            b.id
+                                                        }
                                                         onChange={() => {
-                                                            setBillingAddressId(b.id);
+                                                            setBillingAddressId(
+                                                                b.id,
+                                                            );
                                                         }}
                                                         disabled={creating}
                                                         className="w-4 h-4"
@@ -1493,144 +2040,236 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     </section>
 
                     {/* Right panel / summary */}
-                    <aside className="bg-linear-to-b from-white to-[#f7fbfb] rounded-2xl shadow-lg p-5 md:p-6 xl:sticky xl:top-6">
+                    <aside className="site-card p-4 sm:p-6 xl:sticky xl:top-28">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Order summary</h2>
-                            <span className="text-sm text-slate-500">{cart.length} item{cart.length !== 1 ? "s" : ""}</span>
+                            <h2 className="text-lg font-semibold">
+                                Order summary
+                            </h2>
+                            <span className="text-sm text-slate-500">
+                                {cart.length} item{cart.length !== 1 ? "s" : ""}
+                            </span>
                         </div>
 
-                        <p className="text-sm text-slate-500 mt-1">Secure payment — we never store your card details</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Secure payment — we never store your card details
+                        </p>
 
-                        {/* Coupon Section */}
-                        <div className="mt-4 mb-4">
+                        {/* Always-visible discount area; manual codes work even if
+                            the suggestions endpoint has no active promotions. */}
+                        <div className="mt-5 rounded-2xl border border-[#bde5ea] bg-[#f1fafb] p-4 sm:p-5">
+                            <div className="flex items-start gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#d4f1f3] text-[#065975]">
+                                    <TicketPercent
+                                        aria-hidden="true"
+                                        className="h-5 w-5"
+                                    />
+                                </span>
+                                <div>
+                                    <h3 className="font-bold text-[#065975]">
+                                        Offers & discount codes
+                                    </h3>
+                                    <p className="mt-0.5 text-xs leading-5 text-slate-600">
+                                        Have a coupon? Enter it here to check
+                                        your savings.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <form
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void applyCouponCode(couponCodeInput);
+                                }}
+                                className="mt-4 flex flex-col gap-2 sm:flex-row"
+                            >
+                                <label
+                                    htmlFor="checkout-discount-code"
+                                    className="sr-only"
+                                >
+                                    Discount code
+                                </label>
+                                <input
+                                    id="checkout-discount-code"
+                                    type="text"
+                                    autoComplete="off"
+                                    maxLength={60}
+                                    value={couponCodeInput}
+                                    onChange={(event) => {
+                                        setCouponCodeInput(
+                                            event.target.value.toUpperCase(),
+                                        );
+                                        setCouponError(null);
+                                    }}
+                                    placeholder="Enter coupon code"
+                                    disabled={
+                                        creating ||
+                                        couponLoading ||
+                                        !couponReady
+                                    }
+                                    className="min-w-0 flex-1 rounded-xl border border-[#b7dbe0] bg-white px-4 py-3 text-sm font-semibold uppercase tracking-wide text-slate-800 outline-none transition focus:border-[#0c7d96] focus:ring-2 focus:ring-[#cceff3] disabled:opacity-60"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={
+                                        !couponCodeInput.trim() ||
+                                        couponLoading ||
+                                        !couponReady ||
+                                        creating ||
+                                        !cart.length
+                                    }
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#065975] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#0a7897] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {couponLoading && (
+                                        <LoaderCircle
+                                            aria-hidden="true"
+                                            className="h-4 w-4 animate-spin"
+                                        />
+                                    )}
+                                    {couponLoading ? "Checking…" : "Apply code"}
+                                </button>
+                            </form>
+
+                            {couponError && (
+                                <p
+                                    role="alert"
+                                    className="mt-2 text-xs font-medium text-rose-700"
+                                >
+                                    {couponError}
+                                </p>
+                            )}
+
                             {appliedCoupon && (
-                                <div className="mt-2 flex items-center justify-between text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                                    <span>
-                                        🎉 Applied <strong>{appliedCoupon}</strong> — You saved {formatINR(discountAmount)}
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#8cd2c0] bg-white p-3 text-sm">
+                                    <span className="min-w-0 text-[#087f67]">
+                                        <strong>{appliedCoupon}</strong> applied
+                                        {discountAmount > 0
+                                            ? ` · Saved ${formatINR(discountAmount)}`
+                                            : couponFreeShipping
+                                              ? " · Free delivery"
+                                              : " · Offer verified"}
                                     </span>
-
                                     <button
-                                        onClick={() => {
-                                            setAppliedCoupon(null);
-                                            setDiscountAmount(0);
-                                            setDiscountedSubtotal(null);
-                                            setIsCouponLocked(false);
-
-                                            try {
-                                                localStorage.removeItem("wcm_coupon");
-                                            } catch { }
-                                        }}
-                                        className="text-red-500 text-xs"
+                                        type="button"
+                                        onClick={() => removeCoupon()}
+                                        className="font-semibold text-rose-600 hover:underline"
                                     >
                                         Remove
                                     </button>
                                 </div>
                             )}
 
-                            {couponError && (
-                                <div className="text-red-500 text-xs mt-1">
-                                    {couponError}
-                                </div>
-                            )}
-
-                            {suggestedCoupons.length > 0 && (
-                                <div className="mt-3 space-y-2">
-                                    {suggestedCoupons.map((c, i) => (
-                                        <div
-                                            key={i}
-                                            className={`flex justify-between items-center p-2 rounded-lg border text-sm 
-                                                    ${c.coupon.code === appliedCoupon
-                                                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
-                                                    : c.isBest
-                                                        ? "border-blue-300 bg-blue-50"
-                                                        : "border-slate-200"
-                                                }`}
+                            <div className="mt-4 border-t border-[#d0e8eb] pt-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h4 className="text-xs font-bold uppercase tracking-wide text-[#065975]">
+                                        Available offers
+                                    </h4>
+                                    {couponSuggestionsLoading && (
+                                        <span
+                                            role="status"
+                                            className="text-xs text-slate-500"
                                         >
-                                            <div>
-                                                <div className="font-medium">
-                                                    {c.coupon.code}
-
-                                                    {c.coupon.code === appliedCoupon && (
-                                                        <span className="ml-2 text-xs text-green-700 font-semibold">
-                                                            Applied
-                                                        </span>
-                                                    )}
-
-                                                    {c.isBest && c.coupon.code !== appliedCoupon && (
-                                                        <span className="ml-2 text-xs text-blue-600 font-semibold">
-                                                            Best Deal
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-xs text-slate-500">
-                                                    Save {formatINR(c.discountAmount)}
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                onClick={() => {
-                                                    setAppliedCoupon(c.coupon.code);
-                                                    setDiscountAmount(c.discountAmount);
-                                                    setDiscountedSubtotal(c.finalTotal);
-                                                    setIsCouponLocked(true);
-                                                    setCouponError(null);
-                                                }}
-                                                className="text-xs text-[#065975] font-medium"
-                                            >
-                                                Apply
-                                            </button>
-                                        </div>
-                                    ))}
-
-                                    {lockedCoupons.length > 0 && (
-                                        <div className="mt-3 space-y-2">
-                                            {lockedCoupons.map((c, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="flex justify-between items-center p-2 rounded-lg border border-dashed text-sm bg-slate-50"
-                                                >
-                                                    <div>
-                                                        <div className="font-medium text-slate-600">
-                                                            {c.code}
-                                                        </div>
-                                                        <div className="text-xs text-orange-600">
-                                                            {c.unlockMessage}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                            Checking offers…
+                                        </span>
                                     )}
                                 </div>
-                            )}
+                                {suggestedCoupons.length > 0 ? (
+                                    <div className="mt-2 space-y-2">
+                                        {suggestedCoupons
+                                            .filter(
+                                                (offer) => offer?.coupon?.code,
+                                            )
+                                            .map((offer, i) => (
+                                                <div
+                                                    key={`${offer.coupon.code}-${i}`}
+                                                    className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3 ${appliedCoupon === offer.coupon.code ? "border-[#8cd2c0]" : "border-slate-200"}`}
+                                                >
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-bold text-slate-900">
+                                                            {offer.coupon.code}
+                                                            {offer.isBest && (
+                                                                <span className="ml-2 text-xs font-bold text-[#ce3b49]">
+                                                                    Best offer
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-xs text-slate-600">
+                                                            {Number(
+                                                                offer.discountAmount,
+                                                            ) > 0
+                                                                ? `Save ${formatINR(Number(offer.discountAmount))}`
+                                                                : "View offer benefits"}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        disabled={
+                                                            couponLoading ||
+                                                            creating ||
+                                                            appliedCoupon ===
+                                                                offer.coupon
+                                                                    .code
+                                                        }
+                                                        onClick={() => {
+                                                            void applyCouponCode(
+                                                                offer.coupon
+                                                                    .code,
+                                                            );
+                                                        }}
+                                                        className="text-sm font-bold text-[#065975] hover:underline disabled:opacity-60"
+                                                    >
+                                                        {appliedCoupon ===
+                                                        offer.coupon.code
+                                                            ? "Applied"
+                                                            : "Apply"}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                    </div>
+                                ) : (
+                                    !couponSuggestionsLoading && (
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            No suggested offers right now. You
+                                            can still try your own code above.
+                                        </p>
+                                    )
+                                )}
+                                {lockedCoupons.length > 0 && (
+                                    <div className="mt-2 space-y-2">
+                                        {lockedCoupons.map((offer, i) => (
+                                            <div
+                                                key={`${offer.code || i}`}
+                                                className="rounded-xl border border-dashed border-[#f4c3a3] bg-[#fff9f2] p-3 text-xs"
+                                            >
+                                                <strong className="text-slate-800">
+                                                    {offer.code}
+                                                </strong>
+                                                <p className="mt-1 text-amber-800">
+                                                    {offer.unlockMessage ||
+                                                        "Offer requirements not met"}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="mt-4 space-y-3 text-sm">
-                            {/* Subtotal with coupon applied */}
-                            {discountAmount > 0 && discountedSubtotal !== null ? (
+                            <div className="flex justify-between gap-3">
+                                <div>Subtotal</div>
+                                <div>{formatINR(subtotal)}</div>
+                            </div>
+                            {appliedCoupon && discountAmount > 0 && (
                                 <>
-                                    {/* Old subtotal */}
-                                    <div className="flex justify-between text-slate-400 line-through">
-                                        <div>Subtotal</div>
-                                        <div>{formatINR(subtotal)}</div>
+                                    <div className="flex justify-between gap-3 font-semibold text-[#087f67]">
+                                        <div>Discount ({appliedCoupon})</div>
+                                        <div>−{formatINR(discountAmount)}</div>
                                     </div>
-
-                                    {/* New subtotal from API */}
-                                    <div className="flex justify-between text-green-600 font-semibold">
-                                        <div>New Subtotal</div>
-                                        <div>{formatINR(discountedSubtotal)}</div>
-                                    </div>
-
-                                    {/* Savings */}
-                                    <div className="text-xs text-green-600 font-medium">
-                                        You saved {formatINR(discountAmount)} 🎉
-                                    </div>
+                                    <p className="text-xs font-medium text-[#087f67]">
+                                        You saved {formatINR(discountAmount)} on
+                                        your items.
+                                    </p>
                                 </>
-                            ) : (
-                                <div className="flex justify-between">
-                                    <div>Subtotal</div>
-                                    <div>{formatINR(subtotal)}</div>
-                                </div>
                             )}
 
                             <div className="flex justify-between items-center">
@@ -1641,12 +2280,26 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         Add address to calculate delivery
                                     </div>
                                 ) : (
-                                    <div>{formatINR(Number(currentDeliveryCharge || 0))}</div>
+                                    <div>
+                                        {appliedCoupon && couponFreeShipping ? (
+                                            <span className="font-bold text-[#087f67]">
+                                                Free with coupon
+                                            </span>
+                                        ) : (
+                                            formatINR(
+                                                Number(
+                                                    currentDeliveryCharge || 0,
+                                                ),
+                                            )
+                                        )}
+                                    </div>
                                 )}
                             </div>
 
                             <div className="border-t pt-3 mt-3 flex justify-between items-center">
-                                <div className="text-lg font-extrabold">Total</div>
+                                <div className="text-lg font-extrabold">
+                                    Total
+                                </div>
                                 {!hasAddress ? (
                                     <div className="text-xs text-amber-600">
                                         Add address to see final total
@@ -1665,21 +2318,61 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <div className="mt-6 hidden md:flex gap-3">
                             <button
                                 onClick={placeOrder}
-                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating || !hasAddress ? "opacity-60 cursor-not-allowed bg-gray-200 text-gray-500" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
-                                disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
-                                aria-disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
+                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating || !hasAddress ? "opacity-60 cursor-not-allowed bg-gray-200 text-gray-500" : "bg-linear-to-r from-[#065975] via-[#117b94] to-[#19839a] text-white hover:brightness-95"}`}
+                                disabled={
+                                    creating ||
+                                    paymentInProgress ||
+                                    cart.length === 0 ||
+                                    cart.some((it) => it.available === false) ||
+                                    !hasAddress
+                                }
+                                aria-disabled={
+                                    creating ||
+                                    paymentInProgress ||
+                                    cart.length === 0 ||
+                                    cart.some((it) => it.available === false) ||
+                                    !hasAddress
+                                }
                             >
-                                {creating ? "Placing order…" : `Place order • ${formatINR(total)}`}
+                                {creating
+                                    ? "Placing order…"
+                                    : `Place order • ${formatINR(total)}`}
                             </button>
                         </div>
 
                         <p className="text-xs text-slate-400 mt-3">
-                            By placing order you agree to our <span className="text-[#065975]">Terms &amp; Conditions</span>.
+                            By placing your order you agree to our{" "}
+                            <Link
+                                href="/terms"
+                                className="site-text-link underline"
+                            >
+                                Terms &amp; Conditions
+                            </Link>{" "}
+                            and acknowledge our{" "}
+                            <Link
+                                href="/privacy"
+                                className="site-text-link underline"
+                            >
+                                Privacy Policy
+                            </Link>
+                            .
                         </p>
 
+                        {cart.some((it) => it.available === false) && (
+                            <p
+                                role="alert"
+                                className="text-rose-600 text-sm mt-3"
+                            >
+                                A selected gift hamper is no longer available in
+                                the chosen quantity. Update your cart before
+                                ordering.
+                            </p>
+                        )}
                         {/* --- Your cart section --- */}
                         <div className="mt-6">
-                            <h3 className="text-md font-medium mb-3">Your cart</h3>
+                            <h3 className="text-md font-medium mb-3">
+                                Your cart
+                            </h3>
 
                             {/* grid with 2 items per row */}
                             <div className="flex flex-col gap-4">
@@ -1703,6 +2396,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             <div>
                                                 <div className="font-semibold text-slate-800 leading-snug">
                                                     {it.title}
+                                                    {it.type === "HAMPER" && (
+                                                        <span className="ml-2 rounded bg-teal-50 text-teal-800 text-xs px-2 py-1">
+                                                            Gift hamper
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 <div className="text-sm text-slate-500 mt-1">
@@ -1712,11 +2410,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                             <div className="flex items-center justify-between mt-3">
                                                 <div className="text-sm text-slate-600">
-                                                    Qty <span className="font-semibold">{it.qty}</span>
+                                                    Qty{" "}
+                                                    <span className="font-semibold">
+                                                        {it.qty}
+                                                    </span>
                                                 </div>
 
                                                 <div className="text-base font-bold text-[#065975]">
-                                                    {formatINR(it.price * it.qty)}
+                                                    {formatINR(
+                                                        it.price * it.qty,
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -1725,9 +2428,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                 {cart.length === 0 && (
                                     <div className="col-span-full text-center py-8 border rounded-xl">
-                                        <p className="text-slate-500 mb-3">Your cart is empty</p>
+                                        <p className="text-slate-500 mb-3">
+                                            Your cart is empty
+                                        </p>
                                         <button
-                                            onClick={() => router.push("/products")}
+                                            onClick={() =>
+                                                router.push("/products")
+                                            }
                                             className="px-4 py-2 bg-[#065975] text-white rounded-lg text-sm hover:brightness-95 transition"
                                         >
                                             Continue shopping
@@ -1741,18 +2448,34 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                 {/* MOBILE FIXED BOTTOM BAR */}
                 <div className="fixed left-0 right-0 bottom-0 z-50 md:hidden bg-white/95 backdrop-blur border-t px-4 py-3 shadow-2xl">
-                    <div className="max-w-6xl mx-auto flex items-center gap-3">
+                    <div className="w-full max-w-[1520px] mx-auto flex items-center gap-3">
                         <div className="flex-1">
                             <div className="text-sm text-slate-500">Total</div>
-                            <div className="text-lg font-extrabold">{formatINR(total)}</div>
+                            <div className="text-lg font-extrabold">
+                                {formatINR(total)}
+                            </div>
                         </div>
                         <button
                             onClick={placeOrder}
                             className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-lg font-semibold shadow ${creating ? "opacity-60 cursor-not-allowed bg-gray-200 text-slate-500" : "bg-[#065975] text-white"}`}
-                            disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
-                            aria-disabled={creating || paymentInProgress || cart.length === 0 || !hasAddress}
+                            disabled={
+                                creating ||
+                                paymentInProgress ||
+                                cart.length === 0 ||
+                                cart.some((it) => it.available === false) ||
+                                !hasAddress
+                            }
+                            aria-disabled={
+                                creating ||
+                                paymentInProgress ||
+                                cart.length === 0 ||
+                                cart.some((it) => it.available === false) ||
+                                !hasAddress
+                            }
                         >
-                            {creating ? "Placing…" : `Place order • ${formatINR(total)}`}
+                            {creating
+                                ? "Placing…"
+                                : `Place order • ${formatINR(total)}`}
                         </button>
                     </div>
                 </div>

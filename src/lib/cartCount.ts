@@ -34,7 +34,10 @@ export async function fetchCartCountUtil(): Promise<number> {
 
                 const items = JSON.parse(raw);
 
-                if (!Array.isArray(items)) return 0;
+                if (!Array.isArray(items)) {
+                    localStorage.setItem("cartCount", "0");
+                    return 0;
+                }
 
                 const count = items.reduce(
                     (sum: number, item: any) => sum + (Number(item.quantity) || 0),
@@ -69,11 +72,9 @@ export async function fetchCartCountUtil(): Promise<number> {
 
         if (typeof raw.totalItems === "number") {
             count = raw.totalItems;
-        } else if (Array.isArray(raw.sellItems)) {
-            count = raw.sellItems.reduce(
-                (s: number, it: any) => s + (Number(it.quantity) || 0),
-                0
-            );
+        } else {
+            count = [...(raw.sellItems || []), ...(raw.sellHamperItems || []), ...(raw.rentItems || [])]
+                .reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
         }
 
         localStorage.setItem("cartCount", String(count));
@@ -82,7 +83,7 @@ export async function fetchCartCountUtil(): Promise<number> {
 
     } catch (err) {
         console.error("[cartCountUtil] error:", err);
-        localStorage.setItem("cartCount", "0");
-        return 0;
+        // A temporary network failure is not proof that a shopper's cart is empty.
+        return Number(localStorage.getItem("cartCount") || 0);
     }
 }

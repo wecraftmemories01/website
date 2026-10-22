@@ -2,8 +2,8 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffaf6;
+  --foreground: #173b4a;
   color-scheme: light;
 }
 
@@ -32,7 +32,7 @@ html,
 body {
   max-width: 100%;
   overflow-x: hidden;
-  background-color: #ffffff;
+  background-color: #fffaf6;
 }
 
 /* Custom Scrollbar Styling */
@@ -131,4 +131,745 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* We Craft Memories storefront design system */
+:root {
+  --wcm-ink: #173b4a;
+  --wcm-green: #065975;
+  --wcm-muted: #64766d;
+  --wcm-line: #e0edf0;
+  --wcm-paper: #fffaf6;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--wcm-paper);
+  color: var(--wcm-ink);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #c7eef4;
+  color: #065975;
+}
+
+:focus-visible {
+  outline: 3px solid #59b7c9;
+  outline-offset: 3px;
+}
+
+.site-icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: #065975;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.site-icon-button:hover {
+  background: #edf4ed;
+}
+
+.site-text-link {
+  color: #065975;
+  font-weight: 700;
+}
+
+.site-text-link:hover {
+  text-decoration: underline;
+}
+
+.site-button-primary,
+.site-button-outline {
+  min-height: 48px;
+  padding: 11px 22px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.site-button-primary {
+  background: #065975;
+  color: white;
+  box-shadow: 0 5px 14px rgba(23, 79, 67, 0.14);
+}
+
+.site-button-primary:hover {
+  background: #03465e;
+  transform: translateY(-2px);
+  box-shadow: 0 9px 20px rgba(23, 79, 67, 0.18);
+}
+
+.site-button-outline {
+  background: #ffffffd9;
+  border: 1px solid #abdae4;
+  color: #065975;
+}
+
+.site-button-outline:hover {
+  background: #fff;
+  transform: translateY(-2px);
+}
+
+.site-eyebrow {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  background: #fff5e4;
+  color: #a64a29;
+  border: 1px solid #ffdfbd;
+  border-radius: 100px;
+  padding: 9px 13px;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.site-section {
+  padding: clamp(28px, 5vw, 64px) 0;
+}
+
+.site-section-title {
+  color: #123b50;
+  font-size: clamp(1.65rem, 3vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.site-card {
+  border: 1px solid var(--wcm-line);
+  background: white;
+  border-radius: 23px;
+  box-shadow: 0 7px 28px rgba(31, 56, 43, 0.035);
+}
+
+.site-card-hover {
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.site-card-hover:hover {
+  transform: translateY(-4px);
+  border-color: #b9e4eb;
+  box-shadow: 0 18px 38px rgba(31, 56, 43, 0.09);
+}
+
+.site-field {
+  border: 1px solid #d5e9ee;
+  background: white;
+  border-radius: 13px;
+  min-height: 45px;
+  padding: 10px 14px;
+  outline: none;
+}
+
+.site-field:focus {
+  box-shadow: 0 0 0 3px #b6e7f0;
+  border-color: #198ba1;
+}
+
+.site-gradient {
+  background: linear-gradient(120deg, #e8f8fb 0%, #fff1e8 100%);
+}
+
+.site-reveal {
+  animation: wcm-reveal 0.55s ease-out both;
+}
+
+@keyframes wcm-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* === We Craft Memories / unified October 2026 storefront refresh === */
+:root {
+  --background: #fffaf6;
+  --foreground: #173b4a;
+  --wcm-ink: #173b4a;
+  --wcm-green: #065975;
+  --wcm-accent: #ed6d2f;
+  --wcm-muted: #607987;
+  --wcm-line: #dcecf0;
+  --wcm-paper: #fffaf6;
+  --wcm-shadow: 0 10px 35px rgba(24, 65, 45, 0.055);
+}
+
+html {
+  scroll-padding-top: 118px;
+}
+
+body {
+  color: var(--wcm-ink);
+  background: var(--wcm-paper);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+
+main#content {
+  min-width: 0;
+}
+
+main#content>div {
+  min-width: 0;
+}
+
+button:not(:disabled),
+select:not(:disabled),
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.site-card {
+  border-color: var(--wcm-line);
+  box-shadow: var(--wcm-shadow);
+}
+
+.site-button-primary {
+  background: var(--wcm-green);
+  color: white;
+}
+
+.site-button-primary:focus-visible,
+.site-button-outline:focus-visible {
+  outline-offset: 3px;
+}
+
+.site-eyebrow {
+  letter-spacing: 0.12em;
+}
+
+.site-card-hover:focus-within {
+  border-color: #58b4c3;
+  box-shadow: 0 18px 38px rgba(31, 56, 43, 0.085);
+}
+
+.site-field,
+input,
+textarea,
+select {
+  accent-color: #065975;
+}
+
+.site-gradient {
+  background:
+    radial-gradient(circle at 10% 15%, #dff5f9, transparent 50%),
+    linear-gradient(125deg, #eaf8fb, #fff8ef);
+}
+
+/* Common account screens: consistent brand palette, wide touch targets and compact mobile spacing. */
+.wcm-auth {
+  min-height: min(72dvh, 760px);
+  background:
+    radial-gradient(circle at 12% 14%, #e3f7fa 0, transparent 48%),
+    radial-gradient(circle at 90% 70%, #ffeae8 0, transparent 42%), #fffaf6;
+}
+
+.auth-shell {
+  border: 1px solid #d8ebef;
+  border-radius: 30px;
+  background: white;
+  box-shadow: 0 24px 75px rgba(21, 64, 46, 0.09);
+}
+
+.auth-story {
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  padding: clamp(32px, 4vw, 58px);
+  background: linear-gradient(152deg, #065975, #0a7791 68%, #1193a8);
+}
+
+.auth-story::before {
+  content: "";
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  width: 350px;
+  height: 350px;
+  border-radius: 50%;
+  transform: translate(30%, -20%);
+  right: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.auth-story::after {
+  content: "";
+  position: absolute;
+  width: 270px;
+  height: 270px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+      rgba(255, 230, 177, 0.17),
+      transparent 72%);
+  right: -90px;
+  bottom: -95px;
+  pointer-events: none;
+}
+
+.auth-form {
+  min-width: 0;
+}
+
+.auth-form h1,
+.auth-form h3 {
+  color: #065975;
+  letter-spacing: -0.035em;
+}
+
+.auth-form form input:not([type="checkbox"]) {
+  min-height: 48px;
+  border-radius: 13px;
+  border-color: #d4e9ed;
+  background: #ffffff;
+}
+
+.auth-form form input:not([type="checkbox"]):focus {
+  border-color: #148ba2;
+  outline: 2px solid #b5e1e9;
+  outline-offset: 0;
+}
+
+.auth-form form button[type="submit"] {
+  min-height: 49px;
+  border-radius: 13px;
+  font-weight: 750;
+  background: #065975;
+  color: #fff;
+  box-shadow: 0 7px 18px rgba(23, 79, 67, 0.12);
+}
+
+.auth-form form button[type="submit"]:hover:not(:disabled) {
+  background: #03465e;
+}
+
+.auth-form form button[type="button"]:focus-visible {
+  border-radius: 10px;
+}
+
+.auth-form a[href] {
+  text-underline-offset: 3px;
+}
+
+/* Always-visible product and hamper actions. Detail pages reserve footer space. */
+.wcm-buy-dock {
+  position: fixed;
+  z-index: 48;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.97);
+  border-top: 1px solid #d4eaf0;
+  box-shadow: 0 -9px 30px rgba(21, 65, 45, 0.11);
+  backdrop-filter: blur(18px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.hamper-purchase-panel {
+  border-color: #cde9ee;
+  background: linear-gradient(135deg, #fff, #f5fbfc);
+}
+
+.hamper-purchase-panel textarea {
+  font-size: 14px;
+}
+
+.policy-page a[href]:not(.site-button-outline) {
+  color: #065975;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: #a6dbe6;
+  text-underline-offset: 3px;
+}
+
+.policy-page .policy-index a[href] {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.policy-page .policy-index a[href]:hover {
+  text-decoration: underline;
+}
+
+.policy-page .policy-hero {
+  box-shadow: none;
+}
+
+.policy-page section {
+  overflow-wrap: anywhere;
+}
+
+.policy-page .policy-index nav {
+  max-height: min(55vh, 520px);
+  overflow-y: auto;
+}
+
+@media (max-width: 767px) {
+  .auth-shell {
+    border-radius: 22px;
+  }
+
+  .auth-form {
+    padding: 26px 20px 30px;
+  }
+
+  .auth-form form {
+    gap: 14px;
+  }
+
+  .site-section {
+    padding-block: 32px;
+  }
+
+  .policy-page .policy-index {
+    position: static;
+  }
+
+  .policy-page .policy-index nav {
+    max-height: 170px;
+  }
+
+  .wcm-buy-dock .site-button-primary {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 430px) {
+
+  .site-button-primary,
+  .site-button-outline {
+    padding-inline: 14px;
+  }
+
+  .auth-form h1 {
+    font-size: 1.55rem;
+  }
+
+  .wcm-buy-dock {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+  .site-button-primary:active,
+  .site-button-outline:active {
+    transform: scale(0.985);
+  }
+
+  .auth-shell {
+    animation: wcm-reveal 0.52s ease-out both;
+  }
+}
+
+/* Compact thumb-friendly product actions even on 320px screens. */
+@media (max-width: 440px) {
+  .product-mobile-dock>div:last-child {
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .product-mobile-dock>div:last-child>div {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .product-mobile-dock>div:last-child>div>button:last-child {
+    flex-basis: 100%;
+    min-height: 44px;
+    padding-block: 10px;
+  }
+
+  .product-mobile-dock>div:last-child>div>div:nth-child(2) {
+    margin-left: auto;
+  }
+}
+
+/* 2026 logo-inspired brand palette: calm neutral surfaces, joyful handmade accents. */
+:root {
+  --background: #fffaf6;
+  --foreground: #173b4a;
+  --wcm-ink: #173b4a;
+  --wcm-green: #065975;
+  /* legacy token kept for component compatibility */
+  --wcm-teal: #065975;
+  --wcm-teal-strong: #03465e;
+  --wcm-aqua: #159fb7;
+  --wcm-coral: #ce3b49;
+  --wcm-orange: #ed6a22;
+  --wcm-sunshine: #ffcb35;
+  --wcm-accent: #ce3b49;
+  --wcm-muted: #607987;
+  --wcm-line: #deebef;
+  --wcm-paper: #fffaf6;
+  --wcm-shadow: 0 10px 32px rgba(6, 89, 117, .075);
+}
+
+body {
+  background: var(--wcm-paper);
+  color: var(--wcm-ink);
+}
+
+::selection {
+  background: #bdebf2;
+  color: #03465e;
+}
+
+:focus-visible {
+  outline: 3px solid #22a6bb;
+  outline-offset: 3px;
+}
+
+.site-section-title {
+  color: var(--wcm-ink);
+}
+
+.site-text-link {
+  color: var(--wcm-teal);
+}
+
+.site-text-link:hover {
+  color: var(--wcm-coral);
+}
+
+.site-icon-button {
+  color: var(--wcm-teal);
+}
+
+.site-icon-button:hover {
+  color: var(--wcm-coral);
+  background: #ffedef;
+}
+
+.site-button-primary {
+  background: var(--wcm-teal);
+  color: white;
+  box-shadow: 0 9px 23px rgba(6, 89, 117, .18);
+}
+
+.site-button-primary:hover {
+  background: var(--wcm-teal-strong);
+  box-shadow: 0 13px 28px rgba(6, 89, 117, .24);
+}
+
+.site-button-outline {
+  color: var(--wcm-teal);
+  border-color: #a8d7e0;
+  background: #fffdfb;
+}
+
+.site-button-outline:hover {
+  background: #e9f9fc;
+  border-color: #5fb5c6;
+}
+
+.site-eyebrow {
+  color: #ae4a36;
+  background: #fff1e7;
+  border-color: #ffdbc3;
+}
+
+.site-card-hover:hover {
+  border-color: #8acdda;
+  box-shadow: 0 18px 38px rgba(6, 89, 117, .12);
+}
+
+.site-field:focus {
+  border-color: #159fb7;
+  box-shadow: 0 0 0 3px #c5edf4;
+}
+
+.site-gradient {
+  background: radial-gradient(circle at 8% 14%, #ddf6fa, transparent 45%),
+    radial-gradient(circle at 94% 85%, #ffe3de, transparent 46%),
+    linear-gradient(120deg, #fff9f1, #f6fcfd);
+}
+
+/* Reusable surfaces specific to the new shop theme. */
+.wcm-announcement {
+  background: linear-gradient(110deg, #064b65 0%, #066982 60%, #09829a 100%);
+}
+
+.wcm-header {
+  box-shadow: 0 5px 24px rgba(9, 64, 83, .07);
+}
+
+.wcm-brand-mark {
+  background: linear-gradient(145deg, #ebfafc, #fff1e8);
+}
+
+.wcm-home-perk {
+  border-color: #e4edf0;
+  box-shadow: 0 9px 26px rgba(6, 89, 117, .06);
+}
+
+.wcm-home-perk:nth-child(1) .wcm-perk-icon {
+  background: #fff0f1;
+  color: #ce3b49;
+}
+
+.wcm-home-perk:nth-child(2) .wcm-perk-icon {
+  background: #fff0de;
+  color: #c75b17;
+}
+
+.wcm-home-perk:nth-child(3) .wcm-perk-icon {
+  background: #e5f8fb;
+  color: #087b96;
+}
+
+.wcm-hero {
+  background: linear-gradient(112deg, #e5f8fb 0%, #f5fcfd 47%, #fff1e9 100%);
+  border: 1px solid #d9eef1;
+  box-shadow: 0 16px 44px rgba(6, 89, 117, .065);
+}
+
+.wcm-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  width: 240px;
+  height: 240px;
+  border-radius: 999px;
+  left: -105px;
+  bottom: -175px;
+  background: #ffda79;
+  opacity: .4;
+}
+
+.wcm-hero-highlight {
+  color: var(--wcm-coral);
+}
+
+.wcm-shop-finale {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(120deg, #064a65 0%, #075f79 65%, #137f96 100%);
+}
+
+.wcm-shop-finale::after {
+  content: "";
+  position: absolute;
+  right: -80px;
+  top: -130px;
+  width: 270px;
+  height: 270px;
+  border: 48px solid rgba(255, 203, 53, .17);
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.wcm-shop-finale .site-button-outline {
+  border-color: transparent;
+  color: #074b64;
+  background: #fff;
+}
+
+.wcm-shop-finale .site-button-outline:hover {
+  background: #fff0e8;
+}
+
+.wcm-footer {
+  position: relative;
+}
+
+.wcm-footer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #ce3b49 0 27%, #159fb7 27% 52%, #2d9c5d 52% 72%, #ed6a22 72% 88%, #ffcb35 88%);
+}
+
+.auth-story {
+  background: linear-gradient(145deg, #064b65, #07768e 70%, #159fb7);
+}
+
+.auth-form form button[type="submit"] {
+  background: var(--wcm-teal);
+}
+
+.auth-form form button[type="submit"]:hover:not(:disabled) {
+  background: var(--wcm-teal-strong);
+}
+
+@media (hover: hover) {
+  .wcm-home-perk {
+    transition: transform .22s ease, box-shadow .22s ease;
+  }
+
+  .wcm-home-perk:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(6, 89, 117, .10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wcm-home-perk {
+    transition: none;
+  }
+
+  .wcm-home-perk:hover {
+    transform: none;
+  }
 }

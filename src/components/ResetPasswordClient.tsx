@@ -1,4 +1,5 @@
 "use client";
+import AuthStoryPanel from "@/components/AuthStoryPanel";
 
 import React, { useEffect, useMemo, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -23,7 +24,14 @@ function pwStrength(pw: string) {
     if (/[0-9]/.test(pw)) score++;
     if (/[^A-Za-z0-9]/.test(pw)) score++;
     const pct = (score / 4) * 100;
-    const label = score <= 1 ? "Weak" : score === 2 ? "Okay" : score === 3 ? "Good" : "Strong";
+    const label =
+        score <= 1
+            ? "Weak"
+            : score === 2
+              ? "Okay"
+              : score === 3
+                ? "Good"
+                : "Strong";
     return { score, pct, label };
 }
 
@@ -66,7 +74,10 @@ export default function ResetPasswordClient({ code }: Props) {
             router.push("/login");
             return;
         }
-        const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : c)), 1000);
+        const t = setTimeout(
+            () => setCountdown((c) => (c !== null ? c - 1 : c)),
+            1000,
+        );
         return () => clearTimeout(t);
     }, [countdown, router]);
 
@@ -117,22 +128,25 @@ export default function ResetPasswordClient({ code }: Props) {
 
             const recaptchaToken = await grecaptcha.execute(
                 process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                { action: "reset_password" }
+                { action: "reset_password" },
             );
 
             if (!recaptchaToken) {
                 throw new Error("Failed to generate reCAPTCHA token");
             }
 
-            const res = await fetch(`${API_BASE}/customer/reset_password/${encodeURIComponent(code)}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    newPassword: password,
-                    confirmPassword: confirm,
-                    recaptchaToken
-                }),
-            });
+            const res = await fetch(
+                `${API_BASE}/customer/reset_password/${encodeURIComponent(code)}`,
+                {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        newPassword: password,
+                        confirmPassword: confirm,
+                        recaptchaToken,
+                    }),
+                },
+            );
 
             let data: any = null;
             try {
@@ -142,8 +156,11 @@ export default function ResetPasswordClient({ code }: Props) {
             }
 
             if (!res.ok) {
-                const msg = data?.error ?? data?.message ?? "Unable to reset password.";
-                setError(typeof msg === "string" ? msg : "Unable to reset password.");
+                const msg =
+                    data?.error ?? data?.message ?? "Unable to reset password.";
+                setError(
+                    typeof msg === "string" ? msg : "Unable to reset password.",
+                );
                 setLoading(false);
                 return;
             }
@@ -159,7 +176,7 @@ export default function ResetPasswordClient({ code }: Props) {
 
     if (!mounted) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-sky-50 p-6">
+            <div className="min-h-screen flex items-center justify-center site-gradient p-6">
                 <div className="w-full max-w-lg bg-white rounded-2xl shadow p-6">
                     <div className="h-6 bg-gray-100 rounded mb-4" />
                     <div className="h-12 bg-gray-100 rounded mb-3" />
@@ -170,56 +187,22 @@ export default function ResetPasswordClient({ code }: Props) {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-sky-50 p-6">
+        <div className="min-h-screen flex items-center justify-center site-gradient p-6">
             <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 {/* Info / brand panel (minimal, visible on md+) */}
-                <aside className="hidden md:flex flex-col justify-center gap-6 p-6 rounded-2xl bg-white/90 border border-gray-100 shadow">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-gradient-to-br from-sky-100 to-indigo-50 p-3 rounded-lg">
-                            <ShieldCheck size={28} className="text-sky-600" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold">Secure your account</h3>
-                            <p className="text-sm text-gray-500">Choose a strong password. We’ll never store it in plain text.</p>
-                        </div>
-                    </div>
-
-                    <div className="rounded-lg overflow-hidden">
-                        {/* tasteful SVG accent */}
-                        <div className="w-full h-36 bg-gradient-to-tr from-sky-50 to-indigo-50 flex items-center justify-center">
-                            <svg width="220" height="120" viewBox="0 0 220 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                                <rect x="0" y="0" width="220" height="120" rx="12" fill="url(#g1)" />
-                                <defs>
-                                    <linearGradient id="g1" x1="0" x2="1">
-                                        <stop offset="0" stopColor="#e0f2fe" />
-                                        <stop offset="1" stopColor="#ede9fe" />
-                                    </linearGradient>
-                                </defs>
-                                <path d="M40 70 Q80 20 140 70" stroke="#7dd3fc" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.9" />
-                                <circle cx="60" cy="60" r="6" fill="#06b6d4" />
-                                <circle cx="120" cy="60" r="6" fill="#7c3aed" />
-                            </svg>
-                        </div>
-                    </div>
-
-                    <ul className="text-sm text-gray-600 space-y-2">
-                        <li className="flex items-start gap-3">
-                            <Key size={16} className="mt-1 text-sky-500" />
-                            <span>Use a unique password you don't use elsewhere.</span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                            <CheckCircle size={16} className="mt-1 text-green-500" />
-                            <span>We recommend 12+ characters for maximum safety.</span>
-                        </li>
-                    </ul>
-                </aside>
+                <AuthStoryPanel kind="reset" />
 
                 {/* Form */}
                 <main className="bg-white rounded-2xl p-6 md:p-8 shadow-lg border border-gray-100">
                     <div className="flex items-center justify-between mb-4">
                         <div>
-                            <h1 className="text-2xl font-semibold">Create a new password</h1>
-                            <p className="text-sm text-gray-500 mt-1">Secure your account with a strong, memorable password.</p>
+                            <h1 className="text-2xl font-semibold">
+                                Create a new password
+                            </h1>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Secure your account with a strong, memorable
+                                password.
+                            </p>
                         </div>
                         <button
                             type="button"
@@ -231,16 +214,25 @@ export default function ResetPasswordClient({ code }: Props) {
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+                    <form
+                        onSubmit={handleSubmit}
+                        className="space-y-5"
+                        noValidate
+                    >
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label
+                                htmlFor="password"
+                                className="block text-sm font-medium text-gray-700 mb-2"
+                            >
                                 New password
                             </label>
                             <div className="relative">
                                 <input
                                     id="password"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) =>
+                                        setPassword(e.target.value)
+                                    }
                                     type={showPassword ? "text" : "password"}
                                     placeholder="Minimum 8 characters"
                                     autoComplete="new-password"
@@ -253,9 +245,17 @@ export default function ResetPasswordClient({ code }: Props) {
                                     type="button"
                                     onClick={() => setShowPassword((s) => !s)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                    aria-label={
+                                        showPassword
+                                            ? "Hide password"
+                                            : "Show password"
+                                    }
                                 >
-                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    {showPassword ? (
+                                        <EyeOff size={16} />
+                                    ) : (
+                                        <Eye size={16} />
+                                    )}
                                 </button>
                             </div>
 
@@ -270,17 +270,24 @@ export default function ResetPasswordClient({ code }: Props) {
                                                 strength.pct >= 75
                                                     ? "linear-gradient(90deg,#06b6d4,#7c3aed)"
                                                     : strength.pct >= 50
-                                                        ? "linear-gradient(90deg,#f59e0b,#f97316)"
-                                                        : "linear-gradient(90deg,#ef4444,#f43f5e)",
+                                                      ? "linear-gradient(90deg,#f59e0b,#f97316)"
+                                                      : "linear-gradient(90deg,#ef4444,#f43f5e)",
                                         }}
                                     />
                                 </div>
-                                <div className="mt-2 text-xs text-gray-500">{password ? `${strength.label} • ${password.length} chars` : " "}</div>
+                                <div className="mt-2 text-xs text-gray-500">
+                                    {password
+                                        ? `${strength.label} • ${password.length} chars`
+                                        : " "}
+                                </div>
                             </div>
                         </div>
 
                         <div>
-                            <label htmlFor="confirm" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label
+                                htmlFor="confirm"
+                                className="block text-sm font-medium text-gray-700 mb-2"
+                            >
                                 Confirm password
                             </label>
                             <div className="relative">
@@ -300,9 +307,17 @@ export default function ResetPasswordClient({ code }: Props) {
                                     type="button"
                                     onClick={() => setShowConfirm((s) => !s)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                                    aria-label={showConfirm ? "Hide password" : "Show password"}
+                                    aria-label={
+                                        showConfirm
+                                            ? "Hide password"
+                                            : "Show password"
+                                    }
                                 >
-                                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    {showConfirm ? (
+                                        <EyeOff size={16} />
+                                    ) : (
+                                        <Eye size={16} />
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -319,7 +334,12 @@ export default function ResetPasswordClient({ code }: Props) {
                                 <CheckCircle size={18} />
                                 <div>
                                     <div className="font-medium">{success}</div>
-                                    {countdown !== null && <div className="text-xs text-gray-600 mt-1">Redirecting to login in {countdown}s…</div>}
+                                    {countdown !== null && (
+                                        <div className="text-xs text-gray-600 mt-1">
+                                            Redirecting to login in {countdown}
+                                            s…
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -327,14 +347,22 @@ export default function ResetPasswordClient({ code }: Props) {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full inline-flex items-center justify-center gap-3 px-5 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-semibold shadow hover:scale-[1.01] transition-transform disabled:opacity-60"
+                            className="w-full inline-flex items-center justify-center gap-3 px-5 py-3 rounded-xl bg-[#065975] hover:bg-[#03465e] text-white font-semibold shadow hover:scale-[1.01] transition-transform disabled:opacity-60"
                         >
                             <span className="sr-only">Set new password</span>
-                            {loading ? "Saving..." : <span className="flex items-center gap-2"><Key size={16} /> Set new password</span>}
+                            {loading ? (
+                                "Saving..."
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    <Key size={16} /> Set new password
+                                </span>
+                            )}
                         </button>
 
                         <div className="text-center text-xs text-gray-400">
-                            By setting a new password you agree to our <span className="underline">Terms</span> and <span className="underline">Privacy</span>.
+                            By setting a new password you agree to our{" "}
+                            <span className="underline">Terms</span> and{" "}
+                            <span className="underline">Privacy</span>.
                         </div>
                     </form>
                 </main>

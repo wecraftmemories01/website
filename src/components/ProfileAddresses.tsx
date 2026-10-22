@@ -5,7 +5,9 @@ import { Plus, Trash2 } from "lucide-react";
 import Pagination from "../components/ui/Pagination";
 import ConfirmModal from "./ui/ConfirmModal";
 import type { Address } from "../types/address";
-import AddressModalEdit, { Address as EditAddressType } from "./AddressModalEdit";
+import AddressModalEdit, {
+    Address as EditAddressType,
+} from "./AddressModalEdit";
 
 const TOKEN_KEY = "accessToken";
 const PER_PAGE = 25;
@@ -29,11 +31,15 @@ function getStoredAccessToken(): string | null {
 }
 
 /* Auth fetch with Bearer token */
-async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+async function authFetch(
+    input: RequestInfo,
+    init?: RequestInit,
+): Promise<Response> {
     const token = getStoredAccessToken();
     const headers = new Headers(init?.headers ?? {});
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.get("Content-Type") && init?.body) headers.set("Content-Type", "application/json");
+    if (!headers.get("Content-Type") && init?.body)
+        headers.set("Content-Type", "application/json");
     return fetch(input, { ...init, headers });
 }
 
@@ -73,24 +79,38 @@ function mapServerAddressToLocal(serverRec: any): Address {
 }
 
 export default function ProfileAddresses(props: ProfileAddressesProps) {
-    const { addresses: externalAddresses, onAdd, onEdit, onDelete, onSetDefault } = props;
+    const {
+        addresses: externalAddresses,
+        onAdd,
+        onEdit,
+        onDelete,
+        onSetDefault,
+    } = props;
 
     // When server-driven pagination is used, `addresses` will hold only the current page's items.
-    const [addresses, setAddresses] = useState<Address[]>(externalAddresses ?? []);
+    const [addresses, setAddresses] = useState<Address[]>(
+        externalAddresses ?? [],
+    );
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+    const [settingDefaultId, setSettingDefaultId] = useState<string | null>(
+        null,
+    );
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     // confirmation modal state
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<'delete' | 'setDefault' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<
+        "delete" | "setDefault" | null
+    >(null);
     const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
     const [confirmLoading, setConfirmLoading] = useState(false);
 
     // address edit/add modal
     const [editModalOpen, setEditModalOpen] = useState(false);
-    const [editAddress, setEditAddress] = useState<EditAddressType | null>(null);
+    const [editAddress, setEditAddress] = useState<EditAddressType | null>(
+        null,
+    );
 
     /* --- Pagination state (server-driven) --- */
     const [page, setPage] = useState<number>(1);
@@ -123,13 +143,18 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 }
 
                 const usePage = opts?.pageOverride ?? page;
-                const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1").replace(/\/$/, "");
+                const apiBase = (
+                    process.env.NEXT_PUBLIC_API_BASE ||
+                    "http://localhost:3000/v1"
+                ).replace(/\/$/, "");
                 const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address?page=${encodeURIComponent(String(usePage))}&limit=${encodeURIComponent(String(PER_PAGE))}`;
 
                 const res = await authFetch(url, { method: "GET" });
                 if (!res.ok) {
                     const text = await res.text().catch(() => "");
-                    throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`);
+                    throw new Error(
+                        `HTTP ${res.status} ${res.statusText} ${text}`,
+                    );
                 }
                 const json = await res.json();
 
@@ -139,7 +164,10 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
 
                 // set addresses and totals
                 setAddresses(mapped);
-                const total = typeof json.totalRecords === "number" ? json.totalRecords : mapped.length;
+                const total =
+                    typeof json.totalRecords === "number"
+                        ? json.totalRecords
+                        : mapped.length;
                 setServerTotalRecords(total);
 
                 // if server returns page/limit ensure client follows server (avoid loops: only set when different)
@@ -155,7 +183,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [page, externalAddresses] // page here only for dependency lint; fetchAddresses invoked explicitly
+        [page, externalAddresses], // page here only for dependency lint; fetchAddresses invoked explicitly
     );
 
     /* ---- Effect: fetch when page changes (only in server mode) ---- */
@@ -220,7 +248,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 a.id === rawIdStr ||
                 a.id === `srv_${normalizedCandidate}` ||
                 a.serverId === normalizedCandidate ||
-                a.serverId === rawIdStr
+                a.serverId === rawIdStr,
         );
 
         // prefer serverId from record if available; otherwise use normalizedCandidate
@@ -239,13 +267,20 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
 
         try {
             setDeletingId(String(id));
-            const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1").replace(/\/$/, "");
+            const apiBase = (
+                process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1"
+            ).replace(/\/$/, "");
             // send page & limit so backend can respond with current pagination if desired
             const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address/${encodeURIComponent(useId)}?page=${encodeURIComponent(
-                String(page)
+                String(page),
             )}&limit=${encodeURIComponent(String(PER_PAGE))}`;
 
-            console.debug("[ProfileAddresses] DELETE ->", { url, useId, originalId: id, addr });
+            console.debug("[ProfileAddresses] DELETE ->", {
+                url,
+                useId,
+                originalId: id,
+                addr,
+            });
             const res = await authFetch(url, { method: "DELETE" });
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
@@ -259,18 +294,31 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 // server returns paginated payload
                 const mapped = json.data.map(mapServerAddressToLocal);
                 setAddresses(mapped);
-                const total = typeof json.totalRecords === "number" ? json.totalRecords : mapped.length;
+                const total =
+                    typeof json.totalRecords === "number"
+                        ? json.totalRecords
+                        : mapped.length;
                 setServerTotalRecords(total);
                 if (typeof json.page === "number") setPage(json.page);
             } else {
                 // success: optimistic update and refetch logic
                 setAddresses((prev) => {
-                    const next = prev.filter((a) => !(a.serverId === useId || a.id === String(id) || a.id === `srv_${useId}`));
+                    const next = prev.filter(
+                        (a) =>
+                            !(
+                                a.serverId === useId ||
+                                a.id === String(id) ||
+                                a.id === `srv_${useId}`
+                            ),
+                    );
 
                     // If we've removed the last item on this page, move to previous page (if available)
                     if (next.length === 0) {
                         const newTotal = Math.max(0, serverTotalRecords - 1); // optimistic
-                        const newTotalPages = Math.max(1, Math.ceil(newTotal / PER_PAGE));
+                        const newTotalPages = Math.max(
+                            1,
+                            Math.ceil(newTotal / PER_PAGE),
+                        );
                         if (page > newTotalPages) {
                             setPage(newTotalPages);
                         } else {
@@ -317,7 +365,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                 a.id === rawIdStr ||
                 a.id === `srv_${normalizedCandidate}` ||
                 a.serverId === normalizedCandidate ||
-                a.serverId === rawIdStr
+                a.serverId === rawIdStr,
         );
 
         const useId = (addr?.serverId ?? normalizedCandidate) as string | null;
@@ -334,10 +382,12 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
 
         try {
             setSettingDefaultId(String(id));
-            const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1").replace(/\/$/, "");
+            const apiBase = (
+                process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000/v1"
+            ).replace(/\/$/, "");
             // include page/limit so server can return updated paginated list if it wants
             const url = `${apiBase}/customer/${encodeURIComponent(cust)}/address/${encodeURIComponent(useId)}/default?page=${encodeURIComponent(
-                String(page)
+                String(page),
             )}&limit=${encodeURIComponent(String(PER_PAGE))}`;
 
             console.debug("[ProfileAddresses] PUT", url);
@@ -352,12 +402,20 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
             if (json && Array.isArray(json.data)) {
                 const mapped = json.data.map(mapServerAddressToLocal);
                 setAddresses(mapped);
-                const total = typeof json.totalRecords === "number" ? json.totalRecords : mapped.length;
+                const total =
+                    typeof json.totalRecords === "number"
+                        ? json.totalRecords
+                        : mapped.length;
                 setServerTotalRecords(total);
                 if (typeof json.page === "number") setPage(json.page);
             } else {
                 // Update UI (only after success) - set default flag locally and refetch
-                setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.serverId === useId || a.id === String(id) })));
+                setAddresses((prev) =>
+                    prev.map((a) => ({
+                        ...a,
+                        isDefault: a.serverId === useId || a.id === String(id),
+                    })),
+                );
                 fetchAddresses();
             }
 
@@ -387,7 +445,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
     const handleSetDefault = onSetDefault ?? internalSetDefault;
 
     /* ---- Confirmation modal helpers ---- */
-    function openConfirm(action: 'delete' | 'setDefault', id: string | number) {
+    function openConfirm(action: "delete" | "setDefault", id: string | number) {
         setConfirmAction(action);
         setConfirmTargetId(String(id));
         setConfirmOpen(true);
@@ -398,9 +456,9 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
         setConfirmLoading(true);
 
         try {
-            if (confirmAction === 'delete') {
+            if (confirmAction === "delete") {
                 await Promise.resolve(internalDelete(confirmTargetId));
-            } else if (confirmAction === 'setDefault') {
+            } else if (confirmAction === "setDefault") {
                 await Promise.resolve(internalSetDefault(confirmTargetId));
             }
         } catch (err: any) {
@@ -455,7 +513,11 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
         // Try to update locally; also refetch to get canonical state (server may have different snapshot)
         setAddresses((prev) =>
             prev.map((a) => {
-                const matches = (a.serverId && updated.serverId && a.serverId === updated.serverId) || a.id === updated.id;
+                const matches =
+                    (a.serverId &&
+                        updated.serverId &&
+                        a.serverId === updated.serverId) ||
+                    a.id === updated.id;
                 if (!matches) return a;
                 return {
                     ...a,
@@ -473,7 +535,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                     isDefault: !!updated.isDefault,
                     serverId: updated.serverId ?? a.serverId,
                 };
-            })
+            }),
         );
 
         if (Array.isArray(externalAddresses)) {
@@ -591,7 +653,7 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                                     >
                                         <Trash2 className="w-4 h-4" />
                                         {deletingId === String(a.id) ||
-                                            deletingId === String(a.serverId)
+                                        deletingId === String(a.serverId)
                                             ? "Removing..."
                                             : "Remove"}
                                     </button>
@@ -606,12 +668,11 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                                         disabled={
                                             settingDefaultId === String(a.id) ||
                                             settingDefaultId ===
-                                            String(a.serverId)
+                                                String(a.serverId)
                                         }
                                     >
                                         {settingDefaultId === String(a.id) ||
-                                            settingDefaultId ===
-                                            String(a.serverId)
+                                        settingDefaultId === String(a.serverId)
                                             ? "Setting..."
                                             : "Set as default"}
                                     </button>
@@ -640,15 +701,15 @@ export default function ProfileAddresses(props: ProfileAddressesProps) {
                     confirmAction === "delete"
                         ? "Remove address?"
                         : confirmAction === "setDefault"
-                            ? "Set default address?"
-                            : "Confirm"
+                          ? "Set default address?"
+                          : "Confirm"
                 }
                 description={
                     confirmAction === "delete"
                         ? "Are you sure you want to remove this address? This action cannot be undone."
                         : confirmAction === "setDefault"
-                            ? "Make this address your default shipping address?"
-                            : ""
+                          ? "Make this address your default shipping address?"
+                          : ""
                 }
                 confirmLabel={
                     confirmAction === "delete"

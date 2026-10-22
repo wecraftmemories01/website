@@ -1,16 +1,27 @@
 "use client";
 
+import AuthStoryPanel from "@/components/AuthStoryPanel";
 import React, { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, User } from "lucide-react";
 import favouritesClient from "@/lib/favouritesClient";
-import {
-    getAuth,
-    isTokenValid,
-    persistAuth,
-    type AuthShape,
-} from "@/lib/auth";
+import { getAuth, isTokenValid, persistAuth, type AuthShape } from "@/lib/auth";
+
+/** Only accept on-site paths as post-login destinations. */
+function getPostLoginRedirect(fallback: string): string {
+    if (typeof window === "undefined") return fallback;
+    const target = new URLSearchParams(window.location.search).get("redirect");
+    if (
+        !target ||
+        !target.startsWith("/") ||
+        target.startsWith("//") ||
+        target.includes("\\")
+    ) {
+        return fallback;
+    }
+    return target;
+}
 
 /* ---------------- Component ---------------- */
 
@@ -46,7 +57,7 @@ export default function LoginPage() {
             const tokenValid = isTokenValid();
 
             if (customerId && tokenValid) {
-                router.replace("/");
+                router.replace(getPostLoginRedirect("/"));
             }
         } catch {
             // ignore
@@ -57,7 +68,7 @@ export default function LoginPage() {
         try {
             const r = localStorage.getItem("rememberedUser");
             if (r) setUsername(r);
-        } catch { }
+        } catch {}
     }, []);
 
     const validate = () => {
@@ -96,7 +107,7 @@ export default function LoginPage() {
 
             const recaptchaToken = await grecaptcha.execute(
                 process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                { action: "login" }
+                { action: "login" },
             );
 
             if (!recaptchaToken) {
@@ -112,14 +123,14 @@ export default function LoginPage() {
                 body: JSON.stringify({
                     username: username.trim(),
                     password,
-                    recaptchaToken
+                    recaptchaToken,
                 }),
             });
 
             let data: any = null;
             try {
                 data = await res.json();
-            } catch { }
+            } catch {}
 
             if (!res.ok) {
                 const be: BackendError | undefined = data?.error;
@@ -134,7 +145,7 @@ export default function LoginPage() {
                     accessToken: data.token?.accessToken ?? data.accessToken,
                     refreshToken: data.token?.refreshToken ?? data.refreshToken,
                     expiresIn: data.token?.expiresIn ?? data.expiresIn,
-                }
+                },
             });
 
             // SYNC GUEST FAVOURITES → SERVER
@@ -145,6 +156,19 @@ export default function LoginPage() {
                 window.dispatchEvent(new Event("favouritesChanged"));
             } catch (err) {
                 console.error("Favourites sync failed", err);
+            }
+
+            // Transfer guest hamper/product lines before using the signed-in cart.
+            let cartSyncFailed = false;
+            try {
+                const { syncGuestCartToServer } = await import("@/lib/hampers");
+                await syncGuestCartToServer();
+            } catch (err) {
+                cartSyncFailed = true;
+                console.error(
+                    "Guest cart transfer failed; items remain stored for retry",
+                    err,
+                );
             }
 
             // WAIT FOR CART SYNC BEFORE REDIRECT
@@ -164,9 +188,13 @@ export default function LoginPage() {
             setSuccess(data?.message || "Login successful");
 
             // NOW redirect (after everything is ready)
-            router.push("/cart");
+            router.push(
+                cartSyncFailed ? "/cart" : getPostLoginRedirect("/cart"),
+            );
         } catch {
-            setErrorMsg("Unable to reach server. Please check if your API is running.");
+            setErrorMsg(
+                "Unable to reach server. Please check if your API is running.",
+            );
         } finally {
             setLoading(false);
         }
@@ -191,65 +219,22 @@ export default function LoginPage() {
     }, []);
 
     return (
-        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 md:flex md:items-center md:justify-center md:p-8">
-            <div className="w-full max-w-none md:max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-12 items-center">
-                {/* Left hero panel */}
-                <div className="hidden md:flex flex-col justify-center gap-8 px-10">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-white p-3 rounded-full shadow-md">
-                            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="24" height="24" rx="8" fill="#0ea5e9" />
-                                <path d="M7 12h10" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-extrabold leading-tight">Welcome back to WeCraftMemories</h2>
-                            <p className="text-sm text-gray-600 mt-1 max-w-xs">
-                                Manage orders, track inventory, and create delightful handmade products — all from one cozy dashboard.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="bg-white/90 border border-gray-100 rounded-3xl p-6 shadow-inner">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-sky-50 rounded-lg">📦</div>
-                            <div>
-                                <div className="text-sm font-medium">Fast order lookup</div>
-                                <div className="text-xs text-gray-500">Find any order within seconds</div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 mt-4">
-                            <div className="p-3 bg-sky-50 rounded-lg">🔒</div>
-                            <div>
-                                <div className="text-sm font-medium">Secure tokens</div>
-                                <div className="text-xs text-gray-500">We store only encrypted credentials</div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 mt-4">
-                            <div className="p-3 bg-sky-50 rounded-lg">🎨</div>
-                            <div>
-                                <div className="text-sm font-medium">Creative tools</div>
-                                <div className="text-xs text-gray-500">Design product cards and galleries</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="text-sm text-gray-500">
-                        Need an account?
-                        <Link href="/register" className="text-sky-600 underline">
-                            Sign up
-                        </Link>
-                    </div>
-                </div>
+        <div className="wcm-auth py-5 sm:py-10">
+            <div className="auth-shell mx-auto grid grid-cols-1 md:grid-cols-2 items-stretch max-w-5xl overflow-hidden">
+                {/* Shared brand panel */}
+                <AuthStoryPanel kind="login" />
 
                 {/* Right form */}
-                <div className="bg-white w-full px-6 pt-8 pb-6 md:min-h-0 md:bg-white/95 md:backdrop-blur-sm md:border md:border-gray-200 md:rounded-3xl md:shadow-xl md:p-12">
+                <div className="auth-form bg-white w-full px-6 py-8 sm:p-9 lg:p-12">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold">Sign in to your account</h1>
-                            <p className="text-sm text-gray-500 mt-2">Welcome back — enter your credentials to continue.</p>
+                            <h1 className="text-2xl md:text-3xl font-bold">
+                                Sign in to your account
+                            </h1>
+                            <p className="text-sm text-gray-500 mt-2">
+                                Welcome back — enter your credentials to
+                                continue.
+                            </p>
                         </div>
                     </div>
 
@@ -263,16 +248,28 @@ export default function LoginPage() {
                             </div>
                         </div>
                     ) : (
-                        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+                        <form
+                            onSubmit={handleSubmit}
+                            className="space-y-6"
+                            noValidate
+                        >
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                <label
+                                    htmlFor="wecraft-login-email"
+                                    className="block text-sm font-medium text-gray-700 mb-2"
+                                >
+                                    Email or username
+                                </label>
                                 <div className="relative">
                                     <input
+                                        id="wecraft-login-email"
                                         value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
+                                        onChange={(e) =>
+                                            setUsername(e.target.value)
+                                        }
                                         type="text"
                                         placeholder="you@example.com"
-                                        className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-200 text-sm"
+                                        className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#b6e7f0] text-sm"
                                         autoComplete="username"
                                     />
                                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -282,14 +279,24 @@ export default function LoginPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                                <label
+                                    htmlFor="wecraft-login-password"
+                                    className="block text-sm font-medium text-gray-700 mb-2"
+                                >
+                                    Password
+                                </label>
                                 <div className="relative">
                                     <input
+                                        id="wecraft-login-password"
                                         value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        type={showPassword ? "text" : "password"}
+                                        onChange={(e) =>
+                                            setPassword(e.target.value)
+                                        }
+                                        type={
+                                            showPassword ? "text" : "password"
+                                        }
                                         placeholder="Enter your password"
-                                        className="w-full pl-12 pr-14 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-200 text-sm"
+                                        className="w-full pl-12 pr-14 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#b6e7f0] text-sm"
                                         autoComplete="current-password"
                                     />
                                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -298,11 +305,21 @@ export default function LoginPage() {
 
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword((s) => !s)}
-                                        aria-label={showPassword ? "Hide password" : "Show password"}
+                                        onClick={() =>
+                                            setShowPassword((s) => !s)
+                                        }
+                                        aria-label={
+                                            showPassword
+                                                ? "Hide password"
+                                                : "Show password"
+                                        }
                                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md"
                                     >
-                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        {showPassword ? (
+                                            <EyeOff size={18} />
+                                        ) : (
+                                            <Eye size={18} />
+                                        )}
                                     </button>
                                 </div>
 
@@ -311,13 +328,18 @@ export default function LoginPage() {
                                         <input
                                             type="checkbox"
                                             checked={remember}
-                                            onChange={(e) => setRemember(e.target.checked)}
+                                            onChange={(e) =>
+                                                setRemember(e.target.checked)
+                                            }
                                             className="form-checkbox"
                                         />
                                         <span>Remember me</span>
                                     </label>
 
-                                    <Link href="/forgot-password" className="text-sky-600 hover:underline">
+                                    <Link
+                                        href="/forgot-password"
+                                        className="text-[#065975] hover:underline"
+                                    >
                                         Forgot Password?
                                     </Link>
                                 </div>
@@ -332,18 +354,36 @@ export default function LoginPage() {
                             )}
 
                             {success && (
-                                <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md p-3">{success}</div>
+                                <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md p-3">
+                                    {success}
+                                </div>
                             )}
 
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full inline-flex items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-semibold shadow-lg hover:scale-[1.01] transition-transform disabled:opacity-60"
+                                className="w-full inline-flex items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-[#065975] hover:bg-[#03465e] text-white font-semibold shadow-lg hover:scale-[1.01] transition-transform disabled:opacity-60"
                             >
                                 {loading ? (
-                                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                                    <svg
+                                        className="animate-spin h-5 w-5"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        ></circle>
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8v8z"
+                                        ></path>
                                     </svg>
                                 ) : (
                                     "Sign in"
@@ -351,11 +391,25 @@ export default function LoginPage() {
                             </button>
 
                             <div className="text-center text-sm text-gray-500 mt-2">
-                                Don't have an account? <a href="/register" className="text-sky-600 font-medium">Create one</a>
+                                Don't have an account?{" "}
+                                <a
+                                    href="/register"
+                                    className="text-[#065975] font-medium"
+                                >
+                                    Create one
+                                </a>
                             </div>
 
                             <div className="mt-3 text-xs text-center text-gray-400">
-                                By signing in you agree to our <a href="/terms" className="underline">Terms</a> and <a href="/privacy" className="underline">Privacy</a>.
+                                By signing in you agree to our{" "}
+                                <a href="/terms" className="underline">
+                                    Terms
+                                </a>{" "}
+                                and{" "}
+                                <a href="/privacy" className="underline">
+                                    Privacy
+                                </a>
+                                .
                             </div>
                         </form>
                     )}

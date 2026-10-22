@@ -1,17 +1,21 @@
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000").replace(/\/+$/, '');
+const API_BASE = (
+    process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000"
+).replace(/\/+$/, "");
 
-const TOKEN_KEY = 'accessToken';
-const CART_PRODUCTS_KEY = 'cartProductIds';
+const TOKEN_KEY = "accessToken";
+const CART_PRODUCTS_KEY = "cartProductIds";
 
 let cartProductSet = new Set<string>();
-let cartFetched = false;
 
 /* ---------------- Storage Helpers ---------------- */
 
 function getCartProductIds(): string[] {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === "undefined") return [];
     try {
-        return JSON.parse(localStorage.getItem(CART_PRODUCTS_KEY) || '[]');
+        const ids = JSON.parse(localStorage.getItem(CART_PRODUCTS_KEY) || "[]");
+        return Array.isArray(ids)
+            ? ids.filter((id): id is string => typeof id === "string")
+            : [];
     } catch {
         return [];
     }
@@ -19,8 +23,11 @@ function getCartProductIds(): string[] {
 
 function setCartProductIds(ids: string[]) {
     try {
-        localStorage.setItem(CART_PRODUCTS_KEY, JSON.stringify([...new Set(ids)]));
-    } catch { }
+        localStorage.setItem(
+            CART_PRODUCTS_KEY,
+            JSON.stringify([...new Set(ids)]),
+        );
+    } catch {}
 }
 
 /* ---------------- Public Helpers ---------------- */
@@ -39,8 +46,12 @@ export function isInCart(productId: string): boolean {
 /* ---------------- Auth Helpers ---------------- */
 
 function getStoredAccessToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+    if (typeof window === "undefined") return null;
+    try {
+        return localStorage.getItem(TOKEN_KEY);
+    } catch {
+        return null;
+    }
 }
 
 /* ---------------- Fetch Wrapper ---------------- */
@@ -49,22 +60,29 @@ async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}) {
     const headers = new Headers(init.headers ?? {});
     const token = getStoredAccessToken();
 
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    if (!headers.get('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.get("Content-Type"))
+        headers.set("Content-Type", "application/json");
 
     return fetch(input, { ...init, headers });
 }
 
 /* ---------------- Events ---------------- */
 
-function notifyCartChange() {
+function notifyCartChange(source?: string) {
     try {
-        window.dispatchEvent(new Event('cartChanged'));
-    } catch { }
+        // Other listeners (header, product cards) still receive this event.
+        // The cart page can skip fetching its own optimistic mutations.
+        window.dispatchEvent(
+            source
+                ? new CustomEvent("cartChanged", { detail: { source } })
+                : new Event("cartChanged"),
+        );
+    } catch {}
 
     try {
-        localStorage.setItem('cartUpdatedAt', String(Date.now()));
-    } catch { }
+        localStorage.setItem("cartUpdatedAt", String(Date.now()));
+    } catch {}
 }
 
 /* ---------------- Cart Actions ---------------- */
@@ -75,14 +93,15 @@ function notifyCartChange() {
 export async function addToCart(
     productId: string,
     quantity = 1,
-    type: 'SELL' | 'RENT' = 'SELL',
-    note?: string
+    type: "SELL" | "RENT" = "SELL",
+    note?: string,
 ) {
-    if (typeof window === 'undefined') return { success: false, message: 'not-in-browser' };
+    if (typeof window === "undefined")
+        return { success: false, message: "not-in-browser" };
 
     try {
         const res = await fetchWithAuth(`${API_BASE}/cart`, {
-            method: 'POST',
+            method: "POST",
             body: JSON.stringify({ productId, quantity, type, note }),
         });
 
@@ -101,7 +120,8 @@ export async function addToCart(
 
             return { success: true, payload };
         } else {
-            const msg = payload?.error || payload?.message || `HTTP ${res.status}`;
+            const msg =
+                payload?.error || payload?.message || `HTTP ${res.status}`;
             return { success: false, message: msg, payload };
         }
     } catch (err: any) {
@@ -117,16 +137,21 @@ export async function updateCartItem(
     itemId: string,
     productId: string,
     quantity: number,
-    type: 'SELL' | 'RENT' = 'SELL'
+    type: "SELL" | "RENT" = "SELL",
+    source?: string,
 ) {
-    if (typeof window === 'undefined') return { success: false, message: 'not-in-browser' };
-    if (!cartId) return { success: false, message: 'missing-cartId' };
+    if (typeof window === "undefined")
+        return { success: false, message: "not-in-browser" };
+    if (!cartId) return { success: false, message: "missing-cartId" };
 
     try {
-        const res = await fetchWithAuth(`${API_BASE}/cart/${encodeURIComponent(cartId)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ type, itemId, quantity }),
-        });
+        const res = await fetchWithAuth(
+            `${API_BASE}/cart/${encodeURIComponent(cartId)}`,
+            {
+                method: "PUT",
+                body: JSON.stringify({ type, itemId, quantity }),
+            },
+        );
 
         const payload = await res.json().catch(() => null);
 
@@ -136,15 +161,16 @@ export async function updateCartItem(
             if (quantity === 0) {
                 cartProductSet.delete(id);
 
-                const ids = getCartProductIds().filter(pid => pid !== id);
+                const ids = getCartProductIds().filter((pid) => pid !== id);
                 setCartProductIds(ids);
             }
 
-            notifyCartChange();
+            notifyCartChange(source);
 
             return { success: true, payload };
         } else {
-            const msg = payload?.error || payload?.message || `HTTP ${res.status}`;
+            const msg =
+                payload?.error || payload?.message || `HTTP ${res.status}`;
             return { success: false, message: msg, payload };
         }
     } catch (err: any) {
@@ -159,16 +185,21 @@ export async function removeFromCart(
     cartId: string,
     itemId: string,
     productId: string,
-    type: 'SELL' | 'RENT' = 'SELL'
+    type: "SELL" | "RENT" = "SELL",
+    source?: string,
 ) {
-    if (typeof window === 'undefined') return { success: false, message: 'not-in-browser' };
-    if (!cartId) return { success: false, message: 'missing-cartId' };
+    if (typeof window === "undefined")
+        return { success: false, message: "not-in-browser" };
+    if (!cartId) return { success: false, message: "missing-cartId" };
 
     try {
-        const res = await fetchWithAuth(`${API_BASE}/cart/${encodeURIComponent(cartId)}`, {
-            method: 'DELETE',
-            body: JSON.stringify({ type, itemId }),
-        });
+        const res = await fetchWithAuth(
+            `${API_BASE}/cart/${encodeURIComponent(cartId)}`,
+            {
+                method: "DELETE",
+                body: JSON.stringify({ type, itemId }),
+            },
+        );
 
         const payload = await res.json().catch(() => null);
 
@@ -177,14 +208,15 @@ export async function removeFromCart(
 
             cartProductSet.delete(id);
 
-            const ids = getCartProductIds().filter(pid => pid !== id);
+            const ids = getCartProductIds().filter((pid) => pid !== id);
             setCartProductIds(ids);
 
-            notifyCartChange();
+            notifyCartChange(source);
 
             return { success: true, payload };
         } else {
-            const msg = payload?.error || payload?.message || `HTTP ${res.status}`;
+            const msg =
+                payload?.error || payload?.message || `HTTP ${res.status}`;
             return { success: false, message: msg, payload };
         }
     } catch (err: any) {
@@ -196,33 +228,39 @@ export async function removeFromCart(
  * Fetch cart (hydrates memory + storage)
  */
 export async function fetchCartFromApi(): Promise<number> {
+    if (typeof window === "undefined" || !getStoredAccessToken()) return 0;
+
     try {
         const res = await fetchWithAuth(`${API_BASE}/cart`);
-        const data = await res.json();
+        if (!res.ok) throw new Error(`Cart request failed: HTTP ${res.status}`);
 
+        const data = await res.json();
+        if (data?.ack === "failure")
+            throw new Error("Cart request was rejected");
         let count = 0;
         const productIds: string[] = [];
+        const cart = Array.isArray(data?.cartData)
+            ? data.cartData[0]
+            : data?.cartData;
 
-        const cart = data?.cartData?.[0];
-
-        if (cart) {
-            for (const item of cart.sellItems || []) {
-                if (item.inUse && item.productId) {
-                    const id = String(item.productId);
-                    productIds.push(id);
-                    count += Number(item.quantity || 0);
-                }
+        for (const item of cart?.sellHamperItems || []) {
+            count += Number(item.quantity) || 0;
+        }
+        for (const item of cart?.sellItems || []) {
+            if (item.inUse !== false && item.productId) {
+                productIds.push(String(item.productId));
+                count += Number(item.quantity) || 0;
             }
         }
 
         setCartProductIds(productIds);
         cartProductSet = new Set(productIds);
-
+        notifyCartChange();
         return count;
-
     } catch (err) {
-        console.error('fetchCartFromApi failed', err);
-        return 0;
+        console.error("fetchCartFromApi failed", err);
+        // Do not erase a previously valid cart on a network/API failure.
+        return Number(localStorage.getItem("cartCount") || 0);
     }
 }
 
@@ -230,22 +268,22 @@ export async function fetchCartFromApi(): Promise<number> {
  * Clear cart (on logout)
  */
 export function clearCart() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     cartProductSet.clear();
-    cartFetched = false;
 
     try {
         localStorage.removeItem(CART_PRODUCTS_KEY);
-        localStorage.setItem('cartCount', '0');
-    } catch { }
+        localStorage.removeItem("wcm_guest_cart_v1");
+        localStorage.setItem("cartCount", "0");
+    } catch {}
 
     notifyCartChange();
 }
 
 /* ---------------- Auto Logout Sync ---------------- */
 
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
     window.addEventListener("authChanged", () => {
         const token = getStoredAccessToken();
         if (!token) {

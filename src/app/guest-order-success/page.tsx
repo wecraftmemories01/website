@@ -1,4 +1,10 @@
 import GuestOrderSuccessClient from "../../components/GuestOrderSuccessClient";
+import { OrderConfirmationState } from "@/components/OrderConfirmationView";
+
+export const metadata = {
+    title: "Order Confirmed | We Craft Memories",
+    robots: { index: false, follow: false },
+};
 
 export default async function OrderSuccessPage({
     searchParams,
@@ -9,15 +15,14 @@ export default async function OrderSuccessPage({
 
     const tokenRaw = params?.token;
 
-    const token = Array.isArray(tokenRaw)
-        ? tokenRaw[0]
-        : tokenRaw;
+    const token = Array.isArray(tokenRaw) ? tokenRaw[0] : tokenRaw;
 
     if (!token) {
         return (
-            <div className="p-6 text-sm text-red-600">
-                Invalid request. Missing token.
-            </div>
+            <OrderConfirmationState
+                message="This guest order link is missing its access token. Please use the link in your confirmation email or contact us for help."
+                guest
+            />
         );
     }
 

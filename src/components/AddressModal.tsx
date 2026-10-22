@@ -17,7 +17,9 @@ type Props = {
 
 function getApiBase(): string {
     if (typeof window === "undefined") return "";
-    return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
+    return process.env.NEXT_PUBLIC_API_BASE
+        ? String(process.env.NEXT_PUBLIC_API_BASE)
+        : "";
 }
 
 function buildUrl(path: string) {
@@ -50,7 +52,9 @@ function getCustomerId(): string | null {
 
     try {
         const base64 = token.split(".")[1];
-        const payload = JSON.parse(atob(base64.replace(/-/g, "+").replace(/_/g, "/")));
+        const payload = JSON.parse(
+            atob(base64.replace(/-/g, "+").replace(/_/g, "/")),
+        );
         return payload?.customerId || payload?._id || null;
     } catch {
         return null;
@@ -78,7 +82,7 @@ function isValidIndianPincode(pin: string) {
 async function fetchPostalDetails(pincode: string) {
     try {
         const res = await fetch(
-            `https://api.postalpincode.in/pincode/${encodeURIComponent(pincode)}`
+            `https://api.postalpincode.in/pincode/${encodeURIComponent(pincode)}`,
         );
 
         if (!res.ok) {
@@ -106,7 +110,10 @@ async function fetchPostalDetails(pincode: string) {
             city: po.Block || po.Name,
         };
     } catch (err: any) {
-        return { ok: false, message: err?.message || "Failed to fetch pincode data" };
+        return {
+            ok: false,
+            message: err?.message || "Failed to fetch pincode data",
+        };
     }
 }
 
@@ -114,7 +121,7 @@ async function fetchPostalDetails(pincode: string) {
 
 async function fetchPincodeServiceability(pincode: string) {
     const url = buildUrl(
-        `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`
+        `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`,
     );
 
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -164,7 +171,11 @@ async function apiCreateAddress(customerId: string, addr: Address) {
         isDefault: !!addr.isDefault,
     };
 
-    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
+    const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+    });
 
     const json = await safeJson(res);
     if (!res.ok) {
@@ -193,12 +204,21 @@ const blankAddress: Address = {
     isDefault: false,
 };
 
-export default function AddressModal({ show, onClose, onCreated, onSuccess }: Props) {
+export default function AddressModal({
+    show,
+    onClose,
+    onCreated,
+    onSuccess,
+}: Props) {
     const mountedRef = useRef(true);
     const postalDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
     const [form, setForm] = useState<Address>({ ...blankAddress });
-    const [formSvc, setFormSvc] = useState<{ checking: boolean; prepaid: boolean | null; error?: string }>({
+    const [formSvc, setFormSvc] = useState<{
+        checking: boolean;
+        prepaid: boolean | null;
+        error?: string;
+    }>({
         checking: false,
         prepaid: null,
     });
@@ -290,19 +310,15 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
         if (!form.addressLine1.trim())
             newErrors.addressLine1 = "Address Line 1 is required";
 
-        if (!form.pincode.trim())
-            newErrors.pincode = "Pincode is required";
+        if (!form.pincode.trim()) newErrors.pincode = "Pincode is required";
         else if (!isValidIndianPincode(form.pincode))
             newErrors.pincode = "Enter valid 6-digit pincode";
 
-        if (!form.state.trim())
-            newErrors.state = "State is required";
+        if (!form.state.trim()) newErrors.state = "State is required";
 
-        if (!form.city.trim())
-            newErrors.city = "City is required";
+        if (!form.city.trim()) newErrors.city = "City is required";
 
-        if (!form.district.trim())
-            newErrors.district = "District is required";
+        if (!form.district.trim()) newErrors.district = "District is required";
 
         setErrors(newErrors);
 
@@ -367,17 +383,24 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                 <div className="p-5 overflow-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
                         {/* Recipient Name */}
                         <div>
-                            <label className="block text-sm text-slate-600 mb-1">Recipient Name</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Recipient Name
+                            </label>
                             <input
                                 ref={firstInputRef}
                                 value={form.recipientName}
-                                onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        recipientName: e.target.value,
+                                    })
+                                }
                                 placeholder="Enter recipient name"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.recipientName ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.recipientName ? "border-red-500" : ""
+                                }`}
                             />
                             {errors.recipientName && (
                                 <p className="text-xs text-red-500 mt-1">
@@ -388,13 +411,23 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                         {/* Recipient Contact */}
                         <div>
-                            <label className="block text-sm text-slate-600 mb-1">Recipient Contact</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Recipient Contact
+                            </label>
                             <input
                                 value={form.recipientContact}
-                                onChange={(e) => setForm({ ...form, recipientContact: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        recipientContact: e.target.value,
+                                    })
+                                }
                                 placeholder="Enter recipient contact"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.recipientContact ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.recipientContact
+                                        ? "border-red-500"
+                                        : ""
+                                }`}
                             />
                             {errors.recipientContact && (
                                 <p className="text-xs text-red-500 mt-1">
@@ -405,13 +438,21 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                         {/* Address Line 1 */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm text-slate-600 mb-1">Address Line 1</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Address Line 1
+                            </label>
                             <input
                                 value={form.addressLine1}
-                                onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        addressLine1: e.target.value,
+                                    })
+                                }
                                 placeholder="House, Building, Street"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.addressLine1 ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.addressLine1 ? "border-red-500" : ""
+                                }`}
                             />
                             {errors.addressLine1 && (
                                 <p className="text-xs text-red-500 mt-1">
@@ -422,51 +463,80 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                         {/* Address Line 2 */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm text-slate-600 mb-1">Address Line 2</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Address Line 2
+                            </label>
                             <input
                                 value={form.addressLine2 ?? ""}
-                                onChange={(e) => setForm({ ...form, addressLine2: e.target.value || null })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        addressLine2: e.target.value || null,
+                                    })
+                                }
                                 placeholder="Apartment, Floor, Area (optional)"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.addressLine2 ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.addressLine2 ? "border-red-500" : ""
+                                }`}
                             />
                         </div>
 
                         {/* Address Line 3 */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm text-slate-600 mb-1">Address Line 3</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Address Line 3
+                            </label>
                             <input
                                 value={form.addressLine3 ?? ""}
-                                onChange={(e) => setForm({ ...form, addressLine3: e.target.value || null })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        addressLine3: e.target.value || null,
+                                    })
+                                }
                                 placeholder="Additional directions (optional)"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.addressLine3 ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.addressLine3 ? "border-red-500" : ""
+                                }`}
                             />
                         </div>
 
                         {/* Landmark */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm text-slate-600 mb-1">Landmark</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Landmark
+                            </label>
                             <input
                                 value={form.landmark ?? ""}
-                                onChange={(e) => setForm({ ...form, landmark: e.target.value || null })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        landmark: e.target.value || null,
+                                    })
+                                }
                                 placeholder="Nearby place or landmark (optional)"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.landmark ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.landmark ? "border-red-500" : ""
+                                }`}
                             />
                         </div>
 
                         {/* Pincode */}
                         <div>
-                            <label className="block text-sm text-slate-600 mb-1">Pincode</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                Pincode
+                            </label>
 
                             <input
                                 value={form.pincode}
                                 maxLength={6}
-                                onChange={(e) => handlePostalAutoFill(e.target.value)}
+                                onChange={(e) =>
+                                    handlePostalAutoFill(e.target.value)
+                                }
                                 placeholder="Enter 6-digit pincode"
-                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${errors.pincode ? "border-red-500" : ""
-                                    }`}
+                                className={`border border-slate-300 focus:border-[#065975] focus:ring-2 focus:ring-[#065975]/20 p-3 rounded-xl w-full transition text-sm ${
+                                    errors.pincode ? "border-red-500" : ""
+                                }`}
                             />
 
                             {/* Fetching Indicator */}
@@ -487,15 +557,18 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                         {/* State */}
                         <div>
-                            <label className="block text-sm text-slate-600 mb-1">State</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                State
+                            </label>
                             <input
                                 value={form.state}
                                 disabled={isLocationLocked}
                                 onChange={(e) =>
                                     setForm({ ...form, state: e.target.value })
                                 }
-                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${errors.state ? "border-red-500" : ""
-                                    } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
+                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${
+                                    errors.state ? "border-red-500" : ""
+                                } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
                             />
 
                             {isLocationLocked && (
@@ -513,15 +586,21 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                         {/* District */}
                         <div>
-                            <label className="block text-sm text-slate-600 mb-1">District</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                District
+                            </label>
                             <input
                                 value={form.district}
                                 disabled={isLocationLocked}
                                 onChange={(e) =>
-                                    setForm({ ...form, district: e.target.value })
+                                    setForm({
+                                        ...form,
+                                        district: e.target.value,
+                                    })
                                 }
-                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${errors.district ? "border-red-500" : ""
-                                    } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
+                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${
+                                    errors.district ? "border-red-500" : ""
+                                } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
                             />
 
                             {isLocationLocked && (
@@ -539,17 +618,20 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
 
                         {/* City */}
                         <div>
-                            <label className="block text-sm text-slate-600 mb-1">City</label>
+                            <label className="block text-sm text-slate-600 mb-1">
+                                City
+                            </label>
                             <input
                                 value={form.city}
                                 disabled={isLocationLocked}
                                 onChange={(e) =>
                                     setForm({ ...form, city: e.target.value })
                                 }
-                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${errors.city ? "border-red-500" : ""
-                                    } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
+                                className={`border border-slate-300 p-3 rounded-xl w-full text-sm bg-slate-50 ${
+                                    errors.city ? "border-red-500" : ""
+                                } ${isLocationLocked ? "cursor-not-allowed opacity-80" : ""}`}
                             />
-                            
+
                             {isLocationLocked && (
                                 <p className="text-xs text-slate-500 mt-1">
                                     Auto-filled from pincode
@@ -568,11 +650,17 @@ export default function AddressModal({ show, onClose, onCreated, onSuccess }: Pr
                             <input
                                 type="checkbox"
                                 checked={!!form.isDefault}
-                                onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        isDefault: e.target.checked,
+                                    })
+                                }
                             />
-                            <span className="text-sm text-slate-700">Set as default address</span>
+                            <span className="text-sm text-slate-700">
+                                Set as default address
+                            </span>
                         </label>
-
                     </div>
                 </div>
 

@@ -13,7 +13,9 @@ import ProfilePasswordUpdate from "./ProfilePasswordUpdate";
 import ProfileSection, { UserProfile } from "./ProfileSection";
 
 import AddressModal, { Address as ModalAddress } from "./AddressModal";
-import AddressModalEdit, { Address as EditAddressType } from "./AddressModalEdit";
+import AddressModalEdit, {
+    Address as EditAddressType,
+} from "./AddressModalEdit";
 
 /* LocalAddress local type */
 type LocalAddress = {
@@ -60,7 +62,8 @@ export default function ProfilePageAlt(): React.ReactElement {
     >("overview");
 
     const [editingProfile, setEditingProfile] = useState(false);
-    const [profileDraft, setProfileDraft] = useState<Partial<UserProfile> | null>(null);
+    const [profileDraft, setProfileDraft] =
+        useState<Partial<UserProfile> | null>(null);
 
     const [addrModalOpen, setAddrModalOpen] = useState(false);
     const [addrDraft, setAddrDraft] = useState<LocalAddress | null>(null);
@@ -73,7 +76,8 @@ export default function ProfilePageAlt(): React.ReactElement {
     const [ordersCount, setOrdersCount] = useState<number | null>(null);
     const [loadingOrders, setLoadingOrders] = useState(false);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
+    const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
 
     /* SAFE CUSTOMER ID RESOLVER */
     const resolveCustomerId = () => getStoredCustomerId() ?? user?.id ?? null;
@@ -128,7 +132,9 @@ export default function ProfilePageAlt(): React.ReactElement {
                     setUser(mapped);
                     setProfileDraft(mapped);
                 } else {
-                    throw new Error("Unexpected response shape from customer API");
+                    throw new Error(
+                        "Unexpected response shape from customer API",
+                    );
                 }
             } catch (err: any) {
                 console.error("Error fetching customer", err);
@@ -158,21 +164,23 @@ export default function ProfilePageAlt(): React.ReactElement {
 
                 const data: LocalAddress[] = Array.isArray(json.addressData)
                     ? json.addressData.map((s: any) => ({
-                        id: s._id ? String(s._id) : `a_${Date.now()}_${Math.random()}`,
-                        serverId: s._id ? String(s._id) : null,
-                        recipientName: s.recipientName ?? "",
-                        recipientContact: s.recipientContact ?? "",
-                        addressLine1: s.addressLine1 ?? "",
-                        addressLine2: s.addressLine2 ?? null,
-                        addressLine3: s.addressLine3 ?? null,
-                        landmark: s.landmark ?? null,
-                        pincode: s.pincode ?? "",
-                        state: s.state ?? "",
-                        district: s.district ?? "",
-                        city: s.city ?? "",
-                        country: s.country ?? "India",
-                        isDefault: !!s.isDefault,
-                    }))
+                          id: s._id
+                              ? String(s._id)
+                              : `a_${Date.now()}_${Math.random()}`,
+                          serverId: s._id ? String(s._id) : null,
+                          recipientName: s.recipientName ?? "",
+                          recipientContact: s.recipientContact ?? "",
+                          addressLine1: s.addressLine1 ?? "",
+                          addressLine2: s.addressLine2 ?? null,
+                          addressLine3: s.addressLine3 ?? null,
+                          landmark: s.landmark ?? null,
+                          pincode: s.pincode ?? "",
+                          state: s.state ?? "",
+                          district: s.district ?? "",
+                          city: s.city ?? "",
+                          country: s.country ?? "India",
+                          isDefault: !!s.isDefault,
+                      }))
                     : [];
 
                 setAddresses(data);
@@ -200,7 +208,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                 const apiBase = API_BASE.replace(/\/$/, "");
 
                 const res = await api.get(`/sell_order/orders`, {
-                    params: { page: 1, limit: 1 }
+                    params: { page: 1, limit: 1 },
                 });
 
                 const payload = res.data;
@@ -223,7 +231,10 @@ export default function ProfilePageAlt(): React.ReactElement {
         return () => controller.abort();
     }, [user?.id, API_BASE]);
 
-    const defaultAddress = useMemo(() => addresses.find((a) => a.isDefault) ?? null, [addresses]);
+    const defaultAddress = useMemo(
+        () => addresses.find((a) => a.isDefault) ?? null,
+        [addresses],
+    );
 
     /* ---------- ADDRESS MODAL HANDLERS ---------- */
     function openAddAddress() {
@@ -248,18 +259,26 @@ export default function ProfilePageAlt(): React.ReactElement {
     }
 
     /** Create a tab change helper */
-    function changeTab(tab: "overview" | "profile" | "security" | "addresses" | "orders") {
+    function changeTab(
+        tab: "overview" | "profile" | "security" | "addresses" | "orders",
+    ) {
         setActiveTab(tab);
 
         router.replace(`?tab=${tab}`, { scroll: false });
 
         // scroll to section on mobile
         setTimeout(() => {
-            if (typeof window !== "undefined" && window.innerWidth < 1024 && contentRef.current) {
+            if (
+                typeof window !== "undefined" &&
+                window.innerWidth < 1024 &&
+                contentRef.current
+            ) {
                 const headerOffset = 130;
 
-                const elementPosition = contentRef.current.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                const elementPosition =
+                    contentRef.current.getBoundingClientRect().top;
+                const offsetPosition =
+                    elementPosition + window.pageYOffset - headerOffset;
 
                 window.scrollTo({
                     top: offsetPosition,
@@ -289,7 +308,10 @@ export default function ProfilePageAlt(): React.ReactElement {
 
         setAddresses((prev) => {
             if (normalized.isDefault) {
-                return [...prev.map((p) => ({ ...p, isDefault: false })), normalized];
+                return [
+                    ...prev.map((p) => ({ ...p, isDefault: false })),
+                    normalized,
+                ];
             }
             return [...prev, normalized];
         });
@@ -316,7 +338,8 @@ export default function ProfilePageAlt(): React.ReactElement {
         setAddresses((prev) => {
             return prev.map((a) => {
                 const match =
-                    (normalized.serverId && a.serverId === normalized.serverId) ||
+                    (normalized.serverId &&
+                        a.serverId === normalized.serverId) ||
                     a.id === normalized.id;
 
                 if (match) {
@@ -350,14 +373,14 @@ export default function ProfilePageAlt(): React.ReactElement {
     /* ---------- RENDER ---------- */
     return (
         <div className="min-h-screen bg-linear-to-b from-[#fbfdff] to-white p-6 md:p-8 font-sans text-slate-900">
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* LEFT SIDEBAR */}
                 <aside className="lg:col-span-4 col-span-1">
                     <div className="bg-white rounded-3xl p-6 lg:p-8 shadow-xl border border-slate-100 sticky top-8">
                         <div className="flex items-center gap-4">
                             <div
                                 style={{ width: 84, height: 84 }}
-                                className="rounded-3xl bg-linear-to-br from-[#065975] to-[#0ea5a0] text-white grid place-items-center font-extrabold text-xl shadow-2xl"
+                                className="rounded-3xl bg-linear-to-br from-[#065975] to-[#19839a] text-white grid place-items-center font-extrabold text-xl shadow-2xl"
                             >
                                 {(user?.name ?? "?")
                                     .split(" ")
@@ -367,33 +390,53 @@ export default function ProfilePageAlt(): React.ReactElement {
                                     .toUpperCase()}
                             </div>
                             <div>
-                                <h2 className="text-2xl font-semibold">{user?.name}</h2>
-                                <p className="text-sm text-slate-500">{user?.email}</p>
-                                <p className="text-base text-slate-700 mt-1">{user?.mobile}</p>
+                                <h2 className="text-2xl font-semibold">
+                                    {user?.name}
+                                </h2>
+                                <p className="text-sm text-slate-500">
+                                    {user?.email}
+                                </p>
+                                <p className="text-base text-slate-700 mt-1">
+                                    {user?.mobile}
+                                </p>
                             </div>
                         </div>
 
                         <div className="mt-4">
                             {loadingUser && (
-                                <div className="text-xs text-slate-500">Loading account...</div>
+                                <div className="text-xs text-slate-500">
+                                    Loading account...
+                                </div>
                             )}
                             {userError && (
-                                <div className="text-xs text-rose-600">Failed to load account</div>
+                                <div className="text-xs text-rose-600">
+                                    Failed to load account
+                                </div>
                             )}
                         </div>
 
                         <div className="mt-6 grid grid-cols-2 gap-4 text-center">
                             <div className="p-4 rounded-2xl border bg-[#f0f9ff]">
-                                <div className="text-xs text-slate-500">Orders</div>
-                                <div className="font-semibold text-2xl mt-1">
-                                    {loadingOrders ? "Loading…" : ordersCount ?? "—"}
+                                <div className="text-xs text-slate-500">
+                                    Orders
                                 </div>
-                                <div className="text-xs text-slate-400">Active & recent</div>
+                                <div className="font-semibold text-2xl mt-1">
+                                    {loadingOrders
+                                        ? "Loading…"
+                                        : (ordersCount ?? "—")}
+                                </div>
+                                <div className="text-xs text-slate-400">
+                                    Active & recent
+                                </div>
                             </div>
                             <div className="p-4 rounded-2xl border bg-[#fffaf0]">
-                                <div className="text-xs text-slate-500">Default Pincode</div>
+                                <div className="text-xs text-slate-500">
+                                    Default Pincode
+                                </div>
                                 <div className="font-semibold text-sm truncate mt-1">
-                                    {defaultAddress ? defaultAddress.pincode : "Not set"}
+                                    {defaultAddress
+                                        ? defaultAddress.pincode
+                                        : "Not set"}
                                 </div>
                                 <div className="text-xs text-slate-400 mt-1">
                                     {defaultAddress ? defaultAddress.city : "—"}
@@ -403,21 +446,44 @@ export default function ProfilePageAlt(): React.ReactElement {
 
                         <div className="mt-6 flex flex-col gap-3">
                             {[
-                                { key: "overview", icon: <User />, label: "Overview" },
-                                { key: "profile", icon: <Edit2 />, label: "Edit profile" },
-                                { key: "security", icon: <Lock />, label: "Security" },
-                                { key: "addresses", icon: <MapPin />, label: "Addresses" },
-                                { key: "orders", icon: <Box />, label: "Orders" },
+                                {
+                                    key: "overview",
+                                    icon: <User />,
+                                    label: "Overview",
+                                },
+                                {
+                                    key: "profile",
+                                    icon: <Edit2 />,
+                                    label: "Edit profile",
+                                },
+                                {
+                                    key: "security",
+                                    icon: <Lock />,
+                                    label: "Security",
+                                },
+                                {
+                                    key: "addresses",
+                                    icon: <MapPin />,
+                                    label: "Addresses",
+                                },
+                                {
+                                    key: "orders",
+                                    icon: <Box />,
+                                    label: "Orders",
+                                },
                             ].map((tab) => (
                                 <button
                                     key={tab.key}
                                     onClick={() => changeTab(tab.key as any)}
-                                    className={`flex items-center gap-3 px-5 py-3 rounded-lg text-sm font-medium border transition ${activeTab === tab.key
-                                        ? "bg-[#065975] text-white"
-                                        : "bg-white hover:bg-slate-50"
-                                        }`}
+                                    className={`flex items-center gap-3 px-5 py-3 rounded-lg text-sm font-medium border transition ${
+                                        activeTab === tab.key
+                                            ? "bg-[#065975] text-white"
+                                            : "bg-white hover:bg-slate-50"
+                                    }`}
                                 >
-                                    {React.cloneElement(tab.icon, { className: "w-5 h-5" })}
+                                    {React.cloneElement(tab.icon, {
+                                        className: "w-5 h-5",
+                                    })}
                                     {tab.label}
                                 </button>
                             ))}
@@ -440,11 +506,12 @@ export default function ProfilePageAlt(): React.ReactElement {
                     {activeTab === "overview" && (
                         <section className="bg-linear-to-r from-[#e8fbfa] to-white rounded-3xl p-6 lg:p-8 shadow-lg border">
                             <h3 className="text-2xl font-bold">
-                                Welcome back, {user?.name?.split(" ")[0] ?? "there"} 👋
+                                Welcome back,{" "}
+                                {user?.name?.split(" ")[0] ?? "there"} 👋
                             </h3>
                             <p className="text-sm text-slate-600 mt-2">
-                                Here's a snapshot of your account — quick actions you might want to
-                                check.
+                                Here's a snapshot of your account — quick
+                                actions you might want to check.
                             </p>
 
                             <div className="mt-5 flex flex-wrap gap-3">
@@ -497,7 +564,10 @@ export default function ProfilePageAlt(): React.ReactElement {
                     )}
 
                     {activeTab === "security" && (
-                        <PasswordComp onSubmit={handleChangePassword} statusMessage={pwMsg} />
+                        <PasswordComp
+                            onSubmit={handleChangePassword}
+                            statusMessage={pwMsg}
+                        />
                     )}
 
                     {activeTab === "addresses" && (
@@ -516,7 +586,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                                 state: a.state,
                                 country: a.country,
                                 district: a.district,
-                                isDefault: !!a.isDefault
+                                isDefault: !!a.isDefault,
                             }))}
                             onAdd={openAddAddress}
                             onEdit={(a) => {
@@ -544,7 +614,7 @@ export default function ProfilePageAlt(): React.ReactElement {
                                     prev.map((p) => ({
                                         ...p,
                                         isDefault: p.id === String(id),
-                                    }))
+                                    })),
                                 )
                             }
                         />

@@ -20,7 +20,9 @@ export default function SecuritySection() {
     const [next, setNext] = React.useState("");
     const [confirm, setConfirm] = React.useState("");
     const [loading, setLoading] = React.useState(false);
-    const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+    const [statusMessage, setStatusMessage] = React.useState<string | null>(
+        null,
+    );
     const [isError, setIsError] = React.useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -55,7 +57,7 @@ export default function SecuritySection() {
                         newPassword: next,
                         confirmPassword: confirm,
                     }),
-                }
+                },
             );
 
             const contentType = res.headers.get("content-type") || "";
@@ -133,14 +135,17 @@ export default function SecuritySection() {
                         disabled={loading}
                         className="px-5 py-3 rounded-lg bg-[#065975] text-white shadow flex items-center gap-2 disabled:opacity-50"
                     >
-                        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {loading && (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        )}
                         Update password
                     </button>
 
                     {statusMessage && (
                         <div
-                            className={`text-sm flex items-center gap-2 ${isError ? "text-red-600" : "text-green-600"
-                                }`}
+                            className={`text-sm flex items-center gap-2 ${
+                                isError ? "text-red-600" : "text-green-600"
+                            }`}
                         >
                             {isError ? (
                                 <XCircle className="w-4 h-4" />

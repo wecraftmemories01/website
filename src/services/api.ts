@@ -40,68 +40,61 @@ function onRefreshed(token: string | null) {
     refreshSubscribers = [];
 }
 
-// Handle 401 properly
+// Refresh only authenticated requests. A public endpoint returning 401
+// must not log out an anonymous shopper or redirect them away from the store.
 instance.interceptors.response.use(
     (response) => response,
     async (error) => {
-        const originalRequest = error.config || {};
-
-        // Prevent refresh loop if refresh endpoint itself fails
-        if (originalRequest?.url?.includes("/token/refresh_token")) {
-            return Promise.reject(error);
-        }
-
-        if (!originalRequest || originalRequest._retry) {
-            return Promise.reject(error);
-        }
+        const originalRequest = error?.config;
+        const authHeader = originalRequest?.headers?.Authorization;
+        const hasBearerToken = typeof authHeader === "string" && /^Bearer\s+\S+/i.test(authHeader);
 
         if (
-            typeof window !== "undefined" &&
-            error?.response?.status === 401 &&
-            !originalRequest._retry
+            typeof window === "undefined" ||
+            error?.response?.status !== 401 ||
+            !originalRequest ||
+            originalRequest._retry ||
+            !hasBearerToken ||
+            originalRequest.url?.includes("/token/refresh_token")
         ) {
-            // Prevent infinite loop
-            originalRequest._retry = true;
-
-            // If already refreshing, queue this request
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    subscribeTokenRefresh((token) => {
-                        if (!token) {
-                            reject(error);
-                            return;
-                        }
-
-                        originalRequest.headers = originalRequest.headers || {};
-                        originalRequest.headers.Authorization = `Bearer ${token}`;
-                        resolve(instance(originalRequest));
-                    });
-                });
-            }
-
-            isRefreshing = true;
-
-            const refreshed = await refreshAccessToken();
-
-            if (!refreshed) {
-                isRefreshing = false;
-                onRefreshed(null);
-                await logout("/login");
-                return Promise.reject(error);
-            }
-
-            const newToken = getStoredAccessToken();
-
-            isRefreshing = false;
-            onRefreshed(newToken);
-
-            originalRequest.headers = originalRequest.headers || {};
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-
-            return instance(originalRequest);
+            return Promise.reject(error);
         }
 
-        return Promise.reject(error);
+        originalRequest._retry = true;
+
+        if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+                subscribeTokenRefresh((token) => {
+                    if (!token) {
+                        reject(error);
+                        return;
+                    }
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    resolve(instance(originalRequest));
+                });
+            });
+        }
+
+        isRefreshing = true;
+        let refreshed = false;
+        try {
+            refreshed = await refreshAccessToken();
+        } catch {
+            refreshed = false;
+        } finally {
+            isRefreshing = false;
+        }
+
+        const token = refreshed ? getStoredAccessToken() : null;
+        onRefreshed(token);
+
+        if (!token) {
+            await logout("/login");
+            return Promise.reject(error);
+        }
+
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return instance(originalRequest);
     }
 );
 

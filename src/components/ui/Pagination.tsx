@@ -29,7 +29,7 @@ export default function Pagination({
         let start = page - Math.floor(visible / 2);
         start = Math.max(
             1,
-            Math.min(start, Math.max(1, totalPages - visible + 1))
+            Math.min(start, Math.max(1, totalPages - visible + 1)),
         );
 
         return Array.from({ length: visible }, (_, i) => start + i);
@@ -49,10 +49,11 @@ export default function Pagination({
                 <button
                     onClick={() => go(page - 1)}
                     disabled={!canPrev}
-                    className={`px-4 py-2 rounded-md text-sm border ${canPrev
+                    className={`px-4 py-2 rounded-md text-sm border ${
+                        canPrev
                             ? "bg-white border-slate-200"
                             : "text-slate-300 border-slate-100"
-                        }`}
+                    }`}
                 >
                     ← Prev
                 </button>
@@ -64,10 +65,11 @@ export default function Pagination({
                 <button
                     onClick={() => go(page + 1)}
                     disabled={!canNext}
-                    className={`px-4 py-2 rounded-md text-sm border ${canNext
+                    className={`px-4 py-2 rounded-md text-sm border ${
+                        canNext
                             ? "bg-white border-slate-200"
                             : "text-slate-300 border-slate-100"
-                        }`}
+                    }`}
                 >
                     Next →
                 </button>
@@ -81,10 +83,11 @@ export default function Pagination({
                 <button
                     onClick={() => go(page - 1)}
                     disabled={!canPrev}
-                    className={`px-3 py-1 rounded-md text-sm ${canPrev
+                    className={`px-3 py-1 rounded-md text-sm ${
+                        canPrev
                             ? "bg-white border border-slate-200"
                             : "text-slate-300"
-                        }`}
+                    }`}
                 >
                     Prev
                 </button>
@@ -93,10 +96,11 @@ export default function Pagination({
                     <>
                         <button
                             onClick={() => go(1)}
-                            className={`px-3 py-1 rounded-md text-sm ${page === 1
-                                    ? "bg-teal-600 text-white"
+                            className={`px-3 py-1 rounded-md text-sm ${
+                                page === 1
+                                    ? "bg-[#065975] text-white"
                                     : "bg-white border border-slate-200"
-                                }`}
+                            }`}
                         >
                             1
                         </button>
@@ -114,10 +118,11 @@ export default function Pagination({
                         key={p}
                         onClick={() => go(p)}
                         aria-current={p === page ? "page" : undefined}
-                        className={`px-3 py-1 rounded-md text-sm ${p === page
-                                ? "bg-teal-600 text-white"
+                        className={`px-3 py-1 rounded-md text-sm ${
+                            p === page
+                                ? "bg-[#065975] text-white"
                                 : "bg-white border border-slate-200"
-                            }`}
+                        }`}
                     >
                         {p}
                     </button>
@@ -133,10 +138,11 @@ export default function Pagination({
 
                         <button
                             onClick={() => go(totalPages)}
-                            className={`px-3 py-1 rounded-md text-sm ${page === totalPages
-                                    ? "bg-teal-600 text-white"
+                            className={`px-3 py-1 rounded-md text-sm ${
+                                page === totalPages
+                                    ? "bg-[#065975] text-white"
                                     : "bg-white border border-slate-200"
-                                }`}
+                            }`}
                         >
                             {totalPages}
                         </button>
@@ -146,10 +152,11 @@ export default function Pagination({
                 <button
                     onClick={() => go(page + 1)}
                     disabled={!canNext}
-                    className={`px-3 py-1 rounded-md text-sm ${canNext
+                    className={`px-3 py-1 rounded-md text-sm ${
+                        canNext
                             ? "bg-white border border-slate-200"
                             : "text-slate-300"
-                        }`}
+                    }`}
                 >
                     Next
                 </button>

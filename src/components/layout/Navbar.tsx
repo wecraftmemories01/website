@@ -223,7 +223,7 @@ export default function NavbarEcommerce(): React.ReactElement {
 
     return (
         <header className="w-full bg-white border-b sticky top-0 z-40">
-            <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12">
                 <div className="flex items-center gap-4 py-3 md:py-4">
                     {/* left: mobile menu + logo */}
                     <div className="flex items-center gap-3 w-full md:w-auto">

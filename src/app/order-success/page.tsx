@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import OrderSuccessClient from "../../components/OrderSuccessClient";
+import { OrderConfirmationState } from "@/components/OrderConfirmationView";
 
 export const metadata = {
     title: "Order Confirmed | Thank You for Shopping – WeCraftMemories",
@@ -13,7 +14,7 @@ export const metadata = {
 
 export default function OrderSuccessPage() {
     return (
-        <Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading order details…</div>}>
+        <Suspense fallback={<OrderConfirmationState loading />}>
             <OrderSuccessClient />
         </Suspense>
     );

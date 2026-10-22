@@ -1,747 +1,338 @@
-'use client'
+"use client";
 
-import React, { useMemo, useState } from 'react'
-import { Search, X, ChevronDown, ChevronRight, Tag, Layers, Grid, Box, Clock, Palette } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useId, useMemo, useState } from "react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 
-type Option = { id: string; label: string; count?: number }
+type Option = { id: string; label: string; count?: number };
 
 type Props = {
-    q: string
-    onQChange: (v: string) => void
+    variant?: "sidebar" | "drawer";
+    q: string;
+    onQChange: (v: string) => void;
+    inStockOnly: boolean;
+    onToggleInStock: () => void;
+    masterOptions: Option[];
+    superOptions: Option[];
+    categoryOptions: Option[];
+    subOptions: Option[];
+    ageOptions: Option[];
+    themeOptions: Option[];
+    selectedMasters: string[];
+    selectedSupers: string[];
+    selectedCategories: string[];
+    selectedSubs: string[];
+    selectedAges: string[];
+    selectedThemes: string[];
+    minPrice: number | "";
+    maxPrice: number | "";
+    onMinPriceChange: (v: number | "") => void;
+    onMaxPriceChange: (v: number | "") => void;
+    priceRangeMin: number;
+    priceRangeMax: number;
+    onToggleMaster: (id: string) => void;
+    onToggleSuper: (id: string) => void;
+    onToggleCategory: (id: string) => void;
+    onToggleSub: (id: string) => void;
+    onToggleAge: (id: string) => void;
+    onToggleTheme: (id: string) => void;
+    onClearAll: () => void;
+};
 
-    inStockOnly: boolean
-    onToggleInStock: () => void
+type Group = {
+    id: string;
+    title: string;
+    options: Option[];
+    selected: string[];
+    toggle: (id: string) => void;
+};
 
-    masterOptions: Option[]
-    superOptions: Option[]
-    categoryOptions: {
-        id: string
-        label: string
-        count: number
-    }[]
-    subOptions: Option[]
-    ageOptions: Option[]
-    themeOptions: Option[]
-
-    selectedMasters: string[]
-    selectedSupers: string[]
-    selectedCategories: string[]
-    selectedSubs: string[]
-    selectedAges: string[]
-    selectedThemes: string[]
-
-    minPrice: number | ''
-    maxPrice: number | ''
-    onMinPriceChange: (v: number | '') => void
-    onMaxPriceChange: (v: number | '') => void
-
-    priceRangeMin: number
-    priceRangeMax: number
-
-    onToggleMaster: (id: string) => void
-    onToggleSuper: (id: string) => void
-    onToggleCategory: (id: string) => void
-    onToggleSub: (id: string) => void
-    onToggleAge: (id: string) => void
-    onToggleTheme: (id: string) => void
-
-    onClearAll: () => void
-}
-
-const SECTION_ICON: Record<string, React.ReactNode> = {
-    master: <Layers className="w-4 h-4" />,
-    super: <Grid className="w-4 h-4" />,
-    category: <Box className="w-4 h-4" />,
-    sub: <Tag className="w-4 h-4" />,
-    age: <Clock className="w-4 h-4" />,
-    theme: <Palette className="w-4 h-4" />,
-}
-
-function OptionChip({
-    option,
-    checked,
-    onToggle,
-}: {
-    option: Option
-    checked: boolean
-    onToggle: (id: string) => void
-}) {
-
-    const disabled = !checked && (option.count ?? 0) === 0
-
+function ChoiceGroup({ group }: { group: Group }) {
+    const [term, setTerm] = useState("");
+    const [showAll, setShowAll] = useState(false);
+    const [expanded, setExpanded] = useState(
+        group.id === "category" || group.id === "theme",
+    );
+    const choices = useMemo(() => {
+        const found = group.options.filter((option) =>
+            option.label.toLowerCase().includes(term.trim().toLowerCase()),
+        );
+        return found.sort(
+            (a, b) =>
+                Number(group.selected.includes(b.id)) -
+                    Number(group.selected.includes(a.id)) ||
+                (b.count ?? 0) - (a.count ?? 0) ||
+                a.label.localeCompare(b.label),
+        );
+    }, [group.options, group.selected, term]);
+    if (!group.options.length && !group.selected.length) return null;
+    const shown = showAll || term ? choices : choices.slice(0, 8);
     return (
-        <button
-            type="button"
-            disabled={disabled}
-            onClick={() => onToggle(option.id)}
-            className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border transition-all duration-200 active:scale-95
-
-                ${checked
-                    ? 'bg-[#1FA6B8]/15 text-[#0B5C73] border-[#1FA6B8]/40 shadow-sm'
-                    : disabled
-                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                        : 'bg-white text-[#0B5C73] border-[#0B5C73]/15 hover:bg-[#F6B73C]/15'
-                }
-            `}
-            aria-pressed={checked}
+        <section
+            className="rounded-[17px] border border-[#e3f2f5] bg-[#fbfeff] px-3.5 py-3.5 sm:px-4"
+            aria-label={group.title}
         >
-            <span
-                className={`w-2 h-2 rounded-full ${checked
-                    ? 'bg-[#E24B5B]'
-                    : disabled
-                        ? 'bg-slate-300'
-                        : 'bg-[#1FA6B8]/30'
-                    }`}
-            />
-
-            <span className="truncate max-w-40 font-medium">
-                {option.label}
-            </span>
-
-            <span
-                className={`text-xs px-2 py-0.5 rounded-full ${checked
-                    ? 'bg-white text-[#0B5C73]'
-                    : disabled
-                        ? 'bg-slate-200 text-slate-500'
-                        : 'bg-[#1FA6B8]/10 text-[#0B5C73]'
-                    }`}
+            <button
+                type="button"
+                className="flex min-h-8 w-full items-center justify-between gap-3 text-left"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
             >
-                {option.count ?? 0}
-            </span>
-        </button>
-    )
-}
-
-function IconClear() {
-    return <X className="w-3 h-3" />
-}
-
-function SectionHeader({
-    title,
-    count,
-    onClear,
-    expanded,
-    setExpanded,
-    icon,
-}: {
-    title: string
-    count?: number
-    onClear?: () => void
-    expanded?: boolean
-    setExpanded?: (v: boolean) => void
-    icon?: React.ReactNode
-}) {
-    return (
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <button
-                    onClick={() => setExpanded && setExpanded(!expanded)}
-                    aria-expanded={expanded}
-                    className="flex items-center gap-2 text-sm font-semibold text-slate-700 focus:outline-none"
-                >
-                    <span className="text-slate-400">
-                        {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </span>
-                    <span className="flex items-center gap-2">
-                        <span className="text-slate-500">{icon}</span>
-                        {title}
-                    </span>
-                </button>
-                {typeof count === 'number' && <span className="text-xs text-slate-400">({count})</span>}
-            </div>
-
-            <div className="flex items-center gap-2">
-                {onClear && (
-                    <button
-                        onClick={onClear}
-                        className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded focus:outline-none"
-                        title={`Clear ${title}`}
-                    >
-                        Clear
-                    </button>
-                )}
-            </div>
-        </div>
-    )
-}
-
-export default function SidebarFilters({
-    q,
-    onQChange,
-    inStockOnly,
-    onToggleInStock,
-    masterOptions,
-    superOptions,
-    categoryOptions,
-    subOptions,
-    ageOptions,
-    themeOptions,
-    selectedMasters,
-    selectedSupers,
-    selectedCategories,
-    selectedSubs,
-    selectedAges,
-    selectedThemes,
-    minPrice,
-    maxPrice,
-    onMinPriceChange,
-    onMaxPriceChange,
-    priceRangeMin,
-    priceRangeMax,
-    onToggleMaster,
-    onToggleSuper,
-    onToggleCategory,
-    onToggleSub,
-    onToggleAge,
-    onToggleTheme,
-    onClearAll,
-}: Props) {
-    // ui state
-    const [searchMaster, setSearchMaster] = useState('')
-    const [searchSuper, setSearchSuper] = useState('')
-    const [searchCategory, setSearchCategory] = useState('')
-    const [searchSub, setSearchSub] = useState('')
-    const [searchAge, setSearchAge] = useState('')
-    const [searchTheme, setSearchTheme] = useState('')
-    const [showAll, setShowAll] = useState<Record<string, boolean>>({})
-
-    const [expanded, setExpanded] = useState({
-        master: true,
-        super: true,
-        category: true,
-        sub: true,
-        age: true,
-        theme: true,
-    } as Record<string, boolean>)
-
-    // keep all filters visible
-    const onlyAvailable = (opts: Option[]) => opts
-
-    const filterOptions = (
-        opts: Option[],
-        q: string,
-        selectedIds: string[]
-    ) =>
-        opts
-            .filter((o) =>
-                o.label
-                    .toLowerCase()
-                    .includes(q.trim().toLowerCase())
-            )
-            .sort((a, b) => {
-
-                // selected first
-                const aSelected = selectedIds.includes(a.id)
-                const bSelected = selectedIds.includes(b.id)
-
-                if (aSelected && !bSelected) return -1
-                if (!aSelected && bSelected) return 1
-
-                // then available first
-                const aAvailable = (a.count ?? 0) > 0
-                const bAvailable = (b.count ?? 0) > 0
-
-                if (aAvailable && !bAvailable) return -1
-                if (!aAvailable && bAvailable) return 1
-
-                // then higher count
-                if ((b.count ?? 0) !== (a.count ?? 0)) {
-                    return (b.count ?? 0) - (a.count ?? 0)
-                }
-
-                // then alphabetical
-                return a.label.localeCompare(b.label)
-            })
-
-    const masters = useMemo(
-        () =>
-            filterOptions(
-                onlyAvailable(masterOptions),
-                searchMaster,
-                selectedMasters
-            ),
-        [masterOptions, searchMaster, selectedMasters]
-    )
-
-    const supers = useMemo(
-        () =>
-            filterOptions(
-                onlyAvailable(superOptions),
-                searchSuper,
-                selectedSupers
-            ),
-        [superOptions, searchSuper, selectedSupers]
-    )
-
-    const cats = useMemo(
-        () =>
-            filterOptions(
-                onlyAvailable(categoryOptions),
-                searchCategory,
-                selectedCategories
-            ),
-        [categoryOptions, searchCategory, selectedCategories]
-    )
-
-    const subs = useMemo(
-        () =>
-            filterOptions(
-                onlyAvailable(subOptions),
-                searchSub,
-                selectedSubs
-            ),
-        [subOptions, searchSub, selectedSubs]
-    )
-
-    const ages = useMemo(
-        () =>
-            filterOptions(
-                onlyAvailable(ageOptions),
-                searchAge,
-                selectedAges
-            ),
-        [ageOptions, searchAge, selectedAges]
-    )
-
-    const themes = useMemo(
-        () =>
-            filterOptions(
-                onlyAvailable(themeOptions),
-                searchTheme,
-                selectedThemes
-            ),
-        [themeOptions, searchTheme, selectedThemes]
-    )
-
-    const allOptionsById = useMemo(() => {
-        const map = new Map<string, string>()
-            ;[...masterOptions, ...superOptions, ...categoryOptions, ...subOptions, ...ageOptions, ...themeOptions].forEach((o) =>
-                map.set(o.id, o.label)
-            )
-        return map
-    }, [masterOptions, superOptions, categoryOptions, subOptions, ageOptions, themeOptions])
-
-    const showSelectedChips = [
-        ...selectedMasters.map((id) => ({ id, type: 'master' as const })),
-        ...selectedSupers.map((id) => ({ id, type: 'super' as const })),
-        ...selectedCategories.map((id) => ({ id, type: 'category' as const })),
-        ...selectedSubs.map((id) => ({ id, type: 'sub' as const })),
-        ...selectedAges.map((id) => ({ id, type: 'age' as const })),
-        ...selectedThemes.map((id) => ({ id, type: 'theme' as const })),
-    ]
-
-    function Section({
-        title,
-        options,
-        search,
-        setSearch,
-        selectedIds,
-        onToggle,
-        clearSelected,
-        name,
-        limit = 10,
-    }: {
-        title: string
-        options: Option[]
-        search: string
-        setSearch: (v: string) => void
-        selectedIds: string[]
-        onToggle: (id: string) => void
-        clearSelected?: () => void
-        name: string
-        limit?: number
-    }) {
-        const isExpanded = expanded[name]
-        const short = showAll[name] ? options : options.slice(0, limit)
-        const moreCount = !showAll[name] ? Math.max(0, options.length - limit) : 0
-
-        return (
-            <div className="relative border rounded-xl p-3 bg-white shadow-sm">
-                <div
-                    className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${selectedIds.length ? 'bg-[#1FA6B8]' : 'bg-transparent'}`}
-                    aria-hidden
-                />
-                <SectionHeader
-                    title={title}
-                    count={options.length}
-                    onClear={clearSelected}
-                    expanded={isExpanded}
-                    setExpanded={(v) => setExpanded((s) => ({ ...s, [name]: v }))}
-                    icon={SECTION_ICON[name as keyof typeof SECTION_ICON]}
-                />
-
-                <AnimatePresence initial={false}>
-                    {isExpanded && (
-                        <motion.div
-                            key={name}
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.18 }}
-                            className="mt-3"
-                        >
-                            <div className="flex items-center gap-2">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
-                                    <input
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        placeholder={`Search ${title.toLowerCase()}...`}
-                                        className="w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
-                                    />
-                                </div>
-
-                                {search && (
-                                    <button
-                                        onClick={() => setSearch('')}
-                                        className="px-3 py-2 rounded-md text-sm bg-slate-50 border hover:bg-slate-100"
-                                        title="Clear search"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {(search ? options : short).map((o) => (
-                                    <OptionChip key={o.id} option={o} checked={selectedIds.includes(o.id)} onToggle={onToggle} />
-                                ))}
-
-                                {!search && moreCount > 0 && !showAll[name] && (
-                                    <button
-                                        onClick={() => setShowAll((s) => ({ ...s, [name]: true }))}
-                                        className="px-3 py-1 rounded-full border text-sm text-slate-600 bg-slate-50 hover:bg-slate-100"
-                                    >
-                                        +{moreCount} more
-                                    </button>
-                                )}
-
-                                {showAll[name] && options.length > limit && (
-                                    <button
-                                        onClick={() => setShowAll((s) => ({ ...s, [name]: false }))}
-                                        className="px-3 py-1 rounded-full border text-sm text-slate-600 bg-slate-50 hover:bg-slate-100"
-                                    >
-                                        Show less
-                                    </button>
-                                )}
-
-                                {options.length === 0 && <div className="text-xs text-slate-400">No available options</div>}
-                            </div>
-                        </motion.div>
+                <span className="flex items-center gap-2 text-sm font-bold text-[#234b3e]">
+                    {group.title}
+                    {group.selected.length > 0 && (
+                        <span className="rounded-full bg-[#e4f2e8] px-2 py-0.5 text-xs text-[#065975]">
+                            {group.selected.length}
+                        </span>
                     )}
-                </AnimatePresence>
-            </div>
-        )
-    }
+                </span>
+                <ChevronDown
+                    size={17}
+                    className={`shrink-0 text-[#698276] transition-transform ${expanded ? "rotate-180" : ""}`}
+                />
+            </button>
+            {expanded && (
+                <div className="pt-3">
+                    {group.options.length > 10 && (
+                        <div className="relative mb-3">
+                            <Search
+                                size={16}
+                                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8ba397]"
+                            />
+                            <input
+                                value={term}
+                                onChange={(e) => setTerm(e.target.value)}
+                                type="search"
+                                aria-label={`Search ${group.title}`}
+                                placeholder={`Find ${group.title.toLowerCase()}…`}
+                                className="site-field !min-h-10 w-full !pl-9 text-sm"
+                            />
+                        </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                        {shown.map((option) => {
+                            const active = group.selected.includes(option.id);
+                            const disabled = !active && option.count === 0;
+                            return (
+                                <button
+                                    key={option.id}
+                                    type="button"
+                                    aria-pressed={active}
+                                    disabled={disabled}
+                                    onClick={() => group.toggle(option.id)}
+                                    className={`min-h-9 max-w-full rounded-full border px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 ${active ? "border-[#065975] bg-[#065975] text-white shadow-sm" : disabled ? "border-[#f1f8f9] bg-[#f7f8f6] text-[#adb9ae]" : "border-[#dbecf0] bg-[#f8fbf7] text-[#36584a] hover:border-[#83aa91] hover:bg-[#e6f7f9]"}`}
+                                >
+                                    <span className="break-words">
+                                        {option.label}
+                                    </span>
+                                    {typeof option.count === "number" && (
+                                        <span
+                                            className={`ml-1.5 text-[11px] ${active ? "text-white/70" : "text-[#8b9a8b]"}`}
+                                        >
+                                            {option.count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                        {!choices.length && (
+                            <p className="text-sm text-[#76877a]">
+                                No matching options
+                            </p>
+                        )}
+                    </div>
+                    {!term && choices.length > 8 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowAll((v) => !v)}
+                            className="mt-3 text-xs font-bold text-[#065975] underline-offset-4 hover:underline"
+                        >
+                            {showAll
+                                ? "Show fewer"
+                                : `Show all ${choices.length}`}
+                        </button>
+                    )}
+                </div>
+            )}
+        </section>
+    );
+}
 
-    const clearMasters = () => selectedMasters.forEach((id) => onToggleMaster(id))
-    const clearSupers = () => selectedSupers.forEach((id) => onToggleSuper(id))
-    const clearCategories = () => selectedCategories.forEach((id) => onToggleCategory(id))
-    const clearSubs = () => selectedSubs.forEach((id) => onToggleSub(id))
-    const clearAges = () => selectedAges.forEach((id) => onToggleAge(id))
-    const clearThemes = () => selectedThemes.forEach((id) => onToggleTheme(id))
-
-    const hasAnyFilters =
-        (themes.length > 0)
-    // || masters.length > 0
-    // || supers.length > 0
-    || cats.length > 0
-    // || subs.length > 0
-    // || ages.length > 0
-    const hasAnySelection =
-        showSelectedChips.length > 0 ||
-        inStockOnly ||
-        q.trim().length > 0 ||
-        (minPrice !== '' && !isNaN(Number(minPrice))) ||
-        (maxPrice !== '' && !isNaN(Number(maxPrice)))
-
-    const sliderMin = typeof minPrice === 'number' ? minPrice : priceRangeMin
-    const sliderMax = typeof maxPrice === 'number' ? maxPrice : priceRangeMax
-    const range = Math.max(priceRangeMax - priceRangeMin, 1)
-
+export default function SidebarFilters(props: Props) {
+    const searchId = useId();
+    const isSidebar = props.variant === "sidebar";
+    const groups: Group[] = [
+        {
+            id: "category",
+            title: "Categories",
+            options: props.categoryOptions,
+            selected: props.selectedCategories,
+            toggle: props.onToggleCategory,
+        },
+        {
+            id: "theme",
+            title: "Collections & occasions",
+            options: props.themeOptions,
+            selected: props.selectedThemes,
+            toggle: props.onToggleTheme,
+        },
+        {
+            id: "master",
+            title: "Product families",
+            options: props.masterOptions,
+            selected: props.selectedMasters,
+            toggle: props.onToggleMaster,
+        },
+        {
+            id: "super",
+            title: "Product types",
+            options: props.superOptions,
+            selected: props.selectedSupers,
+            toggle: props.onToggleSuper,
+        },
+        {
+            id: "sub",
+            title: "Styles",
+            options: props.subOptions,
+            selected: props.selectedSubs,
+            toggle: props.onToggleSub,
+        },
+        {
+            id: "age",
+            title: "Age groups",
+            options: props.ageOptions,
+            selected: props.selectedAges,
+            toggle: props.onToggleAge,
+        },
+    ];
+    const count =
+        groups.reduce((sum, group) => sum + group.selected.length, 0) +
+        Number(props.inStockOnly) +
+        Number(props.minPrice !== "") +
+        Number(props.maxPrice !== "") +
+        Number(Boolean(props.q.trim()));
     return (
-        <div className="space-y-5">
-            {/* header: gradient search + stacked controls below */}
-            <div className="rounded-2xl bg-white/80 backdrop-blur-sm border border-[#0B5C73]/10">
-                <div className="px-6 py-5 rounded-2xl bg-slate-50 border border-slate-200">
-                    {/* Search input */}
-                    <div className="relative">
-                        <label htmlFor="global-search" className="sr-only">
-                            Search products
+        <div className={isSidebar ? "space-y-3" : "space-y-4"}>
+            <div
+                className={
+                    isSidebar
+                        ? "grid gap-3"
+                        : "grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                }
+            >
+                {!isSidebar && (
+                    <div>
+                        <label
+                            htmlFor={searchId}
+                            className="mb-1.5 block text-xs font-bold uppercase tracking-[.1em] text-[#607987]"
+                        >
+                            Search gifts
                         </label>
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                            <Search
+                                size={18}
+                                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#769381]"
+                            />
                             <input
-                                id="global-search"
+                                id={searchId}
                                 type="search"
-                                value={q}
-                                onChange={(e) => onQChange(e.target.value)}
-                                placeholder="Search products, tags or names..."
-                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#0B5C73]/15 bg-white focus:ring-2 focus:ring-[#1FA6B8]/30 focus:border-[#1FA6B8] text-sm transition"
+                                value={props.q}
+                                onChange={(e) =>
+                                    props.onQChange(e.target.value)
+                                }
+                                placeholder="Search crochet, gifts, flowers…"
+                                className="site-field !min-h-12 w-full !pl-11 text-sm"
                             />
                         </div>
                     </div>
-
-                    {/* Controls stacked below search */}
-                    <div className="mt-3 flex flex-col items-left justify-between">
-                        <button
-                            onClick={() => {
-                                if (hasAnySelection) onClearAll()
-                            }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${hasAnySelection ? 'bg-[#E24B5B]/10 text-[#E24B5B] border border-[#E24B5B]/30 hover:bg-[#E24B5B]/20' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                }`}
-                            disabled={!hasAnySelection}
-                            title={hasAnySelection ? 'Clear search & selections' : 'Nothing to clear'}
-                        >
-                            <X className="w-4 h-4" />
-                            Clear
-                        </button>
-
-                        <label className="flex items-center gap-2 mt-3 text-sm cursor-pointer select-none">
-                            <input type="checkbox" checked={inStockOnly} onChange={onToggleInStock} className="accent-teal-600 w-4 h-4" />
-                            <span>In stock only</span>
+                )}
+                <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-[#deebde] bg-[#f5fbfc] px-4 text-sm font-semibold text-[#365b4b]">
+                    <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={props.inStockOnly}
+                        onChange={props.onToggleInStock}
+                    />{" "}
+                    In stock only
+                </label>
+            </div>
+            <div
+                className={
+                    isSidebar
+                        ? "grid gap-3"
+                        : "grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+                }
+            >
+                {groups.map((group) => (
+                    <ChoiceGroup key={group.id} group={group} />
+                ))}
+                <section
+                    className="rounded-[17px] border border-[#e3f2f5] bg-[#fbfeff] px-3.5 py-3.5 sm:px-4"
+                    aria-label="Price range"
+                >
+                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#234b3e]">
+                        <SlidersHorizontal size={16} /> Budget
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="min-w-0 text-xs font-medium text-[#667d70]">
+                            Minimum ₹
+                            <input
+                                type="number"
+                                inputMode="numeric"
+                                min="0"
+                                value={props.minPrice}
+                                onChange={(e) =>
+                                    props.onMinPriceChange(
+                                        e.target.value === ""
+                                            ? ""
+                                            : Math.max(
+                                                  0,
+                                                  Number(e.target.value),
+                                              ),
+                                    )
+                                }
+                                placeholder="Any"
+                                className="site-field mt-1.5 !min-h-10 w-full !px-3 text-sm"
+                            />
+                        </label>
+                        <label className="min-w-0 text-xs font-medium text-[#667d70]">
+                            Maximum ₹
+                            <input
+                                type="number"
+                                inputMode="numeric"
+                                min="0"
+                                value={props.maxPrice}
+                                onChange={(e) =>
+                                    props.onMaxPriceChange(
+                                        e.target.value === ""
+                                            ? ""
+                                            : Math.max(
+                                                  0,
+                                                  Number(e.target.value),
+                                              ),
+                                    )
+                                }
+                                placeholder="Any"
+                                className="site-field mt-1.5 !min-h-10 w-full !px-3 text-sm"
+                            />
                         </label>
                     </div>
-                </div>
+                    <p className="mt-3 text-xs leading-5 text-[#879587]">
+                        Set one or both amounts to find gifts within your
+                        budget.
+                    </p>
+                </section>
             </div>
-
-            {/* selected chips */}
-            <div>
-                {showSelectedChips.length > 0 ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {showSelectedChips.map((c) => {
-                            const label = allOptionsById.get(c.id) ?? c.id
-                            return (
-                                <span
-                                    key={`${c.type}-${c.id}`}
-                                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-[#1FA6B8]/20 text-[#0B5C73] border border-[#1FA6B8]/30"
-                                >
-                                    <span className="truncate max-w-48">{label}</span>
-                                    <button
-                                        onClick={() => {
-                                            if (c.type === 'master') onToggleMaster(c.id)
-                                            else if (c.type === 'super') onToggleSuper(c.id)
-                                            else if (c.type === 'category') onToggleCategory(c.id)
-                                            else if (c.type === 'sub') onToggleSub(c.id)
-                                            else if (c.type === 'age') onToggleAge(c.id)
-                                            else if (c.type === 'theme') onToggleTheme(c.id)
-                                        }}
-                                        className="ml-1 text-xs p-1 rounded-full bg-white/20 hover:bg-white/30"
-                                        aria-label={`Remove ${label}`}
-                                    >
-                                        <IconClear />
-                                    </button>
-                                </span>
-                            )
-                        })}
-                    </div>
-                ) : null}
-            </div>
-
-            {/* Price Range */}
-            <div className="border rounded-xl p-5 bg-white shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-slate-800">
-                        Price Range
-                    </h3>
-                    <div className="text-sm font-medium text-teal-600">
-                        ₹{sliderMin} – ₹{sliderMax}
-                    </div>
+            {count > 0 && (
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={props.onClearAll}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-[#9b5341] hover:bg-[#fff3ed]"
+                    >
+                        <X size={15} /> Clear all filters ({count})
+                    </button>
                 </div>
-
-                {/* SLIDER */}
-                <div className="relative h-10 flex items-center">
-                    {/* Base Track */}
-                    <div className="absolute w-full h-3 bg-slate-200 rounded-full" />
-
-                    {/* Active Range */}
-                    <div className="absolute h-3 bg-[#1FA6B8] rounded-full"
-                        style={{
-                            left: `${((sliderMin - priceRangeMin) / range) * 100}%`,
-                            right: `${100 - ((sliderMax - priceRangeMin) / range) * 100}%`,
-                        }}
-                    />
-
-                    {/* Min Slider */}
-                    <input
-                        type="range"
-                        min={priceRangeMin}
-                        max={priceRangeMax}
-                        value={sliderMin}
-                        onChange={(e) => {
-                            const value = Math.min(Number(e.target.value), sliderMax)
-                            onMinPriceChange(value)
-                        }}
-                        className="absolute w-full appearance-none bg-transparent h-10 pointer-events-none
-                            [&::-webkit-slider-thumb]:pointer-events-auto
-                            [&::-webkit-slider-thumb]:appearance-none
-                            [&::-webkit-slider-thumb]:h-6
-                            [&::-webkit-slider-thumb]:w-6
-                            [&::-webkit-slider-thumb]:rounded-full
-                            [&::-webkit-slider-thumb]:bg-white
-                            [&::-webkit-slider-thumb]:border-2
-                            [&::-webkit-slider-thumb]:border-[#0B5C73]
-                            [&::-webkit-slider-thumb]:shadow-md
-                            [&::-webkit-slider-thumb]:cursor-pointer"
-                    />
-
-                    {/* Max Slider */}
-                    <input
-                        type="range"
-                        min={priceRangeMin}
-                        max={priceRangeMax}
-                        value={sliderMax}
-                        onChange={(e) => {
-                            const value = Math.max(Number(e.target.value), sliderMin)
-                            onMaxPriceChange(value)
-                        }}
-                        className="absolute w-full appearance-none bg-transparent h-10 pointer-events-none
-                            [&::-webkit-slider-thumb]:pointer-events-auto
-                            [&::-webkit-slider-thumb]:appearance-none
-                            [&::-webkit-slider-thumb]:h-6
-                            [&::-webkit-slider-thumb]:w-6
-                            [&::-webkit-slider-thumb]:rounded-full
-                            [&::-webkit-slider-thumb]:bg-white
-                            [&::-webkit-slider-thumb]:border-2
-                            [&::-webkit-slider-thumb]:border-[#0B5C73]
-                            [&::-webkit-slider-thumb]:shadow-md
-                            [&::-webkit-slider-thumb]:cursor-pointer"
-                    />
-                </div>
-
-                {/* Inputs (Mobile Friendly Stack) */}
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-xs text-slate-500">Min</label>
-                        <input
-                            type="number"
-                            inputMode="numeric"
-                            min={priceRangeMin}
-                            max={priceRangeMax}
-                            value={minPrice === '' ? '' : String(minPrice)}
-                            onChange={(e) => {
-                                const val = e.target.value
-                                onMinPriceChange(val === '' ? '' : Number(val))
-                            }}
-                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="text-xs text-slate-500">Max</label>
-                        <input
-                            type="number"
-                            inputMode="numeric"
-                            min={priceRangeMin}
-                            max={priceRangeMax}
-                            value={maxPrice === '' ? '' : String(maxPrice)}
-                            onChange={(e) => {
-                                const val = e.target.value
-                                onMaxPriceChange(val === '' ? '' : Number(val))
-                            }}
-                            className="mt-1 w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0B5C73]/20"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* sections (only render when available) */}
-            {/* {masters.length > 0 && (
-                <Section
-                    title="Master Category"
-                    options={masters}
-                    search={searchMaster}
-                    setSearch={setSearchMaster}
-                    selectedIds={selectedMasters}
-                    onToggle={onToggleMaster}
-                    clearSelected={clearMasters}
-                    name="master"
-                />
-            )} */}
-
-            {/* {supers.length > 0 && (
-                <Section
-                    title="Super Category"
-                    options={supers}
-                    search={searchSuper}
-                    setSearch={setSearchSuper}
-                    selectedIds={selectedSupers}
-                    onToggle={onToggleSuper}
-                    clearSelected={clearSupers}
-                    name="super"
-                />
-            )} */}
-
-            {cats.length > 0 && (
-                <Section
-                    title="Category"
-                    options={cats}
-                    search={searchCategory}
-                    setSearch={setSearchCategory}
-                    selectedIds={selectedCategories}
-                    onToggle={onToggleCategory}
-                    clearSelected={clearCategories}
-                    name="category"
-                />
             )}
-
-            {/* {subs.length > 0 && (
-                <Section
-                    title="Sub Category"
-                    options={subs}
-                    search={searchSub}
-                    setSearch={setSearchSub}
-                    selectedIds={selectedSubs}
-                    onToggle={onToggleSub}
-                    clearSelected={clearSubs}
-                    name="sub"
-                />
-            )} */}
-
-            {/* {ages.length > 0 && (
-                <Section
-                    title="Age Group"
-                    options={ages}
-                    search={searchAge}
-                    setSearch={setSearchAge}
-                    selectedIds={selectedAges}
-                    onToggle={onToggleAge}
-                    clearSelected={clearAges}
-                    name="age"
-                    limit={8}
-                />
-            )} */}
-
-            {themes.length > 0 && (
-                <Section
-                    title="Collection"
-                    options={themes}
-                    search={searchTheme}
-                    setSearch={setSearchTheme}
-                    selectedIds={selectedThemes}
-                    onToggle={onToggleTheme}
-                    clearSelected={clearThemes}
-                    name="theme"
-                />
-            )}
-
-            {!hasAnyFilters && (
-                <div className="text-xs text-slate-400">No filters available for the current selection.</div>
-            )}
-
-            <div className="pt-3 border-t">
-                <button
-                    onClick={() => {
-                        if (hasAnySelection) onClearAll()
-                    }}
-                    className={`w-full px-3 py-2 rounded-md text-sm font-semibold ${hasAnySelection ? 'bg-linear-to-r from-slate-100 to-white border' : 'bg-slate-50 text-slate-400 cursor-not-allowed'}`}
-                    disabled={!hasAnySelection}
-                >
-                    Reset filters
-                </button>
-            </div>
         </div>
-    )
+    );
 }

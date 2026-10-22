@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Minus, Plus, Trash } from "lucide-react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 
 type Props = {
     item: any;
@@ -11,7 +11,6 @@ type Props = {
     lineTotal: number;
     formatCurrency: (v: number) => string;
 };
-
 export default function DesktopCartItem({
     item,
     disabled,
@@ -23,69 +22,76 @@ export default function DesktopCartItem({
     formatCurrency,
 }: Props) {
     return (
-        <div className="grid grid-cols-[80px_1fr_120px_160px_120px_60px] items-center px-4 py-4 border-t border-gray-200">
-            {/* Image */}
-            <Image
-                src={item.imagePath ?? "/placeholder-80x80.png"}
-                alt={item.productPublicName}
-                width={64}
-                height={64}
-                className="rounded-md object-cover"
-            />
-
-            {/* Product */}
-            <div className="min-w-0">
-                <p className="font-medium truncate">
+        <div className="flex flex-wrap gap-4 px-3 sm:px-5 py-5 items-start border-b border-[#e7ece7] last:border-b-0">
+            <div className="w-20 h-20 shrink-0 bg-[#ecf8f9] rounded-2xl overflow-hidden">
+                <Image
+                    src={item.imagePath || "/no-image-placeholder.png"}
+                    alt={item.productPublicName || "Product"}
+                    width={80}
+                    height={80}
+                    className="w-full h-full object-cover"
+                />
+            </div>
+            <div className="flex-1 min-w-[130px]">
+                <h3 className="text-sm font-bold text-[#173b4a] leading-6">
                     {item.productPublicName}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                    SKU: {item.productNumber ?? "—"}
+                </h3>
+                <p className="text-sm text-[#065975] mt-1 font-semibold">
+                    {formatCurrency(
+                        item.price?.discountedPrice ??
+                            item.price?.actualPrice ??
+                            0,
+                    )}{" "}
+                    each
                 </p>
                 <button
+                    type="button"
                     onClick={onSave}
                     disabled={disabled}
-                    className="text-xs text-slate-600 mt-1 hover:underline"
+                    className="text-xs text-slate-500 hover:text-[#065975] hover:underline mt-2"
                 >
                     Save for later
                 </button>
             </div>
-
-            {/* Price */}
-            <div className="text-center font-medium">
-                {formatCurrency(
-                    item.price?.discountedPrice ?? item.price?.actualPrice
-                )}
-            </div>
-
-            {/* Quantity */}
-            <div className="flex justify-center">
-                <div className="flex items-center border rounded-md">
-                    <button onClick={onDecrease} disabled={disabled} className="px-2 py-1">
-                        <Minus size={14} />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 ml-auto">
+                <div className="flex items-center border border-[#dae6dc] rounded-xl overflow-hidden">
+                    <button
+                        type="button"
+                        aria-label={`Decrease ${item.productPublicName} quantity`}
+                        onClick={onDecrease}
+                        disabled={disabled || Number(item.quantity) <= 1}
+                        className="site-icon-button !w-9 !h-9 !min-h-9 !min-w-9 disabled:opacity-40"
+                    >
+                        <Minus size={16} />
                     </button>
-                    <span className="px-3 text-sm font-medium">
+                    <span
+                        className="w-8 text-sm font-semibold text-center"
+                        aria-live="polite"
+                    >
                         {item.quantity}
                     </span>
-                    <button onClick={onIncrease} disabled={disabled} className="px-2 py-1">
-                        <Plus size={14} />
+                    <button
+                        type="button"
+                        aria-label={`Increase ${item.productPublicName} quantity`}
+                        onClick={onIncrease}
+                        disabled={disabled}
+                        className="site-icon-button !w-9 !h-9 !min-h-9 !min-w-9 disabled:opacity-40"
+                    >
+                        <Plus size={16} />
                     </button>
                 </div>
-            </div>
-
-            {/* Total */}
-            <div className="text-center font-semibold">
-                {formatCurrency(lineTotal)}
-            </div>
-
-            {/* Remove */}
-            <div className="flex justify-center">
+                <strong className="min-w-20 text-right text-sm text-[#173b4a]">
+                    {formatCurrency(lineTotal)}
+                </strong>
                 <button
+                    type="button"
                     onClick={onRemove}
                     disabled={disabled}
-                    className="text-gray-400 hover:text-red-600"
-                    title="Remove item"
+                    aria-label={`Remove ${item.productPublicName}`}
+                    className="site-icon-button text-rose-600 hover:bg-rose-50"
+                    title="Remove"
                 >
-                    <Trash size={18} />
+                    <Trash2 size={18} />
                 </button>
             </div>
         </div>

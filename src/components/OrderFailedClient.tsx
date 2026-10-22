@@ -11,43 +11,9 @@ export default function OrderFailedClient() {
     const reason = params?.get("reason") ?? null;
     const orderId = params?.get("orderId") ?? null;
 
-    const TOKEN_KEY = "accessToken";
-    function getStoredAccessToken(): string | null {
-        if (typeof window === "undefined") return null;
-        try {
-            return localStorage.getItem(TOKEN_KEY);
-        } catch {
-            return null;
-        }
-    }
-
-    /**
-     * Centralized fetch that injects Authorization header when token exists.
-     */
-    async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-        const token = getStoredAccessToken();
-        // debug - remove in production
-        // eslint-disable-next-line no-console
-        console.debug("authFetch token present:", !!token);
-
-        const headers = new Headers(init?.headers ?? {});
-        if (token) headers.set("Authorization", `Bearer ${token}`);
-        // only set content-type when there's a body and none provided
-        if (init?.body && !headers.get("Content-Type")) headers.set("Content-Type", "application/json");
-
-        const res = await fetch(input, { ...init, headers });
-        if (res.status === 401) {
-            if (typeof window !== "undefined") {
-                localStorage.removeItem(TOKEN_KEY);
-                router.replace("/login");
-            }
-        }
-        return res;
-    }
-
     return (
         <div className="min-h-screen bg-linear-to-b from-[#fff7f7] to-white flex items-center justify-center p-6">
-            <div className="min-w-4xl w-full bg-white rounded-3xl shadow-xl p-12 md:p-12 flex flex-col md:flex-row gap-8 items-center">
+            <div className="max-w-4xl w-full bg-white rounded-3xl shadow-xl p-5 sm:p-8 md:p-12 flex flex-col md:flex-row gap-8 items-center">
                 <div className="shrink-0 flex flex-col items-center gap-4">
                     <div className="w-36 h-36 rounded-full bg-rose-50 grid place-items-center border border-rose-100">
                         <XCircle className="w-20 h-20 text-rose-600" />
@@ -80,7 +46,7 @@ export default function OrderFailedClient() {
                         </button>
 
                         <button
-                            onClick={() => router.push(orderId ? `/order/${encodeURIComponent(String(orderId))}` : "/contact-support")}
+                            onClick={() => router.push(orderId ? `/profile/order/${encodeURIComponent(String(orderId))}` : "/contact")}
                             className="w-full inline-flex items-center justify-center gap-3 py-3 rounded-xl bg-rose-600 text-white font-semibold hover:brightness-95 transition"
                         >
                             <ClipboardList className="w-5 h-5" />

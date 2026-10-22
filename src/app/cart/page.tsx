@@ -9,9 +9,9 @@ export const metadata = {
 
 export default function Page() {
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full max-w-[1520px] mx-auto">
             <header className="mb-6">
-                <h1 className="text-3xl font-extrabold tracking-tight">My Cart</h1>
+                <h1 className="site-section-title">Your shopping bag</h1>
             </header>
 
             <ClientCart />

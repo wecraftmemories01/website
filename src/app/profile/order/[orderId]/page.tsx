@@ -26,7 +26,9 @@ type Props = {
 export default function ProfileOrderPage({ params }: Props) {
     // React.use will unwrap a Promise-like params in Next.js newer versions.
     // Guard with (React as any).use so this still runs if React.use isn't present.
-    const resolvedParams = (React as any).use ? (React as any).use(params) : params;
+    const resolvedParams = (React as any).use
+        ? (React as any).use(params)
+        : params;
     const orderId = resolvedParams?.orderId ?? "";
 
     const [customerId, setCustomerId] = useState<string | null>(null);
@@ -43,8 +45,8 @@ export default function ProfileOrderPage({ params }: Props) {
     if (!customerId) return null; // or show loader
 
     return (
-        <div className="min-h-screen md:p-8 bg-linear-to-b from-[#fbfdff] to-white">
-            <div className="max-w-6xl mx-auto">
+        <div className="min-h-screen bg-[#fffaf6]">
+            <div className="w-full max-w-[1500px] mx-auto">
                 <OrderDetails customerId={customerId} orderId={orderId} />
             </div>
         </div>

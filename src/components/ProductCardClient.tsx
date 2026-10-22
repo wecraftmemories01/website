@@ -1,61 +1,70 @@
-'use client'
+"use client";
 
-import { useRouter } from 'next/navigation'
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import type { Product as ProdType } from '../types/product'
-import { ShoppingCart, Check, Heart, Tag } from 'lucide-react'
-import { addToCart, isInCart } from '../lib/cart'
-import favouritesClient from '../lib/favouritesClient'
+import { useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import type { Product as ProdType } from "../types/product";
+import { ShoppingCart, Check, Heart, ArrowUpRight } from "lucide-react";
+import { addToCart, isInCart } from "../lib/cart";
+import favouritesClient from "../lib/favouritesClient";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 
-type Product = ProdType
-type Props = { product: Product; initialAdded?: boolean }
+type Product = ProdType;
+type Props = { product: Product; initialAdded?: boolean };
 
-const PLACEHOLDER = '/no-image-placeholder.png'
+const PLACEHOLDER = "/no-image-placeholder.png";
 
 /* -------------------- format helpers (unchanged) -------------------- */
 function formatStock(q: unknown): { isInStock: boolean; label: string } {
-    if (q === null || q === undefined || q === '') return { isInStock: false, label: 'Stock unknown' }
-    if (typeof q === 'number') return q > 0 ? { isInStock: true, label: String(q) } : { isInStock: false, label: '0' }
-    if (typeof q === 'string') {
-        const trimmed = q.trim()
-        if (/\d+\+$/.test(trimmed)) return { isInStock: true, label: trimmed }
-        const parsed = parseInt(trimmed.replace(/\D/g, ''), 10)
-        if (!Number.isNaN(parsed)) return parsed > 0 ? { isInStock: true, label: trimmed } : { isInStock: false, label: trimmed }
-        return { isInStock: true, label: trimmed }
+    if (q === null || q === undefined || q === "")
+        return { isInStock: false, label: "Stock unknown" };
+    if (typeof q === "number")
+        return q > 0
+            ? { isInStock: true, label: String(q) }
+            : { isInStock: false, label: "0" };
+    if (typeof q === "string") {
+        const trimmed = q.trim();
+        if (/\d+\+$/.test(trimmed)) return { isInStock: true, label: trimmed };
+        const parsed = parseInt(trimmed.replace(/\D/g, ""), 10);
+        if (!Number.isNaN(parsed))
+            return parsed > 0
+                ? { isInStock: true, label: trimmed }
+                : { isInStock: false, label: trimmed };
+        return { isInStock: false, label: "Stock not confirmed" };
     }
-    return { isInStock: false, label: 'Stock unknown' }
+    return { isInStock: false, label: "Stock unknown" };
 }
 
 function formatPrice(n?: number | string | null) {
-    if (n === null || n === undefined) return ''
-    const num = typeof n === 'string' ? Number(n) : n
-    if (Number.isNaN(num as number)) return String(n)
-    return (num as number).toLocaleString('en-IN', {
+    if (n === null || n === undefined) return "";
+    const num = typeof n === "string" ? Number(n) : n;
+    if (Number.isNaN(num as number)) return String(n);
+    return (num as number).toLocaleString("en-IN", {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
-    })
+    });
 }
 
 function isGuestInCart(productId: string) {
-
-    const raw = localStorage.getItem("wcm_guest_cart_v1")
-    if (!raw) return false
+    const raw = localStorage.getItem("wcm_guest_cart_v1");
+    if (!raw) return false;
 
     try {
-        const items = JSON.parse(raw)
-        return items.some((i: any) => i.productId === productId)
+        const items = JSON.parse(raw);
+        return items.some((i: any) => i.productId === productId);
     } catch {
-        return false
+        return false;
     }
 }
 
 /* -------------------- Component -------------------- */
 
-export default function ProductCardClient({ product, initialAdded = false }: Props) {
-    const router = useRouter()
+export default function ProductCardClient({
+    product,
+    initialAdded = false,
+}: Props) {
+    const router = useRouter();
 
     const [added, setAdded] = useState<boolean>(initialAdded);
     const [wish, setWish] = useState(false);
@@ -68,19 +77,19 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
     const [errorModal, setErrorModal] = useState<{
         open: boolean;
         message: string;
-    }>({ open: false, message: '' });
+    }>({ open: false, message: "" });
 
     // 🔑 Cart sync effect — keeps "Add / Added" correct on Home, Shop & refresh
     useEffect(() => {
-        if (typeof window === 'undefined') return;
+        if (typeof window === "undefined") return;
 
         const syncFromCart = () => {
             try {
-                const token = localStorage.getItem("accessToken")
+                const token = localStorage.getItem("accessToken");
 
                 const inCart = token
                     ? isInCart(String(product._id))
-                    : isGuestInCart(String(product._id))
+                    : isGuestInCart(String(product._id));
                 setAdded(inCart);
             } catch {
                 setAdded(false);
@@ -91,13 +100,12 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
         syncFromCart();
 
         // Sync when cart changes anywhere (home / shop / cart page)
-        window.addEventListener('cartChanged', syncFromCart);
+        window.addEventListener("cartChanged", syncFromCart);
 
         return () => {
-            window.removeEventListener('cartChanged', syncFromCart);
+            window.removeEventListener("cartChanged", syncFromCart);
         };
     }, [product._id]);
-
 
     useEffect(() => {
         setMounted(true);
@@ -111,7 +119,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
             } catch {
                 // ignore
             }
-        }
+        };
         favouritesClient.subscribe(onChange);
 
         // set initial
@@ -119,36 +127,38 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
 
         return () => {
             favouritesClient.unsubscribe(onChange);
-        }
-    }, [product._id])
+        };
+    }, [product._id]);
 
     const imageUrl = useMemo(() => {
-        const img = String(product.productImage ?? '')
-        if (img === '' || imgError) return PLACEHOLDER;
-        if (img.startsWith('http')) return img;
-        return img.startsWith('/') ? img : `/${img}`;
+        const img = String(product.productImage ?? "");
+        if (img === "" || imgError) return PLACEHOLDER;
+        if (img.startsWith("http")) return img;
+        return img.startsWith("/") ? img : `/${img}`;
     }, [product.productImage, imgError]);
 
     const actualPrice = product.latestSalePrice?.actualPrice;
     const discountedPrice = product.latestSalePrice?.discountedPrice;
     const stock = useMemo(
-        () => formatStock(product.sellStockDisplayQuantity),
-        [product.sellStockDisplayQuantity]
+        () =>
+            formatStock(
+                product.sellStockQuantity ?? product.sellStockDisplayQuantity,
+            ),
+        [product.sellStockQuantity, product.sellStockDisplayQuantity],
     );
 
-    const isOnSale = discountedPrice && actualPrice && Number(discountedPrice) < Number(actualPrice);
-    // const isLowStock = !stock.isInStock ? false : /^(0|1|2|3)$/.test(stock.label.replace(/\D/g, ''));
-    const limitedBadge = product.sellStockQuantity < 10;
-    // String(stock.label).endsWith('+') || isLowStock;
-    // console.log('limitedBadge: ', limitedBadge);
+    const isOnSale =
+        discountedPrice &&
+        actualPrice &&
+        Number(discountedPrice) < Number(actualPrice);
 
-    const inferredType: 'SELL' | 'RENT' = useMemo(() => {
-        const raw = String(product.sellStockQuantity ?? '')
-        const digits = raw.replace(/\D/g, '')
-        const q = digits ? parseInt(digits, 10) : NaN
-        if (!Number.isNaN(q) && q > 0) return 'SELL'
-        return 'SELL'
-    }, [product.sellStockQuantity])
+    const inferredType: "SELL" | "RENT" = useMemo(() => {
+        const raw = String(product.sellStockQuantity ?? "");
+        const digits = raw.replace(/\D/g, "");
+        const q = digits ? parseInt(digits, 10) : NaN;
+        if (!Number.isNaN(q) && q > 0) return "SELL";
+        return "SELL";
+    }, [product.sellStockQuantity]);
 
     const handleToggleWish = useCallback(
         async (e: React.MouseEvent) => {
@@ -165,13 +175,15 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                     if (!res.success) {
                         setErrorModal({
                             open: true,
-                            message: res.message || 'Could not update favourite.',
+                            message:
+                                res.message || "Could not update favourite.",
                         });
                         return;
                     } else {
                         setErrorModal({
                             open: true,
-                            message: res.message || 'Could not update favourite.',
+                            message:
+                                res.message || "Could not update favourite.",
                         });
                     }
                     return;
@@ -180,68 +192,101 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                 // update UI from source of truth
                 setWish(favouritesClient.isFavourite(String(product._id)));
             } catch (err) {
-                console.error('Favourite toggle error', err);
+                console.error("Favourite toggle error", err);
                 setErrorModal({
                     open: true,
-                    message: 'Something went wrong while updating favourites.',
+                    message: "Something went wrong while updating favourites.",
                 });
             } finally {
                 setLoadingWish(false);
             }
         },
-        [product._id, loadingWish]
+        [product._id, loadingWish],
     );
 
-    const productUrl =
-        product.seoSlug
-            ? `/products/${product.seoSlug}`
-            : `/products/${product._id}`;
+    const productUrl = product.seoSlug
+        ? `/products/${product.seoSlug}`
+        : `/products/${product._id}`;
 
     return (
         <>
-            <Link href={productUrl} className="block">
-                <article className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col">
+            <div className="block h-full min-w-0">
+                <article className="group relative flex h-full min-w-0 flex-col overflow-hidden rounded-[22px] border border-[#dcebf0] bg-white shadow-[0_10px_27px_rgba(27,65,42,.055)] transition-all duration-300 hover:-translate-y-1 hover:border-[#a2d5df] hover:shadow-[0_22px_45px_rgba(27,65,42,.13)] focus-within:ring-2 focus-within:ring-[#6dbcc9] sm:rounded-[26px] motion-reduce:transform-none">
                     {/* IMAGE */}
-                    <div className="relative w-full aspect-square bg-gray-50 overflow-hidden">
-                        <Image
-                            src={imageUrl}
-                            alt={product.productName || "Product"}
-                            fill
-                            sizes="(max-width:768px) 50vw, (max-width:1200px) 33vw, 25vw"
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
-                            onError={() => setImgError(true)}
-                        />
+                    <div className="relative aspect-[1/1.08] w-full overflow-hidden bg-[radial-gradient(ellipse_at_50%_40%,#fffdf9_7%,#eefafc_72%,#dff1f6_100%)]">
+                        <Link
+                            href={productUrl}
+                            className="absolute inset-0"
+                            aria-label={`View ${product.productName}`}
+                        >
+                            <Image
+                                src={imageUrl}
+                                alt={product.productName || "Product"}
+                                fill
+                                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 25vw, 20vw"
+                                className="object-contain p-2 sm:p-3 transition-transform duration-500 ease-out group-hover:scale-[1.08] motion-reduce:transform-none"
+                                onError={() => setImgError(true)}
+                            />
+                        </Link>
 
+                        <span className="pointer-events-none absolute bottom-3 left-3 hidden items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-[#065975] shadow-sm backdrop-blur-sm transition-transform duration-300 group-hover:translate-x-1 sm:inline-flex">
+                            See details <ArrowUpRight size={13} />
+                        </span>
+                        {isOnSale && (
+                            <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-[#fff0e0] px-2.5 py-1.5 text-[10px] font-extrabold text-[#99501c] shadow-sm sm:left-3 sm:top-3 sm:text-xs">
+                                Special price
+                            </span>
+                        )}
                         {/* Wishlist */}
                         <button
                             aria-pressed={wish}
+                            aria-label={
+                                wish
+                                    ? `Remove ${product.productName} from favourites`
+                                    : `Save ${product.productName} to favourites`
+                            }
                             onClick={handleToggleWish}
                             disabled={loadingWish}
-                            className={`absolute top-3 right-3 p-2 rounded-full shadow-md transition
-                                ${wish
-                                    ? "bg-rose-500 text-white"
-                                    : "bg-white hover:bg-gray-100 text-slate-600"}
+                            className={`absolute top-2 right-2 sm:top-3 sm:right-3 z-10 grid min-h-10 min-w-10 place-items-center rounded-full shadow-sm transition duration-200 hover:scale-105
+                                ${
+                                    wish
+                                        ? "bg-rose-500 text-white"
+                                        : "bg-white hover:bg-gray-100 text-slate-600"
+                                }
                                 `}
                         >
-                            <Heart size={16} fill={wish ? "currentColor" : "none"} />
+                            <Heart
+                                size={16}
+                                fill={wish ? "currentColor" : "none"}
+                            />
                         </button>
                     </div>
 
                     {/* CONTENT */}
-                    <div className="p-4 flex flex-col flex-1">
+                    <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-4 xl:p-5">
+                        <p className="mb-1.5 truncate text-[10px] font-bold uppercase tracking-[.12em] text-[#788b91] sm:text-[11px]">
+                            {product.categoryPublicName ||
+                                product.categoryName ||
+                                "Handmade with care"}
+                        </p>
                         {/* PRODUCT NAME */}
                         <h3
-                            className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2 min-h-10"
+                            className="line-clamp-2 min-h-10 text-sm font-extrabold leading-snug text-[#173b4a] sm:text-base"
                             title={product.productName}
                         >
-                            {product.productName}
+                            <Link
+                                href={productUrl}
+                                className="transition-colors hover:text-[#ce3b49]"
+                            >
+                                {product.productName}
+                            </Link>
                         </h3>
 
                         {/* PRICE */}
-                        <div className="mt-2 flex items-center gap-2">
+                        <div className="mt-3 flex min-h-9 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                             {discountedPrice ? (
                                 <>
-                                    <span className="text-lg font-bold text-[#0B5C73]">
+                                    <span className="text-lg font-extrabold tracking-tight text-[#065975] sm:text-xl">
                                         ₹{formatPrice(discountedPrice)}
                                     </span>
 
@@ -259,83 +304,107 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                         </div>
 
                         {/* ADD TO CART */}
-                        <div className="mt-3">
+                        <div className="mt-auto pt-4">
                             {stock.isInStock && !added ? (
                                 <button
                                     onClick={async (ev) => {
-                                        ev.preventDefault()
-                                        ev.stopPropagation()
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
 
-                                        if (added || loadingAdd) return
+                                        if (added || loadingAdd) return;
 
-                                        setLoadingAdd(true)
+                                        setLoadingAdd(true);
 
                                         try {
-
                                             const token =
                                                 typeof window !== "undefined"
-                                                    ? localStorage.getItem("accessToken")
-                                                    : null
+                                                    ? localStorage.getItem(
+                                                          "accessToken",
+                                                      )
+                                                    : null;
 
                                             // USER LOGGED IN → SERVER CART
                                             if (token) {
-
-                                                const result = await addToCart(String(product._id), 1, inferredType)
+                                                const result = await addToCart(
+                                                    String(product._id),
+                                                    1,
+                                                    inferredType,
+                                                );
 
                                                 if (result?.success) {
-                                                    setAdded(true)
-                                                    window.dispatchEvent(new Event("cartChanged"))
+                                                    setAdded(true);
+                                                    window.dispatchEvent(
+                                                        new Event(
+                                                            "cartChanged",
+                                                        ),
+                                                    );
                                                 }
-
                                             } else {
-
                                                 // GUEST USER → LOCAL STORAGE CART
-                                                const key = "wcm_guest_cart_v1"
+                                                const key = "wcm_guest_cart_v1";
 
-                                                let existing: any[] = []
+                                                let existing: any[] = [];
 
                                                 try {
-                                                    existing = JSON.parse(localStorage.getItem(key) || "[]")
+                                                    existing = JSON.parse(
+                                                        localStorage.getItem(
+                                                            key,
+                                                        ) || "[]",
+                                                    );
                                                 } catch {
-                                                    existing = []
+                                                    existing = [];
                                                 }
 
-                                                const existingItem = existing.find(
-                                                    (i: any) => String(i.productId) === String(product._id)
-                                                )
+                                                const existingItem =
+                                                    existing.find(
+                                                        (i: any) =>
+                                                            String(
+                                                                i.productId,
+                                                            ) ===
+                                                            String(product._id),
+                                                    );
 
                                                 if (existingItem) {
-                                                    existingItem.quantity += 1
+                                                    existingItem.quantity += 1;
                                                 } else {
                                                     existing.push({
-                                                        productId: String(product._id),
+                                                        productId: String(
+                                                            product._id,
+                                                        ),
                                                         quantity: 1,
-                                                        type: inferredType
-                                                    })
+                                                        type: inferredType,
+                                                    });
                                                 }
 
-                                                localStorage.setItem(key, JSON.stringify(existing))
+                                                localStorage.setItem(
+                                                    key,
+                                                    JSON.stringify(existing),
+                                                );
 
-                                                setAdded(true)
+                                                setAdded(true);
 
-                                                window.dispatchEvent(new Event("cartChanged"))
+                                                window.dispatchEvent(
+                                                    new Event("cartChanged"),
+                                                );
                                             }
-
                                         } catch (err) {
-                                            console.error(err)
+                                            console.error(err);
 
                                             setErrorModal({
                                                 open: true,
-                                                message: "Something went wrong."
-                                            })
+                                                message:
+                                                    "Something went wrong.",
+                                            });
                                         } finally {
-                                            setLoadingAdd(false)
+                                            setLoadingAdd(false);
                                         }
                                     }}
                                     disabled={loadingAdd}
-                                    className="w-full flex items-center justify-center gap-2 bg-[#0B5C73] hover:bg-[#094a5d] text-white text-sm font-semibold py-2 rounded-lg transition"
+                                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[13px] bg-[#065975] px-2 py-2 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-[#03465e] hover:shadow-md sm:text-sm"
                                 >
-                                    {loadingAdd ? "Adding…" : (
+                                    {loadingAdd ? (
+                                        "Adding…"
+                                    ) : (
                                         <>
                                             <ShoppingCart size={16} />
                                             Add to Cart
@@ -345,34 +414,41 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                             ) : added ? (
                                 <button
                                     onClick={(ev) => {
-                                        ev.preventDefault()
-                                        ev.stopPropagation()
-                                        router.push("/cart")
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        router.push("/cart");
                                     }}
-                                    className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition"
+                                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#e9f4e9] px-2 py-2 text-xs font-bold text-[#065975] transition-colors hover:bg-[#d6ebdc] sm:text-sm"
                                 >
                                     <Check size={16} />
                                     Go to Cart
                                 </button>
-                            ) : null}
+                            ) : (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="flex min-h-11 w-full items-center justify-center rounded-xl border border-[#e5e9e2] bg-[#f4f5f2] px-2 text-xs font-bold text-[#94a096] sm:text-sm"
+                                >
+                                    Currently unavailable
+                                </button>
+                            )}
                         </div>
 
                         {/* STOCK */}
-                        <div className="mt-3 text-xs">
+                        <div className="mt-2 text-[11px] sm:text-xs">
                             {stock.isInStock ? (
-                                <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
-                                    ● {stock.label} units left
+                                <span className="inline-flex items-center gap-1 text-[#5b8b6a] font-medium">
+                                    ● In stock
                                 </span>
                             ) : (
-                                <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 px-2 py-1 rounded-full font-medium">
+                                <span className="inline-flex items-center gap-1 text-[#a56a61] font-medium">
                                     Out of stock
                                 </span>
                             )}
                         </div>
                     </div>
                 </article>
-            </Link>
-
+            </div>
 
             <ConfirmModal
                 open={showLoginModal}
@@ -382,7 +458,7 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                 cancelLabel="Cancel"
                 onConfirm={() => {
                     setShowLoginModal(false);
-                    window.location.href = '/login';
+                    window.location.href = "/login";
                 }}
                 onCancel={() => setShowLoginModal(false)}
             />
@@ -414,13 +490,13 @@ export default function ProductCardClient({ product, initialAdded = false }: Pro
                 confirmLabel="Go to Login"
                 cancelLabel="Cancel"
                 onConfirm={() => {
-                    setErrorModal({ open: false, message: '' });
-                    window.location.href = '/login';
+                    setErrorModal({ open: false, message: "" });
+                    window.location.href = "/login";
                 }}
                 onCancel={() => {
-                    setErrorModal({ open: false, message: '' });
+                    setErrorModal({ open: false, message: "" });
                 }}
             />
         </>
-    )
+    );
 }

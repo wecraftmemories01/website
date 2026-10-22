@@ -8,7 +8,8 @@ function getGuestFavourites(): string[] {
     try {
         const raw = localStorage.getItem(GUEST_KEY);
         try {
-            return raw ? JSON.parse(raw) : [];
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
         } catch {
             return [];
         }
@@ -21,13 +22,25 @@ function setGuestFavourites(list: string[]) {
     localStorage.setItem(GUEST_KEY, JSON.stringify(list));
 }
 
+function getStoredCustomerId(): string | null {
+    try {
+        const raw = localStorage.getItem("auth");
+        return raw ? JSON.parse(raw)?.customerId ?? null : null;
+    } catch {
+        return null;
+    }
+}
+
 class FavouritesClient {
+    private initialized = false
     private subscribers = new Set<Subscriber>()
     private inflightPromise: Promise<any> | null = null
+    private inflightKey: string | null = null
     private cache: any[] | null = null // server favourites array (normalized items)
 
     init() {
-        if (typeof window === 'undefined') return
+        if (typeof window === 'undefined' || this.initialized) return
+        this.initialized = true
         // listen for accessToken/customerId changes in other tabs; refresh/clear accordingly
         window.addEventListener('storage', this.onStorageEvent)
         // initial attempt: if token present, fetch favourites
@@ -39,23 +52,23 @@ class FavouritesClient {
     destroy() {
         if (typeof window === 'undefined') return
         window.removeEventListener('storage', this.onStorageEvent)
+        this.initialized = false
         this.subscribers.clear()
         this.inflightPromise = null
+        this.inflightKey = null
         this.cache = null
     }
 
     private onStorageEvent = (ev: StorageEvent) => {
-        if (ev.key === 'accessToken' || ev.key === 'customerId') {
-            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-            const customerId = typeof window !== 'undefined' ? localStorage.getItem('customerId') : null
+        if (ev.key === 'accessToken' || ev.key === 'auth' || ev.key === 'customerId') {
+            const token = localStorage.getItem('accessToken')
+            const customerId = getStoredCustomerId()
 
             if (!token || !customerId) {
-                // logged out or token removed: clear in-memory cache and notify
                 this.cache = null
                 this.notify()
             } else {
-                // token added/changed: refresh from server
-                this.refreshFromServer(customerId, token).catch(() => { })
+                void this.refreshFromServer(customerId, token)
             }
         }
     }
@@ -82,9 +95,12 @@ class FavouritesClient {
     async refreshFromServerIfAuthorized(): Promise<void> {
         if (typeof window === 'undefined') return
         const token = localStorage.getItem('accessToken')
-        const authRaw = localStorage.getItem('auth')
-        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null
-        if (!token || !customerId) return
+        const customerId = getStoredCustomerId()
+        if (!token || !customerId) {
+            this.cache = null
+            this.notify()
+            return
+        }
         await this.refreshFromServer(customerId, token)
     }
 
@@ -94,8 +110,7 @@ class FavouritesClient {
     async refreshFromServer(customerId?: string, token?: string | null): Promise<void> {
         if (typeof window === 'undefined') return
         if (!customerId) {
-            const authRaw = localStorage.getItem('auth')
-            customerId = authRaw ? JSON.parse(authRaw)?.customerId : undefined
+            customerId = getStoredCustomerId() ?? undefined
         }
         if (!token) token = localStorage.getItem('accessToken')
 
@@ -106,33 +121,37 @@ class FavouritesClient {
             return
         }
 
-        if (this.inflightPromise) return this.inflightPromise
-        this.inflightPromise = (async () => {
+        const key = `${customerId}:${token}`
+        if (this.inflightPromise && this.inflightKey === key) return this.inflightPromise
+
+        this.inflightKey = key
+        const request = (async () => {
             try {
                 const res = await fetchFavouritesAPI(customerId!, undefined, token)
+                // Never use an old account's response after a session switch.
+                if (localStorage.getItem('accessToken') !== token || getStoredCustomerId() !== customerId) return
+
                 if (!res.success) {
-                    // if API indicates unauthorized (helper returns message containing '401') clear cache
                     if (String(res.message).includes('401')) {
                         this.cache = null
                         this.notify()
-                        this.inflightPromise = null
-                        return
                     }
-                    // other failures => keep old cache (do not overwrite with empty)
-                    this.inflightPromise = null
-                    return
+                    return // transient failures keep a previously valid cache
                 }
 
-                // store normalized in-memory cache
                 this.cache = Array.isArray(res.data) ? res.data : []
                 this.notify()
             } catch {
-                // network error: keep previous cache
+                // Network error: preserve existing favourites.
             } finally {
-                this.inflightPromise = null
+                if (this.inflightKey === key) {
+                    this.inflightPromise = null
+                    this.inflightKey = null
+                }
             }
         })()
-        return this.inflightPromise
+        this.inflightPromise = request
+        return request
     }
 
     /** Is the product favourited? */
@@ -169,8 +188,7 @@ class FavouritesClient {
         if (typeof window === "undefined") return { success: false };
 
         const token = localStorage.getItem("accessToken");
-        const authRaw = localStorage.getItem("auth");
-        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null;
+        const customerId = getStoredCustomerId();
 
         // ================= GUEST =================
         if (!token || !customerId) {
@@ -205,8 +223,7 @@ class FavouritesClient {
         if (typeof window === "undefined") return { success: false };
 
         const token = localStorage.getItem("accessToken");
-        const authRaw = localStorage.getItem("auth");
-        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null;
+        const customerId = getStoredCustomerId();
 
         // ================= GUEST =================
         if (!token || !customerId) {
@@ -247,8 +264,7 @@ class FavouritesClient {
         if (typeof window === "undefined") return;
 
         const token = localStorage.getItem("accessToken");
-        const authRaw = localStorage.getItem("auth");
-        const customerId = authRaw ? JSON.parse(authRaw)?.customerId : null;
+        const customerId = getStoredCustomerId();
 
         if (!token || !customerId) return;
 
@@ -264,16 +280,21 @@ class FavouritesClient {
             )
         );
 
-        // ✅ only add missing ones
+        // Keep unsuccessful uploads locally so a transient error cannot lose favourites.
+        const pending: string[] = [];
         for (const productId of guest) {
             if (existingIds.has(String(productId))) continue;
 
             try {
-                await addFavouriteAPI(customerId, productId, token);
-            } catch { }
+                const result = await addFavouriteAPI(customerId, productId, token);
+                if (!result.success) pending.push(productId);
+            } catch {
+                pending.push(productId);
+            }
         }
 
-        localStorage.removeItem(GUEST_KEY);
+        if (pending.length) setGuestFavourites(pending);
+        else localStorage.removeItem(GUEST_KEY);
 
         await this.refreshFromServer(customerId, token);
         this.notify();

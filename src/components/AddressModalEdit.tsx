@@ -48,7 +48,7 @@ function isValidIndianPincode(pin: string) {
 async function fetchPostalDetails(pincode: string) {
     try {
         const res = await fetch(
-            `https://api.postalpincode.in/pincode/${encodeURIComponent(pincode)}`
+            `https://api.postalpincode.in/pincode/${encodeURIComponent(pincode)}`,
         );
 
         if (!res.ok) return { ok: false };
@@ -80,7 +80,7 @@ async function fetchPincodeServiceability(pincode: string) {
     try {
         const res = await authFetch(
             `${API_BASE}/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`,
-            { method: "GET" }
+            { method: "GET" },
         );
 
         const json = await res.json();
@@ -118,7 +118,6 @@ export default function AddressModal({
     onUpdated,
     editAddress,
 }: Props) {
-
     const mountedRef = useRef(true);
     const postalDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -193,14 +192,13 @@ export default function AddressModal({
         }
 
         if (clean.length === 6 && isValidIndianPincode(clean)) {
-
             // Serviceability Check
             setFormSvc({ checking: true, prepaid: null });
             const svc = await fetchPincodeServiceability(clean);
             if (mountedRef.current) {
                 setFormSvc({
                     checking: false,
-                    prepaid: svc.ok ? !!svc.prepaid : null
+                    prepaid: svc.ok ? !!svc.prepaid : null,
                 });
             }
 
@@ -238,19 +236,15 @@ export default function AddressModal({
         if (!form.addressLine1.trim())
             newErrors.addressLine1 = "Address Line 1 is required";
 
-        if (!form.pincode.trim())
-            newErrors.pincode = "Pincode is required";
+        if (!form.pincode.trim()) newErrors.pincode = "Pincode is required";
         else if (!isValidIndianPincode(form.pincode))
             newErrors.pincode = "Enter valid 6-digit pincode";
 
-        if (!form.state.trim())
-            newErrors.state = "State is required";
+        if (!form.state.trim()) newErrors.state = "State is required";
 
-        if (!form.district.trim())
-            newErrors.district = "District is required";
+        if (!form.district.trim()) newErrors.district = "District is required";
 
-        if (!form.city.trim())
-            newErrors.city = "City is required";
+        if (!form.city.trim()) newErrors.city = "City is required";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -266,7 +260,10 @@ export default function AddressModal({
             if (!validateForm()) return;
 
             if (formSvc.prepaid === false) {
-                setErrors(e => ({ ...e, pincode: "This pincode is not serviceable" }));
+                setErrors((e) => ({
+                    ...e,
+                    pincode: "This pincode is not serviceable",
+                }));
                 return;
             }
 
@@ -291,16 +288,22 @@ export default function AddressModal({
             };
 
             if (form.serverId) {
-                await authFetch(`${API_BASE}/customer/${cust}/address/${form.serverId}`, {
-                    method: "PUT",
-                    body: JSON.stringify(payload),
-                });
+                await authFetch(
+                    `${API_BASE}/customer/${cust}/address/${form.serverId}`,
+                    {
+                        method: "PUT",
+                        body: JSON.stringify(payload),
+                    },
+                );
                 onUpdated?.(form);
             } else {
-                const res = await authFetch(`${API_BASE}/customer/${cust}/address`, {
-                    method: "POST",
-                    body: JSON.stringify(payload),
-                });
+                const res = await authFetch(
+                    `${API_BASE}/customer/${cust}/address`,
+                    {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    },
+                );
                 const json = await res.json();
                 onCreated?.({ ...form, serverId: json?.address?._id });
             }
@@ -337,96 +340,159 @@ export default function AddressModal({
 
                 <div className="p-5 overflow-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
                         {/* All fields preserved here — full layout intact */}
                         {/* (Recipient, Contact, Address1, Address2, Address3, Landmark, State, District, City, Pincode, Default checkbox) */}
 
                         {/* Recipient Name */}
                         <div>
-                            <label className="block text-sm mb-1">Recipient Name</label>
+                            <label className="block text-sm mb-1">
+                                Recipient Name
+                            </label>
                             <input
                                 ref={firstInputRef}
                                 value={form.recipientName}
-                                onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        recipientName: e.target.value,
+                                    })
+                                }
                                 className={`border p-3 rounded-md w-full text-sm ${errors.recipientName ? "border-red-500" : "border-slate-300"}`}
                             />
-                            {errors.recipientName && <p className="text-xs text-red-500 mt-1">{errors.recipientName}</p>}
+                            {errors.recipientName && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.recipientName}
+                                </p>
+                            )}
                         </div>
 
                         {/* Contact */}
                         <div>
-                            <label className="block text-sm mb-1">Recipient Contact</label>
+                            <label className="block text-sm mb-1">
+                                Recipient Contact
+                            </label>
                             <input
                                 value={form.recipientContact}
-                                onChange={(e) => setForm({ ...form, recipientContact: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        recipientContact: e.target.value,
+                                    })
+                                }
                                 className={`border p-3 rounded-md w-full text-sm ${errors.recipientContact ? "border-red-500" : "border-slate-300"}`}
                             />
-                            {errors.recipientContact && <p className="text-xs text-red-500 mt-1">{errors.recipientContact}</p>}
+                            {errors.recipientContact && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.recipientContact}
+                                </p>
+                            )}
                         </div>
 
                         {/* Address Line 1 */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm mb-1">Address Line 1</label>
+                            <label className="block text-sm mb-1">
+                                Address Line 1
+                            </label>
                             <input
                                 value={form.addressLine1}
-                                onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        addressLine1: e.target.value,
+                                    })
+                                }
                                 className={`border p-3 rounded-md w-full text-sm ${errors.addressLine1 ? "border-red-500" : "border-slate-300"}`}
                             />
                         </div>
 
                         {/* Address Line 2 */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm mb-1">Address Line 2</label>
+                            <label className="block text-sm mb-1">
+                                Address Line 2
+                            </label>
                             <input
                                 value={form.addressLine2 ?? ""}
-                                onChange={(e) => setForm({ ...form, addressLine2: e.target.value || null })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        addressLine2: e.target.value || null,
+                                    })
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
                         </div>
 
                         {/* Address Line 3 */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm mb-1">Address Line 3</label>
+                            <label className="block text-sm mb-1">
+                                Address Line 3
+                            </label>
                             <input
                                 value={form.addressLine3 ?? ""}
-                                onChange={(e) => setForm({ ...form, addressLine3: e.target.value || null })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        addressLine3: e.target.value || null,
+                                    })
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
                         </div>
 
                         {/* Landmark */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm mb-1">Landmark</label>
+                            <label className="block text-sm mb-1">
+                                Landmark
+                            </label>
                             <input
                                 value={form.landmark ?? ""}
-                                onChange={(e) => setForm({ ...form, landmark: e.target.value || null })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        landmark: e.target.value || null,
+                                    })
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
                         </div>
 
                         {/* Pincode */}
                         <div>
-                            <label className="block text-sm mb-1">Pincode</label>
+                            <label className="block text-sm mb-1">
+                                Pincode
+                            </label>
                             <input
                                 value={form.pincode}
                                 maxLength={6}
-                                onChange={(e) => handlePostalAutoFill(e.target.value)}
+                                onChange={(e) =>
+                                    handlePostalAutoFill(e.target.value)
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
                             {isFetchingLocation && (
-                                <div className="text-xs text-slate-500 mt-1">Fetching location…</div>
+                                <div className="text-xs text-slate-500 mt-1">
+                                    Fetching location…
+                                </div>
                             )}
                             {formSvc.checking && (
-                                <div className="text-xs text-slate-500 mt-1">Checking serviceability…</div>
+                                <div className="text-xs text-slate-500 mt-1">
+                                    Checking serviceability…
+                                </div>
                             )}
                             {formSvc.prepaid === false && (
-                                <div className="text-xs text-rose-600 mt-1">This pincode is not serviceable.</div>
+                                <div className="text-xs text-rose-600 mt-1">
+                                    This pincode is not serviceable.
+                                </div>
                             )}
                             {formSvc.prepaid === true && (
-                                <div className="text-xs text-green-600 mt-1">Serviceable.</div>
+                                <div className="text-xs text-green-600 mt-1">
+                                    Serviceable.
+                                </div>
                             )}
                             {errors.pincode && (
-                                <p className="text-xs text-red-500 mt-1">{errors.pincode}</p>
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.pincode}
+                                </p>
                             )}
                         </div>
 
@@ -436,22 +502,39 @@ export default function AddressModal({
                             <input
                                 value={form.state}
                                 disabled={isLocationLocked}
-                                onChange={(e) => setForm({ ...form, state: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({ ...form, state: e.target.value })
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
-                            {errors.state && <p className="text-xs text-red-500 mt-1">{errors.state}</p>}
+                            {errors.state && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.state}
+                                </p>
+                            )}
                         </div>
 
                         {/* District */}
                         <div>
-                            <label className="block text-sm mb-1">District</label>
+                            <label className="block text-sm mb-1">
+                                District
+                            </label>
                             <input
                                 value={form.district}
                                 disabled={isLocationLocked}
-                                onChange={(e) => setForm({ ...form, district: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        district: e.target.value,
+                                    })
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
-                            {errors.district && <p className="text-xs text-red-500 mt-1">{errors.district}</p>}
+                            {errors.district && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.district}
+                                </p>
+                            )}
                         </div>
 
                         {/* City */}
@@ -460,10 +543,16 @@ export default function AddressModal({
                             <input
                                 value={form.city}
                                 disabled={isLocationLocked}
-                                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                                onChange={(e) =>
+                                    setForm({ ...form, city: e.target.value })
+                                }
                                 className="border p-3 rounded-md w-full text-sm"
                             />
-                            {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city}</p>}
+                            {errors.city && (
+                                <p className="text-xs text-red-500 mt-1">
+                                    {errors.city}
+                                </p>
+                            )}
                         </div>
 
                         {/* Default */}
@@ -471,15 +560,25 @@ export default function AddressModal({
                             <input
                                 type="checkbox"
                                 checked={!!form.isDefault}
-                                onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        isDefault: e.target.checked,
+                                    })
+                                }
                             />
-                            <span className="text-sm">Set as default address</span>
+                            <span className="text-sm">
+                                Set as default address
+                            </span>
                         </label>
                     </div>
                 </div>
 
                 <div className="px-5 py-3 border-t flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 border rounded-md">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 border rounded-md"
+                    >
                         Cancel
                     </button>
                     <button
@@ -487,7 +586,11 @@ export default function AddressModal({
                         disabled={isSubmitting}
                         className="px-4 py-2 rounded-md bg-[#065975] text-white"
                     >
-                        {isSubmitting ? "Saving..." : form.serverId ? "Update address" : "Save address"}
+                        {isSubmitting
+                            ? "Saving..."
+                            : form.serverId
+                              ? "Update address"
+                              : "Save address"}
                     </button>
                 </div>
             </div>

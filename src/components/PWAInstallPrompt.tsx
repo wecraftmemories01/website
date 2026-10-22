@@ -1,119 +1,106 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
-const STORAGE_KEY = 'pwa_prompt_closed_at'
-const WAIT_TIME = 7 * 24 * 60 * 60 * 1000
+const STORAGE_KEY = "pwa_prompt_closed_at";
+const WAIT_TIME = 7 * 24 * 60 * 60 * 1000;
 
 export default function PWAInstallPrompt() {
-    const [prompt, setPrompt] = useState<any>(null)
-    const [visible, setVisible] = useState(false)
-    const [expanded, setExpanded] = useState(false)
+    const [prompt, setPrompt] = useState<any>(null);
+    const [visible, setVisible] = useState(false);
+    const [expanded, setExpanded] = useState(false);
 
     const isInCooldown = () => {
-        if (typeof window === 'undefined') return true
+        if (typeof window === "undefined") return true;
 
-        const closedAt = localStorage.getItem(STORAGE_KEY)
+        const closedAt = localStorage.getItem(STORAGE_KEY);
 
-        if (!closedAt) return false
+        if (!closedAt) return false;
 
-        return Date.now() - Number(closedAt) < WAIT_TIME
-    }
+        return Date.now() - Number(closedAt) < WAIT_TIME;
+    };
 
     useEffect(() => {
-        if (typeof window === 'undefined') return
-        if (isInCooldown()) return
+        if (typeof window === "undefined") return;
+        if (isInCooldown()) return;
 
-        let eventCaptured = false
-        let userEngaged = false
+        let eventCaptured = false;
+        let userEngaged = false;
 
         const onScroll = () => {
-            userEngaged = true
-            window.removeEventListener('scroll', onScroll)
-        }
+            userEngaged = true;
+            window.removeEventListener("scroll", onScroll);
+        };
 
-        window.addEventListener('scroll', onScroll)
+        window.addEventListener("scroll", onScroll);
 
         const handler = (e: any) => {
-            e.preventDefault()
+            e.preventDefault();
 
-            eventCaptured = true
-            setPrompt(e)
+            eventCaptured = true;
+            setPrompt(e);
 
             setTimeout(() => {
                 if (userEngaged) {
-                    setVisible(true)
+                    setVisible(true);
                 }
-            }, 15000)
-        }
+            }, 15000);
+        };
 
-        window.addEventListener('beforeinstallprompt', handler)
+        window.addEventListener("beforeinstallprompt", handler);
 
         const fallback = setTimeout(() => {
-            if (
-                !eventCaptured &&
-                !isInCooldown() &&
-                userEngaged
-            ) {
-                setVisible(true)
+            if (!eventCaptured && !isInCooldown() && userEngaged) {
+                setVisible(true);
             }
-        }, 45000)
+        }, 45000);
 
         return () => {
-            window.removeEventListener(
-                'beforeinstallprompt',
-                handler
-            )
+            window.removeEventListener("beforeinstallprompt", handler);
 
-            window.removeEventListener(
-                'scroll',
-                onScroll
-            )
+            window.removeEventListener("scroll", onScroll);
 
-            clearTimeout(fallback)
-        }
-    }, [])
+            clearTimeout(fallback);
+        };
+    }, []);
 
     const install = async () => {
         try {
             if (prompt) {
-                prompt.prompt()
+                prompt.prompt();
 
-                await prompt.userChoice
+                await prompt.userChoice;
 
-                setVisible(false)
-                setPrompt(null)
-                return
+                setVisible(false);
+                setPrompt(null);
+                return;
             }
 
             alert(
-                'Android: Browser Menu → Add to Home Screen\n\niPhone: Share → Add to Home Screen'
-            )
+                "Android: Browser Menu → Add to Home Screen\n\niPhone: Share → Add to Home Screen",
+            );
 
-            setVisible(false)
+            setVisible(false);
         } catch (err) {
-            console.log(err)
+            console.log(err);
         }
-    }
+    };
 
     const closePrompt = () => {
-        localStorage.setItem(
-            STORAGE_KEY,
-            Date.now().toString()
-        )
+        localStorage.setItem(STORAGE_KEY, Date.now().toString());
 
-        setVisible(false)
-        setExpanded(false)
-        setPrompt(null)
-    }
+        setVisible(false);
+        setExpanded(false);
+        setPrompt(null);
+    };
 
-    if (!visible) return null
+    if (!visible) return null;
 
     return (
         <div
             className="fixed right-4 bottom-20 z-40"
             style={{
-                paddingBottom: 'env(safe-area-inset-bottom)',
+                paddingBottom: "env(safe-area-inset-bottom)",
             }}
         >
             {!expanded ? (
@@ -133,9 +120,7 @@ export default function PWAInstallPrompt() {
                 >
                     <span className="text-lg">📱</span>
 
-                    <span className="text-sm font-medium">
-                        Install App
-                    </span>
+                    <span className="text-sm font-medium">Install App</span>
                 </button>
             ) : (
                 <div
@@ -177,9 +162,8 @@ export default function PWAInstallPrompt() {
                                     </h3>
 
                                     <p className="text-sm text-gray-500 mt-1">
-                                        Enjoy faster browsing,
-                                        quick checkout and
-                                        app-like experience.
+                                        Enjoy faster browsing, quick checkout
+                                        and app-like experience.
                                     </p>
                                 </div>
                             </div>
@@ -199,9 +183,7 @@ export default function PWAInstallPrompt() {
 
                         <div className="flex gap-2 mt-5">
                             <button
-                                onClick={() =>
-                                    setExpanded(false)
-                                }
+                                onClick={() => setExpanded(false)}
                                 className="
                                     flex-1
                                     h-11
@@ -234,5 +216,5 @@ export default function PWAInstallPrompt() {
                 </div>
             )}
         </div>
-    )
+    );
 }

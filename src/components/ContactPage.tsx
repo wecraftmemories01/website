@@ -290,18 +290,18 @@ export default function ContactPage(): React.ReactElement {
     }
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-[#EAF7FA] via-white to-[#FFF6E8] py-16 px-4 sm:px-6 lg:px-12">
+        <main className="min-h-screen bg-gradient-to-b from-[#e4f7fb] via-white to-[#FFF6E8] py-16 px-4 sm:px-6 lg:px-12">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-10">
-                    <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-[#0B5C73]">Let's build something great together</h2>
+                    <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-[#065975]">Let's build something great together</h2>
                     <p className="mt-3 text-lg text-gray-600 max-w-2xl mx-auto">Questions, feedback, customization or bulk order in mind? Drop us a message — we respond within one business day.</p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left - Visual / Quick contact */}
                     <aside className="lg:col-span-5 flex flex-col gap-6">
-                        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0B5C73] to-[#1FA6B8] text-white p-8 shadow-2xl transform-gpu transition-transform hover:-translate-y-1">
+                        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#065975] to-[#0b91aa] text-white p-8 shadow-2xl transform-gpu transition-transform hover:-translate-y-1">
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center text-2xl font-bold">✨</div>
                                 <div>
@@ -319,7 +319,7 @@ export default function ContactPage(): React.ReactElement {
                                     <span className="text-sm font-medium">support@wecraftmemories.com</span>
                                 </a>
 
-                                <a href="tel:+919876543210" className="inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors px-4 py-3 rounded-lg">
+                                <a href="tel:+918097987769" className="inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors px-4 py-3 rounded-lg">
                                     <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
                                         <path strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 0 1 2-2h2.1a1 1 0 0 1 .9.56l1.2 2.4a1 1 0 0 1-.2 1.06L8.2 8.9a11 11 0 0 0 5.9 5.9l1.88-1.78a1 1 0 0 1 1.06-.2l2.4 1.2a1 1 0 0 1 .56.9V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z" />
                                     </svg>
@@ -328,16 +328,16 @@ export default function ContactPage(): React.ReactElement {
                             </div>
 
                             <div className="mt-6 text-sm text-white/80">
-                                <strong>Support hours:</strong> Mon–Fri, 10:00 AM — 06:00 PM IST
+                                Have a question about a gift or an order? Send a message through the form.
                             </div>
                         </div>
 
                         <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100">
-                            <h4 className="text-lg font-semibold text-[#0B5C73]">Why contact us?</h4>
+                            <h4 className="text-lg font-semibold text-[#065975]">Why contact us?</h4>
                             <ul className="mt-3 space-y-2 text-sm text-gray-600">
-                                <li>• Fast replies & tailored quotes</li>
+                                <li>• Help with gifts, orders & custom requests</li>
                                 <li>• Clear timelines & transparent pricing</li>
-                                <li>• Privacy-first — we don’t share your info</li>
+                                <li>• Your information is handled under our privacy policy</li>
                             </ul>
                             {/* <div className="mt-4">
                                 <a href="/faq" className="inline-flex items-center gap-2 text-indigo-600 font-medium hover:underline">Browse FAQs</a>
@@ -349,7 +349,7 @@ export default function ContactPage(): React.ReactElement {
                     <section className="lg:col-span-7">
                         <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-2xl border border-gray-100">
                             <div className="mb-4">
-                                <h3 className="text-2xl font-semibold text-[#0B5C73]">Send us a message</h3>
+                                <h3 className="text-2xl font-semibold text-[#065975]">Send us a message</h3>
                                 <p className="mt-1 text-sm text-gray-600">Tell us a little about your project or question.</p>
                             </div>
 
@@ -399,12 +399,12 @@ export default function ContactPage(): React.ReactElement {
                                     <input
                                         value={form.subject}
                                         onChange={(e) => setField("subject", e.target.value)}
-                                        className={`mt-1 block w-full rounded-xl px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-[#1FA6B8]/30 transition ${errors.subject ? "border-[#E24B5B]" : "border-gray-200"}`}
+                                        className={`mt-1 block w-full rounded-xl px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-[#0b91aa]/30 transition ${errors.subject ? "border-[#c65e4f]" : "border-gray-200"}`}
                                         placeholder="Quick summary (e.g., Need pricing)"
                                         aria-invalid={!!errors.subject}
                                         aria-describedby={errors.subject ? "subject-error" : undefined}
                                     />
-                                    {errors.subject && <p id="subject-error" className="mt-1 text-xs text-[#E24B5B]">{errors.subject}</p>}
+                                    {errors.subject && <p id="subject-error" className="mt-1 text-xs text-[#c65e4f]">{errors.subject}</p>}
                                 </label>
 
                                 <label className="block">
@@ -418,12 +418,12 @@ export default function ContactPage(): React.ReactElement {
                                         onChange={(e) => {
                                             if (e.target.value.length <= 1000) setField("message", e.target.value);
                                         }}
-                                        className={`mt-1 block w-full rounded-xl px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-[#1FA6B8]/30 transition ${errors.message ? "border-[#E24B5B]" : "border-gray-200"}`}
+                                        className={`mt-1 block w-full rounded-xl px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-[#0b91aa]/30 transition ${errors.message ? "border-[#c65e4f]" : "border-gray-200"}`}
                                         placeholder="Share details, timelines, links — we'll follow up."
                                         aria-invalid={!!errors.message}
                                         aria-describedby={errors.message ? "message-error" : undefined}
                                     />
-                                    {errors.message && <p id="message-error" className="mt-1 text-xs text-[#E24B5B]">{errors.message}</p>}
+                                    {errors.message && <p id="message-error" className="mt-1 text-xs text-[#c65e4f]">{errors.message}</p>}
                                 </label>
 
                                 <div className="flex items-center justify-between gap-4">
@@ -432,7 +432,7 @@ export default function ContactPage(): React.ReactElement {
                                     <button
                                         type="submit"
                                         disabled={isSubmitting || !isFormValid}
-                                        className={`inline-flex items-center gap-3 rounded-xl bg-gradient-to-r from-[#0B5C73] to-[#1FA6B8] text-white font-semibold px-5 py-3 shadow-lg transform transition ${isSubmitting ? "opacity-80" : "hover:scale-[1.01]"} disabled:opacity-60`}
+                                        className={`inline-flex items-center gap-3 rounded-xl bg-gradient-to-r from-[#065975] to-[#0b91aa] text-white font-semibold px-5 py-3 shadow-lg transform transition ${isSubmitting ? "opacity-80" : "hover:scale-[1.01]"} disabled:opacity-60`}
                                         aria-live="polite"
                                         aria-disabled={isSubmitting || !isFormValid}
                                     >
@@ -450,8 +450,8 @@ export default function ContactPage(): React.ReactElement {
                                         <div
                                             role="status"
                                             className={`mt-2 rounded-md px-4 py-3 text-sm font-medium border ${status.type === "success"
-                                                    ? "bg-[#EAF7F0] text-[#2F9E5A] border-[#CDEBDD]"
-                                                    : "bg-[#FFF0F2] text-[#E24B5B] border-[#F5C2C7]"
+                                                ? "bg-[#EAF7F0] text-[#0c7d96] border-[#CDEBDD]"
+                                                : "bg-[#FFF0F2] text-[#c65e4f] border-[#F5C2C7]"
                                                 }`}
                                         >
                                             {status.text}
@@ -465,19 +465,19 @@ export default function ContactPage(): React.ReactElement {
                         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
                                 <div className="text-2xl">⚡</div>
-                                <p className="mt-2 text-sm font-medium text-[#0B5C73]">Quick responses</p>
+                                <p className="mt-2 text-sm font-medium text-[#065975]">Quick responses</p>
                                 <p className="text-xs text-gray-500 mt-1">We value your time</p>
                             </div>
 
                             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
                                 <div className="text-2xl">🔒</div>
-                                <p className="mt-2 text-sm font-medium text-[#0B5C73]">Secure</p>
+                                <p className="mt-2 text-sm font-medium text-[#065975]">Secure</p>
                                 <p className="text-xs text-gray-500 mt-1">Privacy-first handling</p>
                             </div>
 
                             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
                                 <div className="text-2xl">🤝</div>
-                                <p className="mt-2 text-sm font-medium text-[#0B5C73]">Partner-first</p>
+                                <p className="mt-2 text-sm font-medium text-[#065975]">Partner-first</p>
                                 <p className="text-xs text-gray-500 mt-1">Collaborative approach</p>
                             </div>
                         </div>
@@ -517,10 +517,10 @@ function Input({
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
                 autoComplete={autoComplete}
-                className={`mt-1 block w-full rounded-xl px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-[#1FA6B8]/30 transition ${error ? "border-[#E24B5B]" : "border-gray-200"}`}
+                className={`mt-1 block w-full rounded-xl px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-[#0b91aa]/30 transition ${error ? "border-[#c65e4f]" : "border-gray-200"}`}
                 aria-invalid={!!error}
             />
-            {error && <p className="mt-1 text-xs text-[#E24B5B]">{error}</p>}
+            {error && <p className="mt-1 text-xs text-[#c65e4f]">{error}</p>}
         </label>
     );
 }
@@ -654,7 +654,7 @@ function ReachUsSelect({
                         setHighlightIndex(0);
                     }}
                     onKeyDown={onKeyDown}
-                    className="mt-1 block w-full rounded-xl px-4 py-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1FA6B8]/30 transition"
+                    className="mt-1 block w-full rounded-xl px-4 py-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0b91aa]/30 transition"
                     disabled={loading || !!error}
                 />
                 {selectedOption && (
@@ -680,10 +680,10 @@ function ReachUsSelect({
                                     choose(opt);
                                 }}
                                 onMouseEnter={() => setHighlightIndex(idx)}
-                                className={`cursor-pointer px-4 py-2 text-sm ${isHighlighted ? "bg-[#EAF7FA]" : "hover:bg-gray-50"} ${selectedValue === opt.publicName ? "font-semibold" : ""}`}
+                                className={`cursor-pointer px-4 py-2 text-sm ${isHighlighted ? "bg-[#e4f7fb]" : "hover:bg-gray-50"} ${selectedValue === opt.publicName ? "font-semibold" : ""}`}
                             >
                                 <div className="truncate">
-                                    <div className="text-[#0B5C73]">{opt.publicName}</div>
+                                    <div className="text-[#065975]">{opt.publicName}</div>
                                     {opt.description && <div className="text-xs text-gray-500 truncate">{opt.description}</div>}
                                 </div>
                             </li>

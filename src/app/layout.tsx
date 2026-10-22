@@ -2,24 +2,27 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
-import { GoogleAnalytics } from '@next/third-parties/google'
+import AnalyticsConsent from "@/components/AnalyticsConsent";
 
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
-import PWAInstallPrompt from "@/components/PWAInstallPrompt"
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import FavouritesInitializer from "@/components/ui/FavouritesInitializer";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const geistMono = Geist_Mono({
+    variable: "--font-geist-mono",
+    subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-    title: "Welcome to :: We Craft Memories ::",
+    title: "We Craft Memories | Handmade Crochet Gifts & Hampers",
     description: "Cute handmade crochet gifts and handcrafted decor.",
     manifest: "/manifest.json",
     icons: {
         icon: "/favicon.png",
         shortcut: "/favicon.png",
-        apple: "/apple-touch-icon.png",
+        apple: "/icons/icon-192.png",
     },
     other: {
         "color-scheme": "light",
@@ -29,24 +32,26 @@ export const metadata: Metadata = {
 export const viewport = {
     width: "device-width",
     initialScale: 1,
-    themeColor: "#0B5C73",
+    themeColor: "#065975",
 };
 
-/**
- * Container preset (Balanced)
- * - max-w-7xl ≈ 1280px
- * - responsive paddings
- */
-const CONTAINER = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8";
+/** Wide but still comfortably padded shared storefront canvas. */
+const CONTAINER =
+    "w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-10 2xl:px-12";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
     return (
         <html lang="en" data-theme="light">
             <head>
                 <meta name="color-scheme" content="light" />
             </head>
-            <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900 overflow-x-hidden`}>
-
+            <body
+                className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-x-hidden`}
+            >
                 <PWAInstallPrompt />
 
                 <FavouritesInitializer />
@@ -64,7 +69,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <Header containerClass={CONTAINER} headerHeight="h-14" />
 
                     <main id="content" className="flex-1">
-                        <div className={`${CONTAINER} py-4`}>{children}</div>
+                        <div className={`${CONTAINER} py-4 sm:py-6`}>
+                            {children}
+                        </div>
                     </main>
 
                     <Footer containerClass={CONTAINER} footerPadding="py-4" />
@@ -74,15 +81,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     position="top-right"
                     toastOptions={{
                         style: {
-                            borderRadius: "8px",
+                            borderRadius: "15px",
                             background: "#fff",
-                            color: "#333",
+                            color: "#173b4a",
                             boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                         },
                     }}
                 />
 
-                <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID as string} />
+                <AnalyticsConsent gaId={process.env.NEXT_PUBLIC_GA_ID} />
 
                 <script
                     dangerouslySetInnerHTML={{
@@ -95,7 +102,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                         `,
                     }}
                 />
-
             </body>
         </html>
     );

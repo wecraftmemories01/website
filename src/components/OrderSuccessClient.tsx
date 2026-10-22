@@ -1,671 +1,105 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearCart } from "@/lib/cart";
-import {
-    CheckCircle,
-    Home,
-    Truck,
-    ClipboardList,
-    Share2,
-    Printer,
-    ArrowRight,
-    MapPin,
-    Hash,
-    Box,
-    Users,
-} from "lucide-react";
+import OrderConfirmationView, {
+    type ConfirmationOrder,
+    OrderConfirmationState,
+} from "./OrderConfirmationView";
 
-/* ----------------------- */
-/* Types (match your API)  */
-/* ----------------------- */
-
-type ProductItem = {
-    productId?: string;
-    productNameSnapshot?: string;
-    quantity?: number;
-    sellPrice?: number;
-    productImage?: string | null;
-};
-
-type AddressSnapshot = {
-    addressId?: string;
-    recipientNameSnapshot?: string;
-    recipientContactSnapshot?: string;
-    addressLine1Snapshot?: string;
-    addressLine2Snapshot?: string;
-    addressLine3Snapshot?: string;
-    landmarkSnapshot?: string;
-    countrySnapshot?: string;
-    stateSnapshot?: string;
-    districtSnapshot?: string;
-    citySnapshot?: string;
-    pincodeSnapshot?: string;
-};
-
-type CustomerDetailsSnapshot = {
-    customerId?: string;
-    customerNameSnapshot?: string;
-    customerMobileSnapshot?: string;
-    customerEmailSnapshot?: string;
-};
-
-type CouponSnapshot = {
-    code?: string;
-    name?: string;
-    type?: "PERCENTAGE" | "FLAT" | "FREE_SHIPPING";
-    value?: number;
-    discountAmount?: number;
-    isFreeShipping?: boolean;
-};
-
-type Order = {
-    _id?: string;
-    quotedDeliveryCharge?: number;
-    orderTotal?: number;
-    finalPayableAmount?: number;
-    couponAmount?: number;
-    coupon?: CouponSnapshot;
-    purchaseDate?: string;
-    orderNumber?: number | string;
-    orderId?: string;
-    customerDetails?: CustomerDetailsSnapshot;
-    effectiveSubtotalAfterCoupon?: number;
-    orderCustomerAddressDetails?: {
-        deliveryAddress?: AddressSnapshot;
-        billingAddress?: AddressSnapshot;
-    };
-    orderProductsDetails?: ProductItem[];
-};
-
-type OrderShortDetailResponse = {
-    ack?: string;
-    page?: number;
-    limit?: number;
-    totalRecords?: number;
-    data?: Order;
-};
-
-/* ------------- */
-/* Config        */
-/* ------------- */
-function getApiBase(): string {
-    if (typeof window === "undefined") return "";
-    return process.env.NEXT_PUBLIC_API_BASE
-        ? String(process.env.NEXT_PUBLIC_API_BASE).replace(/\/+$/, "")
-        : "";
-}
-function buildUrl(path: string) {
-    const base = getApiBase();
-    if (!base) return path.startsWith("/") ? path : `/${path}`;
-    return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+function apiUrl(path: string): string {
+    const base = (process.env.NEXT_PUBLIC_API_BASE ?? "").replace(/\/+$/, "");
+    return `${base}${path}`;
 }
 
-function getAuthToken(): string | null {
-    try {
-        if (typeof window === "undefined") return null;
-        return localStorage.getItem("accessToken");
-    } catch {
-        return null;
-    }
-}
-
-async function safeJson(res: Response) {
-    const ct = res.headers.get("content-type") || "";
-    const isJson = ct.includes("application/json");
-    if (isJson) {
-        try {
-            return await res.json();
-        } catch {
-            return null;
-        }
-    }
-    try {
-        const text = await res.text();
-        return text;
-    } catch {
-        return null;
-    }
-}
-
-/* ------------------------- */
-/* Small ProductImage helper */
-/* ------------------------- */
-/* Uses next/image with fill; provides a local fallback if image load errors */
-function ProductImage({ src, alt }: { src?: string | null; alt?: string }) {
-    const [failed, setFailed] = useState(false);
-
-    if (!src || failed) {
-        return (
-            <div className="w-16 h-16 bg-[#fbfbfb] border rounded-md grid place-items-center text-slate-300 shrink-0">
-                <Box className="w-6 h-6 text-slate-300" />
-            </div>
-        );
-    }
-
-    return (
-        <div className="w-16 h-16 rounded-md overflow-hidden relative shrink-0 border bg-white/0">
-            <Image
-                src={src}
-                alt={alt ?? "product image"}
-                fill
-                sizes="64px"
-                style={{ objectFit: "cover" }}
-                onError={() => setFailed(true)}
-                // Next 13: you can add unoptimized if you prefer not to use the image loader:
-                // unoptimized
-                // you may leave it out if you configured remotePatterns in next.config.js
-                referrerPolicy="no-referrer"
-            />
-        </div>
-    );
-}
-
-/* ------------------------- */
-/* Main Page Component       */
-/* ------------------------- */
-
-export default function OrderSuccessClient(): React.ReactElement {
+export default function OrderSuccessClient() {
     const router = useRouter();
     const params = useSearchParams();
-
-    const customerId = params?.get("customerId") ?? "";
-    const orderNumber = params?.get("orderNumber") ?? "";
-    const orderIdFromQuery = params?.get("orderId") ?? null;
-    const totalRaw = params?.get("total") ?? null;
-    const quickTotal = totalRaw ? Number(totalRaw) : null;
-
-    const [loading, setLoading] = useState<boolean>(false);
-    const [error, setError] = useState<string>("");
-    const [order, setOrder] = useState<Order | null>(null);
-
-    const TOKEN_KEY = "accessToken";
-    function getStoredAccessToken(): string | null {
-        if (typeof window === "undefined") return null;
-        try {
-            return localStorage.getItem(TOKEN_KEY);
-        } catch {
-            return null;
-        }
-    }
-
-    /**
-     * Centralized fetch that injects Authorization header when token exists.
-     */
-    async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-        const token = getStoredAccessToken();
-        // debug - remove in production
-        // eslint-disable-next-line no-console
-        console.debug("authFetch token present:", !!token);
-
-        const headers = new Headers(init?.headers ?? {});
-        if (token) headers.set("Authorization", `Bearer ${token}`);
-        // only set content-type when there's a body and none provided
-        if (init?.body && !headers.get("Content-Type")) headers.set("Content-Type", "application/json");
-
-        const res = await fetch(input, { ...init, headers });
-        if (res.status === 401) {
-            if (typeof window !== "undefined") {
-                localStorage.removeItem(TOKEN_KEY);
-                window.location.href = "/login";
-            }
-        }
-        return res;
-    }
+    const customerId = params.get("customerId") ?? "";
+    const orderNumber = params.get("orderNumber") ?? "";
+    const orderId = params.get("orderId") ?? "";
 
     const fetchPath = useMemo(() => {
+        // Keep the existing order_short_details API contract used by checkout.
         if (customerId && orderNumber) {
-            return `/sell_order/order_short_details?customerId=${encodeURIComponent(
-                customerId
-            )}&orderNumber=${encodeURIComponent(orderNumber)}`;
+            return `/sell_order/order_short_details?customerId=${encodeURIComponent(customerId)}&orderNumber=${encodeURIComponent(orderNumber)}`;
         }
-        if (orderIdFromQuery) {
-            return `/sell_order/order_short_details?orderNumber=${encodeURIComponent(
-                orderIdFromQuery
-            )}`;
+        if (orderNumber || orderId) {
+            return `/sell_order/order_short_details?orderNumber=${encodeURIComponent(orderNumber || orderId)}`;
         }
         return null;
-    }, [customerId, orderNumber, orderIdFromQuery]);
+    }, [customerId, orderNumber, orderId]);
+
+    const [order, setOrder] = useState<ConfirmationOrder | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        let mounted = true;
+        if (!fetchPath) {
+            setError(
+                "This link doesn't contain an order reference. Please check your confirmation email or your account's orders.",
+            );
+            setLoading(false);
+            return;
+        }
+        const controller = new AbortController();
         async function load() {
-            if (!fetchPath) {
-                setError("Missing customerId + orderNumber, or orderId in URL.");
-                return;
-            }
-
             setLoading(true);
             setError("");
-
             try {
-                const url = buildUrl(fetchPath);
-                
-                const res = await authFetch(url, { method: "GET" });
-
-                if (res.status === 401) {
+                const token =
+                    typeof window !== "undefined"
+                        ? localStorage.getItem("accessToken")
+                        : null;
+                const headers = new Headers();
+                if (token) headers.set("Authorization", `Bearer ${token}`);
+                const response = await fetch(apiUrl(fetchPath!), {
+                    method: "GET",
+                    headers,
+                    signal: controller.signal,
+                });
+                if (response.status === 401) {
                     try {
-                        if (typeof window !== "undefined") {
-                            localStorage.removeItem("accessToken");
-                            localStorage.removeItem("customerId");
-                        }
-                    } catch { }
+                        localStorage.removeItem("accessToken");
+                        localStorage.removeItem("customerId");
+                    } catch {
+                        /* storage may be blocked */
+                    }
                     router.replace("/login");
                     return;
                 }
-
-                if (!res.ok) {
-                    const body = await safeJson(res);
-                    const msg =
-                        typeof body === "string"
-                            ? body
-                            : body?.message || body?.error || JSON.stringify(body || {});
-                    throw new Error(`Failed to fetch order: ${res.status} ${msg}`);
-                }
-
-                const payload = (await safeJson(res)) as OrderShortDetailResponse | null;
-
-                if (!payload) {
-                    throw new Error("Empty response from server.");
-                }
-
-                const hasData = !!(payload as any).data;
-                if (!hasData) {
-                    const alt = (payload as any).order ?? (payload as any).data ?? null;
-                    if (!alt) {
-                        throw new Error("Unexpected response shape from server.");
-                    }
-                    if (mounted) setOrder(alt as Order);
-                } else {
-                    if (mounted) setOrder(payload.data as Order);
-                }
-            } catch (err: unknown) {
-                console.error("[OrderSuccessPage] load error:", err);
-                setError(err instanceof Error ? err.message : String(err));
+                if (!response.ok)
+                    throw new Error(
+                        "We couldn't load the order details. You can check your orders in your account or contact us if you need help.",
+                    );
+                const json = await response.json();
+                const result = (json?.data ?? json?.order) as
+                    ConfirmationOrder | undefined;
+                if (!result || typeof result !== "object")
+                    throw new Error(
+                        "Your order details are not available yet. Please check your orders in your account.",
+                    );
+                if (controller.signal.aborted) return;
+                setOrder(result);
+                // Clear only after the backend confirms an actual order.
+                clearCart();
+            } catch (err) {
+                if (controller.signal.aborted) return;
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Unable to load your order details.",
+                );
             } finally {
-                if (mounted) setLoading(false);
+                if (!controller.signal.aborted) setLoading(false);
             }
         }
-
-        load();
-
-        return () => {
-            mounted = false;
-        };
+        void load();
+        return () => controller.abort();
     }, [fetchPath, router]);
 
-    useEffect(() => {
-        if (order) {
-            clearCart();
-        }
-    }, [order]);
-
-    const handleShare = async (): Promise<void> => {
-        const shareText = `Order ${order?.orderNumber ?? order?.orderId ?? ""} • ₹${(
-            order?.finalPayableAmount ?? 0
-        ).toLocaleString("en-IN")}`;
-        const url = typeof window !== "undefined" ? window.location.href : "";
-        const shareData = { title: "Order details", text: shareText, url };
-
-        try {
-            if (typeof navigator !== "undefined" && (navigator as any).share) {
-                // @ts-ignore
-                await (navigator as any).share(shareData);
-            } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-                await navigator.clipboard.writeText(url);
-            }
-        } catch (err) {
-            console.warn("Share failed:", err);
-        }
-    };
-
-    const formattedDate = (iso: string | null | undefined): string => {
-        if (!iso) return "—";
-        try {
-            const dt = new Date(iso);
-            return new Intl.DateTimeFormat("en-IN", {
-                dateStyle: "medium",
-                timeStyle: "short",
-                timeZone: "Asia/Kolkata",
-            }).format(dt);
-        } catch {
-            return iso;
-        }
-    };
-
-    const currency = (v: number | string | undefined | null): string => {
-        if (v === undefined || v === null || v === "") return "—";
-        const num = typeof v === "number" ? v : Number(v);
-        if (Number.isNaN(num)) return "—";
-        return `₹${num.toLocaleString("en-IN")}`;
-    };
-
-    const subtotalAmount = (): number => {
-        if (order?.orderTotal != null) return Number(order.orderTotal);
-
-        const items = order?.orderProductsDetails ?? [];
-        return items.reduce(
-            (s, it) => s + (Number(it.sellPrice ?? 0) * Number(it.quantity ?? 1)),
-            0
-        );
-    };
-
-    const discountedSubtotal = (): number => {
-        if (order?.effectiveSubtotalAfterCoupon != null) {
-            return Number(order.effectiveSubtotalAfterCoupon);
-        }
-
-        const subtotal = subtotalAmount();
-        const discount = Number(order?.coupon?.discountAmount ?? 0);
-        return Math.max(0, subtotal - discount);
-    };
-
-    const totalSavings = (): number => {
-        const coupon = Number(order?.coupon?.discountAmount ?? 0);
-        const deliverySaved = order?.coupon?.isFreeShipping
-            ? Number(order?.quotedDeliveryCharge ?? 0)
-            : 0;
-
-        return coupon + deliverySaved;
-    };
-
-    const resolveProductImage = (raw?: string | null) => {
-        if (!raw) return null;
-        const trimmed = String(raw).trim();
-        if (!trimmed) return null;
-        if (/^https?:\/\//i.test(trimmed)) return trimmed;
-        return buildUrl(trimmed.startsWith("/") ? trimmed : `/${trimmed}`);
-    };
-
-    return (
-        <div className="min-h-screen bg-linear-to-b from-[#fbfeff] to-white flex items-start justify-center py-6 sm:py-10 px-3 sm:px-4">
-            <div className="w-full max-w-5xl">
-                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-4 sm:px-6 py-5 bg-[#f7fbfb] border-b border-slate-100">
-                        <div className="w-14 h-14 rounded-md bg-white grid place-items-center border border-[#e6f7f6]">
-                            <CheckCircle className="w-8 h-8 text-[#065975]" />
-                        </div>
-
-                        <div className="flex-1">
-                            <h1 className="text-xl font-semibold text-[#065975]">Order placed successfully</h1>
-                            <p className="text-xs text-slate-400 mt-1">
-                                Estimated delivery: 3–5 working days
-                            </p>
-                        </div>
-
-                        <div className="sm:ml-auto sm:text-right flex items-start sm:block justify-between w-full sm:w-auto">
-                            <div className="text-xs text-slate-400">Order total</div>
-                            <div className="text-lg font-semibold text-[#065975]">
-                                {currency(order?.finalPayableAmount ?? 0)}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Body */}
-                    <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
-                        <div className="lg:col-span-2 flex flex-col gap-5">
-                            {/* Order summary */}
-                            <section className="border rounded-lg p-4">
-                                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-                                    <div className="shrink-0 w-12 h-12 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
-                                        <Hash className="w-5 h-5 text-[#065975]" />
-                                    </div>
-
-                                    <div className="flex-1">
-                                        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-                                            <div className="flex-1">
-                                                <div className="text-xs text-slate-400">Order Number</div>
-                                                <div className="text-sm font-medium break-all">
-                                                    {order?.orderNumber ?? "—"}
-                                                </div>
-                                            </div>
-
-                                            <div className="sm:text-right">
-                                                <div className="text-xs text-slate-400">Placed</div>
-                                                <div className="text-sm text-slate-500">{order ? formattedDate(order.purchaseDate) : "—"}</div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-3 text-sm text-slate-600">
-                                            <div className="flex items-center gap-2">
-                                                <ClipboardList className="w-4 h-4 text-slate-400" />
-                                                <span>
-                                                    Receipt sent to{" "}
-                                                    <strong className="text-slate-700">
-                                                        {order?.customerDetails?.customerEmailSnapshot ?? "your email"}
-                                                    </strong>
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* Products list */}
-                            <section className="border rounded-lg p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-slate-700">Items in your order</h3>
-                                        <p className="text-xs text-slate-400">We will ship these soon.</p>
-                                    </div>
-                                    <div className="text-xs text-slate-400">{(order?.orderProductsDetails ?? []).length} item(s)</div>
-                                </div>
-
-                                <ul className="mt-4 space-y-3">
-                                    {(order?.orderProductsDetails ?? []).map((p, idx) => {
-                                        const imageSrc = resolveProductImage(p.productImage);
-                                        return (
-                                            <li key={p.productId ?? idx} className="flex items-start gap-3 p-3 rounded-md border border-slate-100">
-                                                <ProductImage src={imageSrc} alt={p.productNameSnapshot} />
-
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-sm font-medium text-slate-800 truncate">{p.productNameSnapshot ?? "Product"}</div>
-                                                    <div className="text-xs text-slate-500">Qty: {p.quantity ?? 1}</div>
-                                                </div>
-
-                                                <div className="text-sm font-semibold text-slate-700 shrink-0">{currency((p.sellPrice ?? 0) * (p.quantity ?? 1))}</div>
-                                            </li>
-                                        );
-                                    })}
-
-                                    {((order?.orderProductsDetails ?? []).length === 0) && (
-                                        <li className="text-sm text-slate-500">No items found for this order.</li>
-                                    )}
-                                </ul>
-                            </section>
-
-                            {/* Delivery address */}
-                            <section className="border rounded-lg p-4 flex gap-4 items-start">
-                                <div className="shrink-0 w-10 h-10 rounded-md bg-[#f0f9f8] grid place-items-center border border-[#e6f7f6]">
-                                    <MapPin className="w-5 h-5 text-[#065975]" />
-                                </div>
-
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="text-xs text-slate-400">Shipping to</div>
-                                            <div className="text-sm font-medium text-slate-800">
-                                                {order?.orderCustomerAddressDetails?.deliveryAddress?.recipientNameSnapshot ?? "—"}
-                                            </div>
-                                            <div className="text-sm text-slate-600 mt-1 break-words">
-                                                {order?.orderCustomerAddressDetails?.deliveryAddress?.addressLine1Snapshot ?? ""}{" "}
-                                                {order?.orderCustomerAddressDetails?.deliveryAddress?.addressLine2Snapshot ?? ""}{" "}
-                                                {order?.orderCustomerAddressDetails?.deliveryAddress?.landmarkSnapshot ? `, ${order.orderCustomerAddressDetails.deliveryAddress.landmarkSnapshot}` : ""}
-                                                <div className="text-xs text-slate-400 mt-1">
-                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.citySnapshot ?? ""} • &nbsp;
-                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.districtSnapshot ?? ""} • &nbsp;
-                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.stateSnapshot ?? ""} • &nbsp;
-                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.countrySnapshot ?? ""} • &nbsp;
-                                                    {order?.orderCustomerAddressDetails?.deliveryAddress?.pincodeSnapshot ?? ""}
-                                                </div>
-                                                <div className="text-xs text-slate-400">
-                                                    Phone: {order?.orderCustomerAddressDetails?.deliveryAddress?.recipientContactSnapshot ?? order?.customerDetails?.customerMobileSnapshot ?? "—"}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* Right column */}
-                        <aside className="space-y-4">
-                            <div className="lg:sticky lg:top-6">
-                                <div className="flex flex-col gap-3">
-                                    <button type="button"
-                                        onClick={() => router.push("/products")}
-                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-[#065975] font-medium hover:shadow-sm transition"
-                                        aria-label="Continue shopping"
-                                    >
-                                        <Home className="w-4 h-4" />
-                                        <span className="text-sm">Continue shopping</span>
-                                    </button>
-
-                                    <button type="button"
-                                        onClick={() => {
-                                            if (order?.orderId || order?._id) router.push(`/profile/order/${encodeURIComponent(String(order.orderId ?? order._id))}`);
-                                            else router.push("/orders");
-                                        }}
-                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-[#065975] text-white font-semibold hover:brightness-95 transition"
-                                        aria-label="Track order"
-                                    >
-                                        <Truck className="w-4 h-4" />
-                                        <span className="text-sm">Track order</span>
-                                    </button>
-
-                                    <div className="flex gap-2 mt-1">
-                                        <button type="button"
-                                            onClick={() => typeof window !== "undefined" && window.print()}
-                                            className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-sm hover:shadow-sm transition"
-                                        >
-                                            <Printer className="w-4 h-4" />
-                                            Print
-                                        </button>
-
-                                        <button type="button"
-                                            onClick={() => handleShare()}
-                                            className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border bg-white text-sm hover:shadow-sm transition"
-                                        >
-                                            <Share2 className="w-4 h-4" />
-                                            Share
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 border rounded-lg p-4 bg-[#fbffff]">
-                                    <div className="text-xs text-slate-400">Order summary</div>
-
-                                    <div className="mt-3 space-y-2">
-                                        {/* Subtotal with discount applied */}
-                                        {order?.coupon?.code && Number(order?.coupon?.discountAmount ?? 0) > 0 ? (
-                                            <>
-                                                {/* Coupon Applied Badge */}
-                                                <div className="flex items-center justify-between text-xs bg-green-50 border border-green-100 text-green-700 px-2 py-1 rounded-md">
-                                                    <div>
-                                                        Coupon <span className="font-semibold">{order.coupon.code}</span> applied
-                                                    </div>
-                                                    <div className="font-semibold">
-                                                        -{currency(order?.coupon?.discountAmount ?? 0)}
-                                                    </div>
-                                                </div>
-
-                                                {order?.coupon?.type === "PERCENTAGE" && (
-                                                    <div className="text-[11px] text-green-600">
-                                                        {order.coupon.value}% OFF applied
-                                                    </div>
-                                                )}
-
-                                                {order?.coupon?.type === "FLAT" && (
-                                                    <div className="text-[11px] text-green-600">
-                                                        Flat {currency(order.coupon.value)} OFF
-                                                    </div>
-                                                )}
-
-                                                {order?.coupon?.isFreeShipping && (
-                                                    <div className="text-[11px] text-green-600">
-                                                        Free delivery applied 🚚
-                                                    </div>
-                                                )}
-
-                                                {/* Old subtotal */}
-                                                <div className="flex items-center justify-between text-sm text-slate-400 line-through">
-                                                    <div>Subtotal</div>
-                                                    <div>{currency(subtotalAmount())}</div>
-                                                </div>
-
-                                                {/* Discounted subtotal */}
-                                                <div className="flex items-center justify-between text-sm text-green-600 font-semibold">
-                                                    <div>Discounted Subtotal</div>
-                                                    <div>{currency(discountedSubtotal())}</div>
-                                                </div>
-
-                                                {/* Savings line */}
-                                                <div className="text-xs text-green-600 font-medium">
-                                                    You saved {currency(order.coupon.discountAmount)} 🎉
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="flex items-center justify-between text-sm text-slate-600">
-                                                <div>Subtotal</div>
-                                                <div>{currency(subtotalAmount())}</div>
-                                            </div>
-                                        )}
-
-                                        {/* Delivery */}
-                                        <div className="flex items-center justify-between text-sm text-slate-600">
-                                            <div>Delivery</div>
-                                            <div>
-                                                {order?.coupon?.isFreeShipping
-                                                    ? "Free (Coupon)"
-                                                    : order?.quotedDeliveryCharge === 0
-                                                        ? "Free"
-                                                        : currency(order?.quotedDeliveryCharge ?? 0)}
-                                            </div>
-                                        </div>
-
-                                        {/* Total */}
-                                        <div className="flex items-center justify-between text-sm font-semibold text-[#065975] mt-2 border-t pt-2">
-                                            <div>Total</div>
-                                            <div>{currency(order?.finalPayableAmount ?? 0)}</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="mt-3 text-xs text-slate-500">
-                                    <div className="flex items-start gap-2">
-                                        <Users className="w-4 h-4 text-slate-400" />
-                                        <div>Need help? Reply to the order email or visit our Help center.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </aside>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="px-6 py-4 border-t border-slate-100 bg-white/50 flex items-center justify-between gap-3">
-                        <button type="button" onClick={() => router.push("/products")} className="inline-flex items-center gap-2 text-sm text-[#065975] font-medium">
-                            Continue shopping
-                            <ArrowRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Loading & Error overlays */}
-                {loading && (
-                    <div className="fixed inset-0 bg-white/60 backdrop-blur-sm grid place-items-center z-50">
-                        <div className="text-sm text-slate-700">Loading order details…</div>
-                    </div>
-                )}
-
-                {error && (
-                    <div className="mt-4 p-3 bg-red-50 border border-red-100 text-red-700 rounded">
-                        <strong>Error:</strong> {error}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
+    if (loading) return <OrderConfirmationState loading />;
+    if (!order) return <OrderConfirmationState message={error || undefined} />;
+    return <OrderConfirmationView order={order} />;
 }

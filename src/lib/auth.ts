@@ -6,6 +6,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshPromise: Promise<boolean> | null = null;
+// Invalidates in-flight refresh responses when the session changes.
+let authGeneration = 0;
 
 /* =========================
    Types
@@ -40,11 +42,15 @@ export function getAuth(): AuthShape | null {
 export function getStoredAccessToken(): string | null {
     if (typeof window === "undefined") return null;
 
-    const direct = localStorage.getItem(TOKEN_KEY);
-    if (direct) return direct;
+    try {
+        const direct = localStorage.getItem(TOKEN_KEY);
+        if (direct) return direct;
 
-    const auth = getAuth();
-    return auth?.token?.accessToken ?? null;
+        const auth = getAuth();
+        return auth?.token?.accessToken ?? null;
+    } catch {
+        return null;
+    }
 }
 
 export function storeTokens(accessToken: string) {
@@ -88,6 +94,7 @@ export function isTokenValid(): boolean {
 ========================= */
 
 export async function logout(redirectTo = "/login") {
+    authGeneration++;
     try {
         const token = getStoredAccessToken();
 
@@ -148,6 +155,7 @@ export async function refreshAccessToken(): Promise<boolean> {
         return refreshPromise;
     }
 
+    const generation = authGeneration;
     refreshPromise = (async () => {
         try {
             const res = await fetch(`${API_BASE}/token/refresh_token`, {
@@ -160,7 +168,7 @@ export async function refreshAccessToken(): Promise<boolean> {
             }
 
             const data = await res.json();
-            if (!data?.accessToken) {
+            if (generation !== authGeneration || !data?.accessToken) {
                 return false;
             }
 
@@ -211,7 +219,7 @@ export async function authFetch(
         credentials: "include",
     });
 
-    if (res.status === 401) {
+    if (res.status === 401 && token) {
         const refreshed = await refreshAccessToken();
 
         if (!refreshed) {
@@ -269,6 +277,7 @@ export function scheduleSilentRefresh() {
 export function persistAuth(data: AuthShape | null) {
     if (!data?.token?.accessToken) return;
 
+    authGeneration++;
     const now = Date.now();
     const expiresIn = data.token.expiresIn ?? 0;
 

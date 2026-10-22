@@ -1,4 +1,5 @@
 import React from "react";
+import { notFound } from "next/navigation";
 import ProductClient from "../../../components/ProductDetails";
 
 export const dynamic = "force-dynamic";
@@ -13,15 +14,15 @@ async function fetchProduct(value: string) {
         ? `${API_BASE}/product/sell/${value}`
         : `${API_BASE}/product/sell/slug/${encodeURIComponent(value)}`;
 
-    const res = await fetch(url, {
-        cache: "no-store",
-    });
-
-    if (!res.ok) return null;
-
-    const json = await res.json();
-
-    return json?.productData || null;
+    try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json?.productData || null;
+    } catch (error) {
+        console.error("Unable to fetch product", error);
+        return null;
+    }
 }
 
 /* SEO metadata */
@@ -98,13 +99,7 @@ export default async function Page({
 
     const productData = await fetchProduct(slug);
 
-    if (!productData) {
-        return (
-            <div className="p-8 text-center">
-                Product not found
-            </div>
-        );
-    }
+    if (!productData) notFound();
 
     const productSchema = {
         "@context": "https://schema.org",
@@ -151,7 +146,7 @@ export default async function Page({
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(productSchema),
+                    __html: JSON.stringify(productSchema).replace(/</g, "\\u003c"),
                 }}
             />
 

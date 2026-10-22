@@ -1,5 +1,5 @@
 // ReviewModule.tsx
-'use client'
+"use client";
 
 import React, { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns"; // OPTIONAL: remove if date-fns unavailable
@@ -35,7 +35,9 @@ function formatRelative(dateIso: string) {
     } catch {
         // ignore
     }
-    const diff = Math.floor((Date.now() - new Date(dateIso).getTime()) / (1000 * 60 * 60 * 24));
+    const diff = Math.floor(
+        (Date.now() - new Date(dateIso).getTime()) / (1000 * 60 * 60 * 24),
+    );
     if (diff <= 0) return "today";
     if (diff === 1) return "1 day ago";
     return `${diff} days ago`;
@@ -43,13 +45,22 @@ function formatRelative(dateIso: string) {
 
 function StarIcon({ filled }: { filled: boolean }) {
     return (
-        <svg className={`w-4 h-4 ${filled ? "text-[#F6B73C]" : "text-[#0B5C73]/20"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+        <svg
+            className={`w-4 h-4 ${filled ? "text-[#edc793]" : "text-[#065975]/20"}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden
+        >
             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.95a1 1 0 00.95.69h4.163c.969 0 1.371 1.24.588 1.81l-3.37 2.466a1 1 0 00-.364 1.118l1.287 3.95c.3.921-.755 1.688-1.54 1.118L10 15.347l-3.399 2.272c-.785.57-1.84-.197-1.54-1.118l1.287-3.95a1 1 0 00-.364-1.118L2.615 9.377c-.783-.57-.38-1.81.588-1.81h4.163a1 1 0 00.95-.69l1.286-3.95z" />
         </svg>
     );
 }
 
-export default function ReviewModule({ productName, initialReviews = [], maxPerPage = 4 }: Props) {
+export default function ReviewModule({
+    productName,
+    initialReviews = [],
+    maxPerPage = 4,
+}: Props) {
     // Sample mock if none provided
     const sample: Review[] = [
         {
@@ -57,7 +68,9 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             name: "Asha",
             rating: 5,
             text: "Absolutely lovely! Great gift & very well packed. The stitches are neat and colors are vibrant.",
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+            createdAt: new Date(
+                Date.now() - 1000 * 60 * 60 * 24 * 2,
+            ).toISOString(),
             helpful: 12,
             images: [],
         },
@@ -66,7 +79,9 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             name: "Ravi",
             rating: 4,
             text: "Nice quality, shipping took a little long but product matched the photos.",
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
+            createdAt: new Date(
+                Date.now() - 1000 * 60 * 60 * 24 * 10,
+            ).toISOString(),
             helpful: 3,
             images: [],
         },
@@ -75,13 +90,17 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             name: "Maya",
             rating: 5,
             text: "My sister loved it — looks premium!",
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
+            createdAt: new Date(
+                Date.now() - 1000 * 60 * 60 * 24 * 30,
+            ).toISOString(),
             helpful: 7,
             images: [],
         },
     ];
 
-    const [reviews, setReviews] = useState<Review[]>(initialReviews.length ? initialReviews : sample);
+    const [reviews, setReviews] = useState<Review[]>(
+        initialReviews.length ? initialReviews : sample,
+    );
     const [filterRating, setFilterRating] = useState<number | null>(null);
     const [page, setPage] = useState(1);
     const [showWrite, setShowWrite] = useState(false);
@@ -94,7 +113,9 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
 
     const stats = useMemo(() => {
         const total = reviews.length;
-        const avg = total ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
+        const avg = total
+            ? reviews.reduce((s, r) => s + r.rating, 0) / total
+            : 0;
         const counts = [0, 0, 0, 0, 0]; // index 0->1 star ... 4->5 star
         reviews.forEach((r) => {
             counts[r.rating - 1] += 1;
@@ -103,15 +124,24 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
     }, [reviews]);
 
     const filtered = useMemo(() => {
-        const arr = filterRating ? reviews.filter((r) => r.rating === filterRating) : reviews;
+        const arr = filterRating
+            ? reviews.filter((r) => r.rating === filterRating)
+            : reviews;
         return arr;
     }, [reviews, filterRating]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / maxPerPage));
-    const pageItems = filtered.slice((page - 1) * maxPerPage, page * maxPerPage);
+    const pageItems = filtered.slice(
+        (page - 1) * maxPerPage,
+        page * maxPerPage,
+    );
 
     function handleHelpful(id: string) {
-        setReviews((prev) => prev.map((r) => (r.id === id ? { ...r, helpful: (r.helpful ?? 0) + 1 } : r)));
+        setReviews((prev) =>
+            prev.map((r) =>
+                r.id === id ? { ...r, helpful: (r.helpful ?? 0) + 1 } : r,
+            ),
+        );
     }
 
     function submitReview(e?: React.FormEvent) {
@@ -147,13 +177,15 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
     }, [toast]);
 
     return (
-        <div className="bg-white rounded-2xl p-8 shadow-[0_10px_40px_rgba(11,92,115,0.08)] border border-[#0B5C73]/10">
+        <div className="bg-white rounded-2xl p-8 shadow-[0_10px_40px_rgba(11,92,115,0.08)] border border-[#065975]/10">
             {/* Header: average rating */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="bg-linear-to-br from-[#0B5C73] to-[#1FA6B8] text-white rounded-2xl px-6 py-5 flex flex-col items-center justify-center shadow-lg">
-                            <div className="text-2xl font-extrabold leading-none">{stats.total ? stats.avg.toFixed(1) : "—"}</div>
+                        <div className="bg-linear-to-br from-[#065975] to-[#0b91aa] text-white rounded-2xl px-6 py-5 flex flex-col items-center justify-center shadow-lg">
+                            <div className="text-2xl font-extrabold leading-none">
+                                {stats.total ? stats.avg.toFixed(1) : "—"}
+                            </div>
                             <div className="text-xs">avg rating</div>
                         </div>
 
@@ -162,20 +194,30 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                                 {/* visual stars */}
                                 <div className="flex">
                                     {Array.from({ length: 5 }).map((_, i) => (
-                                        <StarIcon key={i} filled={i < Math.round(stats.avg)} />
+                                        <StarIcon
+                                            key={i}
+                                            filled={i < Math.round(stats.avg)}
+                                        />
                                     ))}
                                 </div>
-                                <div className="text-sm text-gray-600">{stats.total} review{stats.total !== 1 ? "s" : ""}</div>
+                                <div className="text-sm text-gray-600">
+                                    {stats.total} review
+                                    {stats.total !== 1 ? "s" : ""}
+                                </div>
                             </div>
-                            <div className="text-sm text-gray-500 mt-1">Rated by customers who bought this product</div>
+                            <div className="text-sm text-gray-500 mt-1">
+                                Rated by customers who bought this product
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => { setShowWrite(true); }}
-                        className="px-5 py-2.5 bg-[#E24B5B] text-white rounded-full shadow-lg hover:scale-[1.02] transition font-medium"
+                        onClick={() => {
+                            setShowWrite(true);
+                        }}
+                        className="px-5 py-2.5 bg-[#c65e4f] text-white rounded-full shadow-lg hover:scale-[1.02] transition font-medium"
                     >
                         Write a review
                     </button>
@@ -184,8 +226,21 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                     <select
                         onChange={(e) => {
                             const v = e.target.value;
-                            if (v === "newest") setReviews((r) => [...r].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
-                            if (v === "helpful") setReviews((r) => [...r].sort((a, b) => (b.helpful ?? 0) - (a.helpful ?? 0)));
+                            if (v === "newest")
+                                setReviews((r) =>
+                                    [...r].sort(
+                                        (a, b) =>
+                                            +new Date(b.createdAt) -
+                                            +new Date(a.createdAt),
+                                    ),
+                                );
+                            if (v === "helpful")
+                                setReviews((r) =>
+                                    [...r].sort(
+                                        (a, b) =>
+                                            (b.helpful ?? 0) - (a.helpful ?? 0),
+                                    ),
+                                );
                         }}
                         className="border rounded px-2 py-1 text-sm"
                         aria-label="Sort reviews"
@@ -204,23 +259,40 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                         {Array.from({ length: 5 }).map((_, idx) => {
                             const star = 5 - idx; // 5..1
                             const count = stats.counts[star - 1] ?? 0;
-                            const pct = stats.total ? Math.round((count / stats.total) * 100) : 0;
+                            const pct = stats.total
+                                ? Math.round((count / stats.total) * 100)
+                                : 0;
                             return (
                                 <button
                                     key={star}
                                     onClick={() => {
-                                        setFilterRating((cur) => (cur === star ? null : star));
+                                        setFilterRating((cur) =>
+                                            cur === star ? null : star,
+                                        );
                                         setPage(1);
                                     }}
-                                    className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 focus:outline-none ${filterRating === star ? 'bg-gray-100 ring-1 ring-[#E94E4E]' : ''}`}
+                                    className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 focus:outline-none ${filterRating === star ? "bg-gray-100 ring-1 ring-[#E94E4E]" : ""}`}
                                 >
-                                    <div className="w-14 text-sm text-gray-700">{star} <span className="text-[#F6B73C]">★</span></div>
-
-                                    <div className="flex-1 bg-[#0B5C73]/10 rounded-full h-3 overflow-hidden">
-                                        <div className="h-3 bg-linear-to-r from-[#E24B5B] to-[#F6B73C]" style={{ width: `${pct}%`, transition: "width .3s" }} />
+                                    <div className="w-14 text-sm text-gray-700">
+                                        {star}{" "}
+                                        <span className="text-[#edc793]">
+                                            ★
+                                        </span>
                                     </div>
 
-                                    <div className="w-10 text-right text-sm text-gray-600">{pct}%</div>
+                                    <div className="flex-1 bg-[#065975]/10 rounded-full h-3 overflow-hidden">
+                                        <div
+                                            className="h-3 bg-linear-to-r from-[#c65e4f] to-[#edc793]"
+                                            style={{
+                                                width: `${pct}%`,
+                                                transition: "width .3s",
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="w-10 text-right text-sm text-gray-600">
+                                        {pct}%
+                                    </div>
                                 </button>
                             );
                         })}
@@ -230,9 +302,16 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                 <div className="md:col-span-2">
                     <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
                         <div className="font-semibold">Filter</div>
-                        <div className="mt-2 text-sm text-gray-600">Showing {filterRating ? `${filterRating}-star` : "all"} reviews</div>
+                        <div className="mt-2 text-sm text-gray-600">
+                            Showing{" "}
+                            {filterRating ? `${filterRating}-star` : "all"}{" "}
+                            reviews
+                        </div>
                         {filterRating && (
-                            <button onClick={() => setFilterRating(null)} className="mt-2 text-xs text-[#004F64] underline">
+                            <button
+                                onClick={() => setFilterRating(null)}
+                                className="mt-2 text-xs text-[#065975] underline"
+                            >
                                 Clear filter
                             </button>
                         )}
@@ -243,24 +322,46 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             {/* review list */}
             <div className="mt-6 space-y-4">
                 {pageItems.map((r) => (
-                    <article key={r.id} className="border border-[#0B5C73]/10 rounded-2xl p-6 bg-white shadow-[0_8px_30px_rgba(11,92,115,0.06)] hover:shadow-[0_12px_40px_rgba(11,92,115,0.12)] transition">
+                    <article
+                        key={r.id}
+                        className="border border-[#065975]/10 rounded-2xl p-6 bg-white shadow-[0_8px_30px_rgba(11,92,115,0.06)] hover:shadow-[0_12px_40px_rgba(11,92,115,0.12)] transition"
+                    >
                         <header className="flex items-start gap-4">
-                            <div aria-hidden className="w-12 h-12 rounded-full bg-[#0B5C73]/10 text-[#0B5C73] font-semibold text-sm flex items-center justify-center">
-                                {r.name.split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase()}
+                            <div
+                                aria-hidden
+                                className="w-12 h-12 rounded-full bg-[#065975]/10 text-[#065975] font-semibold text-sm flex items-center justify-center"
+                            >
+                                {r.name
+                                    .split(" ")
+                                    .map((s) => s[0])
+                                    .slice(0, 2)
+                                    .join("")
+                                    .toUpperCase()}
                             </div>
                             <div className="flex-1">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="font-medium text-gray-800">{r.name}</div>
-                                        <div className="flex items-center text-sm">
-                                            {Array.from({ length: 5 }).map((__, i) => (
-                                                <StarIcon key={i} filled={i < r.rating} />
-                                            ))}
+                                        <div className="font-medium text-gray-800">
+                                            {r.name}
                                         </div>
-                                        <div className="text-xs text-gray-500 ml-2">{formatRelative(r.createdAt)}</div>
+                                        <div className="flex items-center text-sm">
+                                            {Array.from({ length: 5 }).map(
+                                                (__, i) => (
+                                                    <StarIcon
+                                                        key={i}
+                                                        filled={i < r.rating}
+                                                    />
+                                                ),
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 ml-2">
+                                            {formatRelative(r.createdAt)}
+                                        </div>
                                     </div>
 
-                                    <div className="text-sm text-gray-500">{r.helpful ?? 0} helpful</div>
+                                    <div className="text-sm text-gray-500">
+                                        {r.helpful ?? 0} helpful
+                                    </div>
                                 </div>
 
                                 <p className="mt-3 text-gray-700">{r.text}</p>
@@ -269,17 +370,39 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                                 {r.images?.length ? (
                                     <div className="mt-3 flex gap-2">
                                         {r.images.map((img, i) => (
-                                            <a key={i} href={img} target="_blank" rel="noreferrer" className="w-20 h-20 rounded-md overflow-hidden border">
+                                            <a
+                                                key={i}
+                                                href={img}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="w-20 h-20 rounded-md overflow-hidden border"
+                                            >
                                                 {/* we use a plain img to avoid extra Next/Image layout issues in popups */}
-                                                <img src={img} alt={`review-${r.id}-${i}`} className="w-full h-full object-cover" />
+                                                <img
+                                                    src={img}
+                                                    alt={`review-${r.id}-${i}`}
+                                                    className="w-full h-full object-cover"
+                                                />
                                             </a>
                                         ))}
                                     </div>
                                 ) : null}
 
                                 <div className="mt-3 flex gap-3">
-                                    <button onClick={() => handleHelpful(r.id)} className="text-sm px-3 py-1.5 rounded-full bg-[#0B5C73]/10 text-[#0B5C73] hover:bg-[#0B5C73]/20 transition">Helpful</button>
-                                    <button onClick={() => setToast("Report submitted")} className="text-sm px-2 py-1 rounded bg-gray-50 hover:bg-gray-100">Report</button>
+                                    <button
+                                        onClick={() => handleHelpful(r.id)}
+                                        className="text-sm px-3 py-1.5 rounded-full bg-[#065975]/10 text-[#065975] hover:bg-[#065975]/20 transition"
+                                    >
+                                        Helpful
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setToast("Report submitted")
+                                        }
+                                        className="text-sm px-2 py-1 rounded bg-gray-50 hover:bg-gray-100"
+                                    >
+                                        Report
+                                    </button>
                                 </div>
                             </div>
                         </header>
@@ -288,11 +411,32 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
 
                 {/* pagination */}
                 <div className="flex items-center justify-between mt-1">
-                    <div className="text-sm text-gray-600">Showing {Math.min((page - 1) * maxPerPage + 1, filtered.length)}–{Math.min(page * maxPerPage, filtered.length)} of {filtered.length}</div>
+                    <div className="text-sm text-gray-600">
+                        Showing{" "}
+                        {Math.min((page - 1) * maxPerPage + 1, filtered.length)}
+                        –{Math.min(page * maxPerPage, filtered.length)} of{" "}
+                        {filtered.length}
+                    </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
-                        <div className="text-sm">{page} / {totalPages}</div>
-                        <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
+                        <button
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={page === 1}
+                            className="px-3 py-1 border rounded disabled:opacity-50"
+                        >
+                            Prev
+                        </button>
+                        <div className="text-sm">
+                            {page} / {totalPages}
+                        </div>
+                        <button
+                            onClick={() =>
+                                setPage((p) => Math.min(totalPages, p + 1))
+                            }
+                            disabled={page === totalPages}
+                            className="px-3 py-1 border rounded disabled:opacity-50"
+                        >
+                            Next
+                        </button>
                     </div>
                 </div>
             </div>
@@ -300,17 +444,37 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
             {/* Write review modal */}
             {showWrite && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setShowWrite(false)} />
-                    <form onSubmit={submitReview} className="relative max-w-xl w-full bg-white rounded-2xl p-8 z-10 shadow-[0_20px_60px_rgba(11,92,115,0.2)] border border-[#0B5C73]/10">
+                    <div
+                        className="absolute inset-0 bg-black/50"
+                        onClick={() => setShowWrite(false)}
+                    />
+                    <form
+                        onSubmit={submitReview}
+                        className="relative max-w-xl w-full bg-white rounded-2xl p-8 z-10 shadow-[0_20px_60px_rgba(11,92,115,0.2)] border border-[#065975]/10"
+                    >
                         <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold">Write a review</h3>
-                            <button type="button" onClick={() => setShowWrite(false)} className="text-gray-500 px-2">✕</button>
+                            <h3 className="text-lg font-semibold">
+                                Write a review
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setShowWrite(false)}
+                                className="text-gray-500 px-2"
+                            >
+                                ✕
+                            </button>
                         </div>
 
                         <div className="mt-4 grid grid-cols-1 gap-3">
                             <label className="text-sm">
                                 Your name
-                                <input value={formName} onChange={(e) => setFormName(e.target.value)} className="mt-1 w-full border rounded px-3 py-2" />
+                                <input
+                                    value={formName}
+                                    onChange={(e) =>
+                                        setFormName(e.target.value)
+                                    }
+                                    className="mt-1 w-full border rounded px-3 py-2"
+                                />
                             </label>
 
                             <label className="text-sm">
@@ -319,8 +483,18 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
                                     {Array.from({ length: 5 }).map((_, i) => {
                                         const star = i + 1;
                                         return (
-                                            <button type="button" key={i} onClick={() => setFormRating(star)} className={`p-2 rounded ${formRating >= star ? "bg-yellow-50" : "bg-gray-50"}`} aria-label={`Rate ${star} star`}>
-                                                <StarIcon filled={formRating >= star} />
+                                            <button
+                                                type="button"
+                                                key={i}
+                                                onClick={() =>
+                                                    setFormRating(star)
+                                                }
+                                                className={`p-2 rounded ${formRating >= star ? "bg-yellow-50" : "bg-gray-50"}`}
+                                                aria-label={`Rate ${star} star`}
+                                            >
+                                                <StarIcon
+                                                    filled={formRating >= star}
+                                                />
                                             </button>
                                         );
                                     })}
@@ -329,17 +503,42 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
 
                             <label className="text-sm">
                                 Review
-                                <textarea value={formText} onChange={(e) => setFormText(e.target.value)} rows={4} className="mt-1 w-full border rounded px-3 py-2" />
+                                <textarea
+                                    value={formText}
+                                    onChange={(e) =>
+                                        setFormText(e.target.value)
+                                    }
+                                    rows={4}
+                                    className="mt-1 w-full border rounded px-3 py-2"
+                                />
                             </label>
 
                             <label className="text-sm">
                                 Image URL (optional)
-                                <input value={formImage} onChange={(e) => setFormImage(e.target.value)} className="mt-1 w-full border rounded px-3 py-2" placeholder="https://..." />
+                                <input
+                                    value={formImage}
+                                    onChange={(e) =>
+                                        setFormImage(e.target.value)
+                                    }
+                                    className="mt-1 w-full border rounded px-3 py-2"
+                                    placeholder="https://..."
+                                />
                             </label>
 
                             <div className="flex items-center justify-end gap-2 mt-2">
-                                <button type="button" onClick={() => setShowWrite(false)} className="px-3 py-2 rounded border">Cancel</button>
-                                <button type="submit" className="px-4 py-2 bg-[#E94E4E] text-white rounded">Submit review</button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowWrite(false)}
+                                    className="px-3 py-2 rounded border"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-[#E94E4E] text-white rounded"
+                                >
+                                    Submit review
+                                </button>
                             </div>
                         </div>
                     </form>
@@ -348,7 +547,7 @@ export default function ReviewModule({ productName, initialReviews = [], maxPerP
 
             {/* small toast */}
             {toast && (
-                <div className="fixed left-1/2 transform -translate-x-1/2 bottom-8 bg-[#004F64] text-white px-4 py-2 rounded-md shadow z-50">
+                <div className="fixed left-1/2 transform -translate-x-1/2 bottom-8 bg-[#065975] text-white px-4 py-2 rounded-md shadow z-50">
                     {toast}
                 </div>
             )}

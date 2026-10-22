@@ -1,229 +1,225 @@
-"use client";
+import Link from "next/link";
+import { ArrowUpRight, LockKeyhole, Mail } from "lucide-react";
 
-export default function PrivacyPolicy() {
+const sections = [
+    {
+        title: "Who we are",
+        body: (
+            <>
+                We Craft Memories operates the website wecraftmemories.com. This
+                notice explains how information is handled when you browse our
+                handmade gifts, contact us, register for an account or make a
+                purchase. For privacy requests, reach us through our{" "}
+                <Link href="/contact">contact page</Link>.
+            </>
+        ),
+    },
+    {
+        title: "Information we collect",
+        body: (
+            <>
+                Depending on what you do, we may collect your name, email
+                address, phone number, saved addresses, account identifiers,
+                order contents, delivery preferences, gift messages and support
+                communications. The website may also receive device, browser,
+                IP, approximate location derived from IP, cookie and usage
+                information. Please avoid putting sensitive personal details in
+                a gift message.
+            </>
+        ),
+    },
+    {
+        title: "Why we use information",
+        body: (
+            <>
+                We use relevant information to create and manage accounts,
+                process purchases, confirm orders, arrange delivery, respond to
+                your questions, prevent abuse, maintain records and improve the
+                website. Where optional marketing is offered, it should be
+                governed by the choices made available to you. We do not
+                describe essential order messages as marketing.
+            </>
+        ),
+    },
+    {
+        title: "Payments and service providers",
+        body: (
+            <>
+                Payment information may be submitted to the payment provider
+                selected at checkout. We need transaction status and limited
+                payment references to reconcile an order, but you should enter
+                card credentials only into the provider's secure payment flow.
+                Delivery, email, hosting, analytics, security and technical
+                service providers may process only the information relevant to
+                the service they perform.
+            </>
+        ),
+    },
+    {
+        title: "Cookies and analytics",
+        body: (
+            <>
+                The website may use essential browser storage and cookies to
+                maintain cart state, session and shopping preferences. If
+                configured, it also loads Google Analytics for website
+                measurement, and account creation may use Google's reCAPTCHA for
+                abuse protection. Non-essential measurement or marketing
+                technologies should be enabled only in accordance with
+                applicable consent requirements. You can control many cookies in
+                your browser; disabling essential storage may affect your cart
+                or sign-in.
+            </>
+        ),
+    },
+    {
+        title: "When information is shared",
+        body: (
+            <>
+                We share information where needed to fulfil an order (for
+                example with logistics and payment providers), provide technical
+                support, meet a legal obligation, investigate fraud, or respond
+                to a lawful request. We do not authorise unrelated third parties
+                to use order details for their own independent marketing merely
+                because they help fulfil a purchase.
+            </>
+        ),
+    },
+    {
+        title: "Security and retention",
+        body: (
+            <>
+                We take appropriate administrative and technical measures to
+                protect information, but no website or transmission method can
+                be guaranteed completely secure. We keep records for as long as
+                reasonably required for orders, accounts, legitimate operational
+                needs and legal obligations, then delete, anonymise or securely
+                archive them as appropriate. Specific retention schedules depend
+                on the information and applicable law.
+            </>
+        ),
+    },
+    {
+        title: "Your choices and requests",
+        body: (
+            <>
+                You may ask us to correct inaccurate account details, review or
+                erase eligible information, withdraw consent where consent is
+                the basis of processing, or raise a privacy grievance by using
+                our <Link href="/contact">contact page</Link>. Some records may
+                need to be retained to satisfy tax, financial, fraud-prevention
+                or other legal duties. We may verify your identity before
+                completing a request. Applicable rights depend on the legal
+                provisions in force at the time.
+            </>
+        ),
+    },
+    {
+        title: "Children and gift recipients",
+        body: (
+            <>
+                Our ordering and account experiences are intended for adults.
+                Gift recipients' contact and address information should be
+                provided only where you have a legitimate reason to arrange
+                delivery. Do not submit children's personal information unless
+                necessary and permitted by applicable law.
+            </>
+        ),
+    },
+    {
+        title: "Links and international services",
+        body: (
+            <>
+                Some website services or links may be operated by other
+                companies and governed by their own privacy statements. Service
+                providers may host or process data in different locations where
+                permitted and subject to appropriate safeguards. Review their
+                notices when you use external services.
+            </>
+        ),
+    },
+    {
+        title: "Policy changes and contact",
+        body: (
+            <>
+                We may update this page as our services, providers and legal
+                requirements change. The date at the top shows the most recent
+                text revision. For questions, access requests, correction,
+                deletion or grievances, use{" "}
+                <Link href="/contact">Contact us</Link>.
+            </>
+        ),
+    },
+];
+
+export default function PrivacyAndPolicy() {
     return (
-        <div className="max-w-6xl mx-auto px-4 py-10 text-slate-700">
-            <h1 className="text-3xl font-bold mb-6 text-slate-900">
-                Privacy Policy
-            </h1>
-
-            <p className="mb-6 text-sm text-slate-500">
-                Effective Date: [Insert Date]
-            </p>
-
-            {/* 1. Introduction */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">1. Introduction</h2>
-                <p>
-                    WeCraftMemories (“Company”, “we”, “us”, “our”) is a registered
-                    Partnership Firm operating in India. This Privacy Policy explains
-                    how we collect, use, disclose, and safeguard your information when
-                    you visit https://wecraftmemories.com and purchase our products.
+        <article className="policy-page max-w-5xl mx-auto py-6 sm:py-12">
+            <div className="policy-hero site-gradient site-card p-6 sm:p-10">
+                <span className="site-eyebrow">
+                    <LockKeyhole size={15} /> YOUR INFORMATION MATTERS
+                </span>
+                <h1 className="site-section-title !text-3xl sm:!text-4xl mt-5">
+                    Privacy Policy
+                </h1>
+                <p className="text-[#576f79] mt-3 max-w-2xl leading-7">
+                    How your data helps us take care of your orders, and the
+                    choices available to you.
                 </p>
-                <p className="mt-3">
-                    This Policy is framed in accordance with the Information Technology
-                    Act, 2000 and applicable Indian data protection regulations.
+                <p className="text-xs text-[#5f7884] mt-5">
+                    Last updated: 21 October 2026 · For customers and website
+                    visitors
                 </p>
-            </section>
-
-            {/* 2. Information We Collect */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    2. Information We Collect
-                </h2>
-
-                <h3 className="font-semibold mt-4 mb-2">a) Personal Information</h3>
-                <ul className="list-disc pl-6 space-y-2">
-                    <li>Name</li>
-                    <li>Email address</li>
-                    <li>Mobile number</li>
-                    <li>Billing and shipping address</li>
-                </ul>
-
-                <h3 className="font-semibold mt-4 mb-2">b) Payment Information</h3>
-                <p>
-                    Payments are processed securely through third-party payment
-                    gateways. We do not store your debit/credit card details.
-                </p>
-
-                <h3 className="font-semibold mt-4 mb-2">c) Technical Data</h3>
-                <ul className="list-disc pl-6 space-y-2">
-                    <li>IP address</li>
-                    <li>Browser type</li>
-                    <li>Device information</li>
-                    <li>Cookies and usage data</li>
-                </ul>
-            </section>
-
-            {/* 3. How We Use Your Information */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    3. How We Use Your Information
-                </h2>
-                <ul className="list-disc pl-6 space-y-2">
-                    <li>To process and fulfill orders</li>
-                    <li>To provide customer support</li>
-                    <li>To send order confirmations and shipping updates</li>
-                    <li>To send password resets and account notifications</li>
-                    <li>To improve our website and services</li>
-                    <li>To prevent fraud and enhance security</li>
-                    <li>To send marketing emails (only if opted-in)</li>
-                </ul>
-            </section>
-
-            {/* 4. Email Communications */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    4. Email Communications
-                </h2>
-                <p>
-                    We use secure email service providers (such as Amazon SES)
-                    to send transactional emails including:
-                </p>
-                <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Order confirmations</li>
-                    <li>Shipping notifications</li>
-                    <li>Password reset emails</li>
-                    <li>Email verification links</li>
-                </ul>
-                <p className="mt-3">
-                    You may opt out of promotional emails at any time using
-                    the unsubscribe link.
-                </p>
-            </section>
-
-            {/* 5. Cookies */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    5. Cookies & Tracking Technologies
-                </h2>
-                <p>
-                    We use cookies and similar technologies to enhance user
-                    experience, analyze website traffic, and improve services.
-                </p>
-                <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Essential cookies for website functionality</li>
-                    <li>Analytics cookies</li>
-                    <li>Security cookies (via Cloudflare)</li>
-                </ul>
-                <p className="mt-3">
-                    You may disable cookies in your browser settings, though
-                    some website features may not function properly.
-                </p>
-            </section>
-
-            {/* 6. Data Sharing */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    6. Sharing of Information
-                </h2>
-                <p>We may share your information with:</p>
-                <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Payment gateway providers</li>
-                    <li>Courier and logistics partners</li>
-                    <li>Cloud hosting providers (AWS)</li>
-                    <li>Security & CDN providers (Cloudflare)</li>
-                    <li>Email service providers</li>
-                </ul>
-                <p className="mt-3 font-medium">
-                    We do not sell or rent your personal data.
-                </p>
-            </section>
-
-            {/* 7. Data Security */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    7. Data Security
-                </h2>
-                <ul className="list-disc pl-6 space-y-2">
-                    <li>SSL encryption is used to protect data transmission.</li>
-                    <li>Data is stored on secure cloud infrastructure (AWS).</li>
-                    <li>Access to personal data is restricted.</li>
-                    <li>Security monitoring is implemented.</li>
-                </ul>
-            </section>
-
-            {/* 8. Data Retention */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    8. Data Retention
-                </h2>
-                <p>
-                    We retain personal data only as long as necessary for:
-                </p>
-                <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Order fulfillment</li>
-                    <li>Legal compliance (including tax laws)</li>
-                    <li>Dispute resolution</li>
-                </ul>
-            </section>
-
-            {/* 9. Your Rights */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    9. Your Rights
-                </h2>
-                <p>Under applicable Indian law, you may have the right to:</p>
-                <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Access your personal information</li>
-                    <li>Request correction of inaccurate data</li>
-                    <li>Withdraw consent for marketing communications</li>
-                </ul>
-                <p className="mt-3">
-                    To exercise these rights, contact us using the details below.
-                </p>
-            </section>
-
-            {/* 10. Children's Privacy */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    10. Children's Privacy
-                </h2>
-                <p>
-                    Our website is not intended for children under 13 years of age.
-                    We do not knowingly collect personal data from minors.
-                </p>
-            </section>
-
-            {/* 11. Grievance Officer */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    11. Grievance Officer
-                </h2>
-                <p>
-                    In compliance with the Information Technology Act, 2000:
-                </p>
-                <ul className="list-disc pl-6 mt-2 space-y-2">
-                    <li>Name: Chandrakala Bangera</li>
-                    <li>Email: support@wecraftmemories.com</li>
-                    {/* <li>Address: [Insert Address]</li> */}
-                    <li>Response Time: Within 15 working days</li>
-                </ul>
-            </section>
-
-            {/* 12. Changes */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    12. Changes to This Policy
-                </h2>
-                <p>
-                    We reserve the right to update this Privacy Policy at any time.
-                    Updated versions will be posted on this page with a revised
-                    effective date.
-                </p>
-            </section>
-
-            {/* Contact */}
-            <section className="border-t pt-6 mt-8">
-                <h2 className="text-xl font-semibold mb-3">
-                    Contact Information
-                </h2>
-                <p>
-                    WeCraftMemories<br />
-                    Email: support@wecraftmemories.com<br />
-                    {/* Registered Address: [Insert Registered Address] */}
-                </p>
-            </section>
-        </div>
+            </div>
+            <div className="grid md:grid-cols-[215px_minmax(0,1fr)] gap-7 mt-8 sm:mt-10 items-start">
+                <aside className="policy-index site-card p-5 md:sticky md:top-28">
+                    <p className="font-extrabold text-sm mb-3 text-[#065975]">
+                        On this page
+                    </p>
+                    <nav aria-label="Privacy sections" className="space-y-1">
+                        {sections.map((s, i) => (
+                            <a
+                                href={`#privacy-${i + 1}`}
+                                key={s.title}
+                                className="block py-1.5 text-sm text-slate-600 hover:text-[#065975]"
+                            >
+                                {i + 1}. {s.title}
+                            </a>
+                        ))}
+                    </nav>
+                </aside>
+                <div className="site-card p-6 sm:p-9 divide-y divide-[#e3ecef]">
+                    {sections.map((s, i) => (
+                        <section
+                            key={s.title}
+                            id={`privacy-${i + 1}`}
+                            className="scroll-mt-32 py-6 first:pt-0 last:pb-0"
+                        >
+                            <h2 className="text-lg sm:text-xl font-extrabold text-[#065975] mb-3">
+                                {i + 1}. {s.title}
+                            </h2>
+                            <div className="text-sm sm:text-[15px] leading-7 text-slate-600">
+                                {s.body}
+                            </div>
+                        </section>
+                    ))}
+                </div>
+            </div>
+            <div className="mt-7 site-card p-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex items-start gap-3">
+                    <Mail className="text-[#065975] shrink-0" />
+                    <div>
+                        <h2 className="font-bold text-[#065975]">
+                            Questions about your data?
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Get in touch to make a request or raise a concern.
+                        </p>
+                    </div>
+                </div>
+                <Link href="/contact" className="site-button-outline shrink-0">
+                    Contact us <ArrowUpRight size={16} />
+                </Link>
+            </div>
+        </article>
     );
 }

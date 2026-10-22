@@ -1,5 +1,6 @@
 "use client";
 
+import AuthStoryPanel from "@/components/AuthStoryPanel";
 import React, { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
@@ -21,7 +22,7 @@ export default function ForgotPasswordPage() {
     // simple email regex for client validation
     const emailIsValid = (e: string) =>
         /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i.test(
-            e.trim()
+            e.trim(),
         );
 
     useEffect(() => {
@@ -39,7 +40,10 @@ export default function ForgotPasswordPage() {
             router.push("/login");
             return;
         }
-        const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : c)), 1000);
+        const t = setTimeout(
+            () => setCountdown((c) => (c !== null ? c - 1 : c)),
+            1000,
+        );
         return () => clearTimeout(t);
     }, [countdown, router]);
 
@@ -83,7 +87,7 @@ export default function ForgotPasswordPage() {
             const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
             if (!API_BASE) {
-            throw new Error("NEXT_PUBLIC_API_BASE is not defined");
+                throw new Error("NEXT_PUBLIC_API_BASE is not defined");
             }
 
             const grecaptcha = (window as any).grecaptcha;
@@ -98,7 +102,7 @@ export default function ForgotPasswordPage() {
 
             const recaptchaToken = await grecaptcha.execute(
                 process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!,
-                { action: "forgot_password" }
+                { action: "forgot_password" },
             );
 
             if (!recaptchaToken) {
@@ -110,7 +114,7 @@ export default function ForgotPasswordPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email: trimmed,
-                    recaptchaToken
+                    recaptchaToken,
                 }),
             });
 
@@ -124,7 +128,12 @@ export default function ForgotPasswordPage() {
             if (!res.ok) {
                 // handle variety of shapes
                 if (data && data.error) {
-                    setErrorMsg(typeof data.error === "string" ? data.error : data.error.message || "Failed to send reset email");
+                    setErrorMsg(
+                        typeof data.error === "string"
+                            ? data.error
+                            : data.error.message ||
+                                  "Failed to send reset email",
+                    );
                 } else if (data && data.message) {
                     setErrorMsg(data.message);
                 } else {
@@ -135,7 +144,9 @@ export default function ForgotPasswordPage() {
             }
 
             const message =
-                (data && (data.message || (typeof data === "string" ? data : null))) ||
+                (data &&
+                    (data.message ||
+                        (typeof data === "string" ? data : null))) ||
                 "If that email exists we will send a reset link.";
 
             setSuccessMsg(message);
@@ -143,7 +154,9 @@ export default function ForgotPasswordPage() {
             // start countdown to redirect (10 seconds)
             setCountdown(10);
         } catch (err) {
-            setErrorMsg("Unable to reach server. Please check if your API is running.");
+            setErrorMsg(
+                "Unable to reach server. Please check if your API is running.",
+            );
         } finally {
             setLoading(false);
         }
@@ -153,7 +166,7 @@ export default function ForgotPasswordPage() {
     if (!isMounted) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-sky-50 md:flex md:items-center md:justify-center md:p-6">
-                <div className="w-full max-w-none md:max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-10 items-center">
+                <div className="auth-shell mx-auto grid grid-cols-1 md:grid-cols-2 items-stretch max-w-5xl overflow-hidden">
                     <div className="hidden md:block p-8">
                         <div className="h-6 bg-gray-200 rounded w-2/3 mb-4" />
                         <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
@@ -175,78 +188,40 @@ export default function ForgotPasswordPage() {
 
     // mounted — render interactive UI
     return (
-        <div className="bg-gradient-to-br from-indigo-50 to-sky-50 md:flex md:items-center md:justify-center md:p-6">
-            <div className="w-full max-w-none md:max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-10 items-center">
-                {/* Left hero */}
-                <div className="hidden md:flex flex-col gap-6 px-8">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-white p-3 rounded-full shadow-md">
-                            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="24" height="24" rx="8" fill="#0ea5e9" />
-                                <path d="M7 12h10" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
+        <div className="wcm-auth py-5 sm:py-10">
+            <div className="auth-shell mx-auto grid grid-cols-1 md:grid-cols-2 items-stretch max-w-5xl overflow-hidden">
+                {/* Shared brand panel */}
+                <AuthStoryPanel kind="reset" />
+
+                {/* Right form */}
+                <div className="auth-form bg-white w-full px-6 py-8 sm:p-9 lg:p-12">
+                    <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h2 className="text-3xl font-extrabold leading-tight">Forgot your password?</h2>
-                            <p className="text-sm text-gray-600 mt-1 max-w-xs">
-                                No worries — enter your registered email and we'll send you a secure reset link.
+                            <h1 className="text-2xl md:text-3xl font-bold">
+                                Reset your password
+                            </h1>
+                            <p className="text-sm text-gray-500 mt-1">
+                                We'll email a secure link to set a new password.
                             </p>
                         </div>
                     </div>
 
-                    <div className="bg-white/95 border border-gray-100 rounded-3xl p-6 shadow-inner">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-sky-50 rounded-lg">📧</div>
-                            <div>
-                                <div className="text-sm font-medium">Secure reset</div>
-                                <div className="text-xs text-gray-500">Reset links expire quickly for safety</div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 mt-4">
-                            <div className="p-3 bg-sky-50 rounded-lg">🔐</div>
-                            <div>
-                                <div className="text-sm font-medium">Privacy first</div>
-                                <div className="text-xs text-gray-500">We won't reveal whether an email exists publicly</div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 mt-4">
-                            <div className="p-3 bg-sky-50 rounded-lg">🕒</div>
-                            <div>
-                                <div className="text-sm font-medium">Quick process</div>
-                                <div className="text-xs text-gray-500">Most emails arrive within a minute</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="text-sm text-gray-500">
-                        Remembered your password?{" "}
-                        <button onClick={() => router.push("/login")} className="text-sky-600 underline" type="button">
-                            Sign in
-                        </button>
-                    </div>
-                </div>
-
-                {/* Right form */}
-                <div className=" bg-white w-full px-6 pt-8 pb-6 md:bg-white/95 md:border md:border-gray-200 md:rounded-3xl md:shadow-xl md:p-10">
-                    <div className="flex items-center justify-between mb-6">
+                    <form
+                        onSubmit={handleSubmit}
+                        className="space-y-5"
+                        noValidate
+                    >
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold">Reset your password</h1>
-                            <p className="text-sm text-gray-500 mt-1">We'll email a secure link to set a new password.</p>
-                        </div>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Email
+                            </label>
                             <div className="relative">
                                 <input
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     type="email"
                                     placeholder="you@example.com"
-                                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-200 text-sm"
+                                    className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#b6e7f0] text-sm"
                                     autoComplete="email"
                                     aria-label="Email"
                                     aria-required
@@ -255,32 +230,52 @@ export default function ForgotPasswordPage() {
                                     <Mail size={18} />
                                 </div>
                             </div>
-                            <p className="mt-2 text-xs text-gray-400">We'll never share your email. The reset link will be sent if the email exists in our system.</p>
+                            <p className="mt-2 text-xs text-gray-400">
+                                We'll never share your email. The reset link
+                                will be sent if the email exists in our system.
+                            </p>
                         </div>
 
                         {errorMsg && (
                             <div className="flex items-start gap-3">
                                 <div className="p-3 bg-red-50 border border-red-100 rounded-md flex items-center gap-3">
-                                    <XCircle size={18} className="text-red-600" />
+                                    <XCircle
+                                        size={18}
+                                        className="text-red-600"
+                                    />
                                 </div>
-                                <div className="flex-1 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-3">{errorMsg}</div>
+                                <div className="flex-1 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-3">
+                                    {errorMsg}
+                                </div>
                             </div>
                         )}
 
                         {successMsg && (
                             <div className="flex items-start gap-3">
                                 <div className="p-3 bg-green-50 border border-green-100 rounded-md flex items-center gap-3">
-                                    <CheckCircle size={18} className="text-green-700" />
+                                    <CheckCircle
+                                        size={18}
+                                        className="text-green-700"
+                                    />
                                 </div>
                                 <div className="flex-1 text-sm text-green-700 bg-green-50 border border-green-100 rounded-md p-3">
-                                    <div className="font-medium">{successMsg}</div>
+                                    <div className="font-medium">
+                                        {successMsg}
+                                    </div>
                                     {countdown !== null && (
                                         <div className="mt-1 text-xs text-gray-600">
                                             Redirecting to{" "}
-                                            <button onClick={() => router.push("/login")} className="underline" type="button">
+                                            <button
+                                                onClick={() =>
+                                                    router.push("/login")
+                                                }
+                                                className="underline"
+                                                type="button"
+                                            >
                                                 login
                                             </button>{" "}
-                                            in {countdown} second{countdown === 1 ? "" : "s"}...
+                                            in {countdown} second
+                                            {countdown === 1 ? "" : "s"}...
                                         </div>
                                     )}
                                 </div>
@@ -290,12 +285,28 @@ export default function ForgotPasswordPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full inline-flex items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-semibold shadow-lg hover:scale-[1.01] transition-transform disabled:opacity-60"
+                            className="w-full inline-flex items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-[#065975] hover:bg-[#03465e] text-white font-semibold shadow-lg hover:scale-[1.01] transition-transform disabled:opacity-60"
                         >
                             {loading ? (
-                                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                                <svg
+                                    className="animate-spin h-5 w-5"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8v8z"
+                                    ></path>
                                 </svg>
                             ) : (
                                 "Send reset link"
@@ -303,7 +314,15 @@ export default function ForgotPasswordPage() {
                         </button>
 
                         <div className="mt-4 text-xs text-center text-gray-400">
-                            By requesting a reset you agree to our <a className="underline">Terms</a> and <a className="underline">Privacy</a>.
+                            By requesting a reset you agree to our{" "}
+                            <a href="/terms" className="underline">
+                                Terms
+                            </a>{" "}
+                            and{" "}
+                            <a href="/privacy" className="underline">
+                                Privacy Policy
+                            </a>
+                            .
                         </div>
                     </form>
                 </div>

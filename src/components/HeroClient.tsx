@@ -1,75 +1,73 @@
-'use client'
-
-import React from "react"
-import { motion } from "framer-motion"
-import Image from "next/image"
+"use client";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowRight, Gift, Heart, PackageCheck, Sparkles } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 
 export default function HeroClient() {
+    const reduceMotion = useReducedMotion();
     return (
-        <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="relative overflow-hidden rounded-3xl bg-linear-to-r from-[#D7EDF3] via-[#EAF6FA] to-[#F5FAFB] shadow-md"
-        >
-            {/* soft glow background */}
-            <div className="absolute -top-20 -left-20 w-44 h-44 bg-[#1FA6B8]/15 rounded-full blur-3xl" />
-            <div className="absolute -bottom-20 -right-20 w-56 h-56 bg-[#1FA6B8]/10 rounded-full blur-3xl" />
-            <div className="relative w-full px-6 sm:px-10 py-10">
-                <div className="grid md:grid-cols-[1.2fr_2fr] gap-2 items-center">
-                    {/* TEXT CONTENT */}
-                    <div className="text-center md:text-left">
-                        <p className="text-sm font-medium text-[#0B5C73]/80 mb-2">
-                            ✨ Handmade with Love
-                        </p>
-
-                        <h1 className="text-3xl sm:text-4xl md:text-[42px] font-extrabold text-[#0B5C73] leading-tight">
-                            Cute Handmade Treasures
-                        </h1>
-
-                        <p className="mt-3 text-[#355F6B] text-base max-w-md mx-auto md:mx-0">
-                            Adorable crochet creations crafted with love — perfect for
-                            gifting or adding joy to your day.
-                        </p>
-
-                        {/* trust badges */}
-                        <div className="mt-4 flex gap-4 flex-wrap text-sm text-[#355F6B] justify-center md:justify-start">
-                            <span>🧶 Handmade</span>
-                            <span>🎁 Perfect Gifts</span>
-                            <span>🚚 Pan-India Delivery</span>
-                        </div>
-
-                        {/* CTA */}
-                        <motion.a
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.97 }}
-                            href="/products"
-                            className="inline-block mt-6 bg-[#E24B5B] text-white font-semibold px-6 py-3 rounded-xl shadow hover:bg-[#d23f4e] transition"
-                        >
-                            🛍 Shop Cute Gifts
-                        </motion.a>
+        <section className="site-hero wcm-hero relative isolate overflow-hidden rounded-[26px] sm:rounded-[36px]">
+            <div className="absolute -left-32 -top-36 h-80 w-80 rounded-full bg-white/40 blur-3xl pointer-events-none" />
+            <div className="grid items-center lg:grid-cols-[.9fr_1.1fr] min-h-[435px]">
+                <motion.div
+                    initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.55 }}
+                    className="relative z-10 p-7 pb-4 sm:p-12 lg:p-16 lg:pr-4"
+                >
+                    <span className="site-eyebrow">
+                        <Sparkles size={14} /> Crafted slowly. Gifted joyfully.
+                    </span>
+                    <h1 className="mt-6 max-w-lg text-[clamp(2.35rem,5vw,4.6rem)] leading-[1.08] tracking-[-.045em] font-extrabold text-[#065975]">
+                        Little gifts.
+                        <br />
+                        <span className="wcm-hero-highlight">
+                            Big feelings.
+                        </span>
+                    </h1>
+                    <p className="mt-5 max-w-md text-[15px] sm:text-lg leading-7 text-[#527481]">
+                        From adorable crochet keepsakes to ready-to-gift
+                        hampers, find something as special as the person
+                        receiving it.
+                    </p>
+                    <div className="flex flex-col min-[390px]:flex-row gap-3 mt-7 sm:mt-9">
+                        <Link href="/products" className="site-button-primary">
+                            Shop handmade gifts <ArrowRight size={18} />
+                        </Link>
+                        <Link href="/hampers" className="site-button-outline">
+                            <Gift size={18} /> Explore hampers
+                        </Link>
                     </div>
-
-                    {/* HERO IMAGE (hidden on mobile) */}
-                    <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="hidden md:flex justify-end"
-                    >
-                        <div className="w-full">
-                            <Image
-                                src="/banner.png"
-                                alt="Cute handmade crochet gifts"
-                                width={1400}
-                                height={1400}
-                                priority
-                                className="w-full h-auto object-contain"
-                            />
-                        </div>
-                    </motion.div>
-                </div>
+                    <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-[#527481]">
+                        <span className="inline-flex items-center gap-1.5">
+                            <Heart size={14} /> Handmade
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <PackageCheck size={14} /> Packed with care
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <Gift size={14} /> Made to gift
+                        </span>
+                    </div>
+                </motion.div>
+                <motion.div
+                    initial={reduceMotion ? false : { opacity: 0, scale: 1.04 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.7 }}
+                    className="relative h-[270px] sm:h-[370px] lg:h-full min-h-[270px] overflow-hidden"
+                >
+                    <Image
+                        src="/banner.png"
+                        alt="A collection of handmade crochet gifts from We Craft Memories"
+                        fill
+                        priority
+                        sizes="(max-width: 1024px) 100vw, 55vw"
+                        className="object-contain object-center p-2 sm:p-4 lg:object-cover lg:object-center"
+                    />
+                    <div className="absolute inset-0 hidden lg:block bg-gradient-to-r from-[#f4fbfc] via-transparent to-transparent" />
+                </motion.div>
             </div>
-        </motion.section>
-    )
+        </section>
+    );
 }

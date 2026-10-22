@@ -2,6 +2,19 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import {
+    ArrowLeft,
+    CheckCircle2,
+    Clock3,
+    CreditCard,
+    Gift,
+    MapPin,
+    Package,
+    ReceiptText,
+    ShieldCheck,
+    ShoppingBag,
+    Truck,
+} from "lucide-react";
 
 /* --------------------- Helpers --------------------- */
 const TOKEN_KEY = "accessToken";
@@ -14,11 +27,15 @@ function getStoredAccessToken(): string | null {
     }
 }
 
-async function authFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+async function authFetch(
+    input: RequestInfo,
+    init?: RequestInit,
+): Promise<Response> {
     const token = getStoredAccessToken();
     const headers = new Headers(init?.headers ?? {});
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (init?.body && !headers.get("Content-Type")) headers.set("Content-Type", "application/json");
+    if (init?.body && !headers.get("Content-Type"))
+        headers.set("Content-Type", "application/json");
     return fetch(input, { ...init, headers });
 }
 
@@ -31,6 +48,7 @@ function currency(n?: number) {
 function formatFullDate(iso?: string) {
     if (!iso) return "-";
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleString("en-IN", {
         day: "numeric",
         month: "short",
@@ -44,19 +62,13 @@ function formatFullDate(iso?: string) {
 function formatShortDate(iso?: string) {
     if (!iso) return "-";
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleDateString("en-IN", {
         day: "numeric",
         month: "short",
         year: "numeric",
     });
 }
-
-/* --------------------- Inline Icons --------------------- */
-const IconBack = () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-);
 
 /* --------------------- Types --------------------- */
 type ApiOrderProduct = {
@@ -123,6 +135,16 @@ type ApiOrder = {
     };
 
     orderProductsDetails?: ApiOrderProduct[];
+    orderHampersDetails?: {
+        hamperId: string;
+        hamperNameSnapshot: string;
+        hamperImage?: string | null;
+        quantity: number;
+        sellPrice: number;
+        totalPrice: number;
+        itemNotes?: string;
+        products?: { productNameSnapshot: string; totalQuantity: number }[];
+    }[];
     paymentMethods?: PaymentMethod[] | null;
 
     customerSnapshot?: {
@@ -161,26 +183,33 @@ export default function OrderDetails({
                 params.set("orderId", orderId);
                 const url = `${base}/sell_order/order_details?${params.toString()}`;
 
-                const res = await authFetch(url, { method: "GET", signal: controller.signal });
+                const res = await authFetch(url, {
+                    method: "GET",
+                    signal: controller.signal,
+                });
 
                 // Redirect on 401 unauthorized (keeps UX smooth)
                 if (res.status === 401) {
                     try {
                         localStorage.removeItem(TOKEN_KEY);
-                    } catch { }
+                    } catch {}
                     window.location.href = "/login";
                     return;
                 }
 
                 if (!res.ok) {
                     const txt = await res.text().catch(() => "");
-                    throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`);
+                    throw new Error(
+                        `HTTP ${res.status} ${res.statusText} ${txt}`,
+                    );
                 }
 
-                const payload = await res.json().catch(() => ({} as any));
+                const payload = await res.json().catch(() => ({}) as any);
                 if (!mounted) return;
                 if (payload?.ack !== "success" || !payload?.data) {
-                    throw new Error(payload?.message ?? "Unexpected API response");
+                    throw new Error(
+                        payload?.message ?? "Unexpected API response",
+                    );
                 }
                 setOrder(payload.data as ApiOrder);
             } catch (err: any) {
@@ -201,20 +230,31 @@ export default function OrderDetails({
     }, [customerId, orderId, apiBase]);
 
     const products = order?.orderProductsDetails ?? [];
+    const orderHampers = order?.orderHampersDetails ?? [];
     const itemsSubtotal = useMemo(() => {
-        return products.reduce((s, p) => s + (Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0)), 0);
-    }, [products]);
+        return (
+            products.reduce(
+                (s, p) =>
+                    s + Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0),
+                0,
+            ) +
+            orderHampers.reduce(
+                (s, h) => s + Number(h.totalPrice ?? h.sellPrice * h.quantity),
+                0,
+            )
+        );
+    }, [products, orderHampers]);
 
     const delivery = Number(order?.quotedDeliveryCharge ?? 0);
 
     const couponDiscount = Number(
-        order?.coupon?.discountAmount ?? order?.couponAmount ?? 0
+        order?.coupon?.discountAmount ?? order?.couponAmount ?? 0,
     );
 
     const deliverySaved = order?.coupon?.isFreeShipping ? delivery : 0;
 
     const finalTotal = Number(
-        order?.finalPayableAmount ?? (itemsSubtotal + delivery - couponDiscount)
+        order?.finalPayableAmount ?? itemsSubtotal + delivery - couponDiscount,
     );
 
     const totalSavings = couponDiscount + deliverySaved;
@@ -223,16 +263,21 @@ export default function OrderDetails({
         if (!a) return <div className="text-sm text-slate-500">—</div>;
         const lines: (string | null | undefined)[] = [
             a.recipientNameSnapshot ?? null,
-            a.recipientContactSnapshot ? `Contact: ${a.recipientContactSnapshot}` : null,
+            a.recipientContactSnapshot
+                ? `Contact: ${a.recipientContactSnapshot}`
+                : null,
             a.addressLine1Snapshot ?? null,
             a.addressLine2Snapshot ?? null,
             a.addressLine3Snapshot ?? null,
             a.landmarkSnapshot ? `Landmark: ${a.landmarkSnapshot}` : null,
-            [a.cityNameSnapshot, a.stateNameSnapshot, a.pincodeSnapshot].filter(Boolean).join(", ") || null,
+            [a.cityNameSnapshot, a.stateNameSnapshot, a.pincodeSnapshot]
+                .filter(Boolean)
+                .join(", ") || null,
             a.countryNameSnapshot ?? null,
         ];
         const filled = lines.filter((l) => l && String(l).trim() !== "");
-        if (filled.length === 0) return <div className="text-sm text-slate-500">—</div>;
+        if (filled.length === 0)
+            return <div className="text-sm text-slate-500">—</div>;
         return (
             <div className="text-sm text-slate-700 space-y-1">
                 {filled.map((line, idx) => (
@@ -246,7 +291,11 @@ export default function OrderDetails({
        We parse paymentMethods[].fields looking for key === "method"
        Fallback to paymentMethodNameSnapshot when "method" is absent.
     ---------------------------------------------------------*/
-    const paymentMethodsRaw: PaymentMethod[] = Array.isArray(order?.paymentMethods) ? (order?.paymentMethods as PaymentMethod[]) : [];
+    const paymentMethodsRaw: PaymentMethod[] = Array.isArray(
+        order?.paymentMethods,
+    )
+        ? (order?.paymentMethods as PaymentMethod[])
+        : [];
     const paymentAggregates = useMemo(() => {
         // Map methodLabel -> { amount, statusSet }
         const map = new Map<
@@ -273,7 +322,11 @@ export default function OrderDetails({
                 }
             }
 
-            const existing = map.get(methodLabel) ?? { amount: 0, statuses: new Set<string>(), sources: [] };
+            const existing = map.get(methodLabel) ?? {
+                amount: 0,
+                statuses: new Set<string>(),
+                sources: [],
+            };
             existing.amount += amount;
             if (status) existing.statuses.add(status);
             existing.sources.push(pm.paymentMethodNameSnapshot ?? "");
@@ -281,16 +334,29 @@ export default function OrderDetails({
         }
 
         // convert to array preserving insertion order
-        const arr: { method: string; amount: number; statuses: string[]; sources: string[] }[] = [];
+        const arr: {
+            method: string;
+            amount: number;
+            statuses: string[];
+            sources: string[];
+        }[] = [];
         for (const [method, obj] of map.entries()) {
-            arr.push({ method, amount: obj.amount, statuses: Array.from(obj.statuses), sources: obj.sources });
+            arr.push({
+                method,
+                amount: obj.amount,
+                statuses: Array.from(obj.statuses),
+                sources: obj.sources,
+            });
         }
 
         return arr;
     }, [paymentMethodsRaw]);
 
     // totals
-    const totalPaid = paymentMethodsRaw.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+    const totalPaid = paymentMethodsRaw.reduce(
+        (s, p) => s + Number(p.amount ?? 0),
+        0,
+    );
     const balance = Math.max(0, finalTotal - totalPaid);
     const latestStatus = order?.orderStatusTimeline?.[0];
 
@@ -313,7 +379,9 @@ export default function OrderDetails({
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
                 <div className="max-w-3xl w-full bg-white rounded-2xl p-6 shadow">
-                    <div className="text-rose-600 font-medium">Error: {error}</div>
+                    <div className="text-rose-600 font-medium">
+                        Error: {error}
+                    </div>
                 </div>
             </div>
         );
@@ -322,377 +390,496 @@ export default function OrderDetails({
     if (!order) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-                <div className="max-w-3xl w-full bg-white rounded-2xl p-6 shadow text-slate-600">No order selected.</div>
+                <div className="max-w-3xl w-full bg-white rounded-2xl p-6 shadow text-slate-600">
+                    No order selected.
+                </div>
             </div>
         );
     }
 
-    const customer = order.customerSnapshot ?? { customerNameSnapshot: "—", customerMobileSnapshot: "—", customerEmailSnapshot: "—" };
+    /* --------------------- Responsive order experience --------------------- */
+    const itemCount =
+        products.reduce((sum, p) => sum + Number(p.quantity || 0), 0) +
+        orderHampers.reduce((sum, h) => sum + Number(h.quantity || 0), 0);
 
-    /* --------------------- Render full-page layout --------------------- */
     return (
-        <div className="min-h-screen bg-linear-to-br from-[#f4fafc] via-white to-[#eef6f9]">
-            {/* Topbar */}
-            <header className="sticky top-0 z-40 backdrop-blur bg-white/70 border-b border-slate-100">
-                <div className="max-w-6xl mx-auto px-4 py-3 flex items-center">
+        <div className="min-w-0 bg-[#fffaf6] text-[#173b4a] pb-10">
+            <main className="mx-auto w-full max-w-[1440px] px-3 sm:px-6 lg:px-8 py-4 sm:py-7 space-y-6 sm:space-y-8">
+                {/* Navigation remains visible without competing with the order summary. */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <button
+                        type="button"
                         onClick={() => window.history.back()}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 transition"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#dce7de] bg-white px-4 text-sm font-bold text-[#065975] transition-colors hover:bg-[#eef6ee]"
                     >
-                        <IconBack />
-                        <span className="text-sm text-slate-700">Back</span>
+                        <ArrowLeft size={17} /> My orders
                     </button>
+                    <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[.15em] text-[#8a785e]">
+                        We Craft Memories · Your order
+                    </span>
                 </div>
-            </header>
 
-            <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-
-                {/* ================= HERO ================= */}
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <div className="text-xs uppercase tracking-wide text-slate-400">
-                                Order
+                {/* High contrast header with status, date, and final amount. */}
+                <section
+                    aria-labelledby="order-heading"
+                    className="relative isolate overflow-hidden rounded-[26px] sm:rounded-[32px] bg-[#065975] px-5 py-6 sm:px-9 sm:py-9 text-white shadow-[0_18px_50px_rgba(23,79,67,.13)]"
+                >
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full border-[50px] border-white/5"
+                    />
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute bottom-[-120px] left-[40%] h-64 w-64 rounded-full bg-[#3c8269]/20 blur-3xl"
+                    />
+                    <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="min-w-0">
+                            <div className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-[.17em] text-[#d7e9d8] font-bold">
+                                <ShoppingBag size={15} /> Order details
                             </div>
-                            <div className="text-2xl md:text-3xl font-bold text-slate-900">
-                                #{order.orderNumber}
-                            </div>
-                            <div className="mt-1 text-sm text-slate-500">
+                            <h1
+                                id="order-heading"
+                                className="break-all text-[clamp(1.85rem,3.4vw,3rem)] leading-tight tracking-[-.045em] font-extrabold"
+                            >
+                                Order #{order.orderNumber}
+                            </h1>
+                            <p className="mt-2 flex items-center gap-2 text-sm text-[#d7e9dc]">
+                                <Clock3 size={15} /> Placed{" "}
                                 {formatFullDate(order.purchaseDate)}
-                            </div>
-                        </div>
-
-                        <div className="md:text-right">
-                            {latestStatus && (
-                                <div className="inline-flex px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold mb-2">
-                                    {latestStatus.status}
-                                </div>
-                            )}
-
-                            <div
-                                className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${balance > 0
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-emerald-100 text-emerald-800"
-                                    }`}
-                            >
-                                {balance > 0 ? "Payment Pending" : "Fully Paid"}
-                            </div>
-
-                            <div className="mt-1 text-slate-500 text-xs">
-                                Total
-                            </div>
-                            <div className="text-3xl font-extrabold text-[#065975]">
-                                {currency(finalTotal)}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ================= ITEMS ================= */}
-                <div className="space-y-4">
-                    <div>
-                        <div className="text-sm text-slate-500">Items</div>
-                        <div className="text-lg font-semibold text-slate-900">
-                            {products.length} product{products.length !== 1 ? "s" : ""}
-                        </div>
-                    </div>
-
-                    {products.map((p, idx) => {
-                        const subtotal =
-                            Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0);
-
-                        return (
-                            <div
-                                key={`${p.productNameSnapshot}-${idx}`}
-                                className="bg-white rounded-2xl shadow-sm p-5"
-                            >
-                                {/* Desktop Structured Grid */}
-                                <div className="grid grid-cols-1 lg:grid-cols-[110px_1fr_140px] gap-6 items-start">
-
-                                    {/* IMAGE */}
-                                    <div className="relative w-full sm:max-w-md lg:w-27.5 
-                                        aspect-4/3 lg:aspect-auto lg:h-24 
-                                        rounded-xl overflow-hidden bg-slate-100 mx-auto lg:mx-0">
-                                        {p.productImage ? (
-                                            <Image
-                                                src={p.productImage}
-                                                alt={p.productNameSnapshot || "Product image"}
-                                                fill
-                                                sizes="(max-width:768px) 100vw, 110px"
-                                                style={{ objectFit: "cover" }}
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full grid place-items-center text-xs text-slate-400">
-                                                No image
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* PRODUCT INFO */}
-                                    <div className="space-y-3">
-                                        <div className="text-base font-semibold text-slate-900">
-                                            {p.productNameSnapshot}
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-8 text-sm text-slate-600">
-                                            <div>
-                                                Qty:{" "}
-                                                <span className="font-semibold text-slate-800">
-                                                    {p.quantity}
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                Price:{" "}
-                                                <span className="font-semibold text-slate-800">
-                                                    {currency(Number(p.sellPrice ?? 0))}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* PRICE COLUMN (Aligned) */}
-                                    <div className="text-left md:text-right border-t pt-3 md:border-0 md:pt-0">
-                                        <div className="text-xs text-slate-400">
-                                            Subtotal
-                                        </div>
-                                        <div className="text-lg font-bold text-slate-900">
-                                            {currency(subtotal)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* ================= ADDRESS + PAYMENT ================= */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                    {/* Address Section */}
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-2xl shadow-sm p-5">
-                            <div className="text-lg font-semibold mb-3">
-                                Delivery Address
-                            </div>
-                            {renderAddress(
-                                order.orderCustomerAddressDetails?.deliveryAddress
-                            )}
-                        </div>
-
-                        <div className="bg-white rounded-2xl shadow-sm p-5">
-                            <div className="text-lg font-semibold mb-3">
-                                Billing Address
-                            </div>
-                            {renderAddress(
-                                order.orderCustomerAddressDetails?.billingAddress
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Payment Section */}
-                    <div className="bg-white rounded-2xl shadow-sm p-5 space-y-5">
-                        <div>
-                            <div className="text-sm text-slate-500">
-                                Payment Summary
-                            </div>
-                            <div className="text-xl font-bold text-slate-900">
-                                {currency(finalTotal)}
-                            </div>
-                        </div>
-
-                        <div className="space-y-2 text-sm">
-
-                            {/* ITEMS */}
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Items</span>
-                                <span>{currency(itemsSubtotal)}</span>
-                            </div>
-
-                            {/* COUPON */}
-                            <div className="flex justify-between items-center min-h-[22px]">
-                                {couponDiscount > 0 ? (
-                                    <>
-                                        <div className="flex items-center gap-2">
-                                            {order?.coupon?.code && (
-                                                <span className="px-2 py-[3px] text-[10px] font-semibold rounded-md bg-[#065975] text-white">
-                                                    {order.coupon.code}
-                                                </span>
-                                            )}
-
-                                            <span className="text-[11px] text-green-700 font-medium">
-                                                {order?.coupon?.type === "PERCENTAGE"
-                                                    ? `${order?.coupon?.value ?? 0}% OFF`
-                                                    : order?.coupon?.type === "FLAT"
-                                                        ? `Flat ${currency(order?.coupon?.value ?? 0)} OFF`
-                                                        : "Discount"}
-                                            </span>
-                                        </div>
-
-                                        <span className="text-green-700 font-semibold">
-                                            -{currency(couponDiscount)}
-                                        </span>
-                                    </>
-                                ) : (
-                                    <span className="text-xs text-slate-400 w-full text-center">
-                                        No offers applied
+                            </p>
+                            <div className="mt-5 flex flex-wrap gap-2">
+                                {latestStatus?.status && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-bold text-white">
+                                        <Package size={14} />{" "}
+                                        {latestStatus.status}
                                     </span>
                                 )}
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
+                                    {balance > 0 ? (
+                                        <Clock3 size={14} />
+                                    ) : (
+                                        <CheckCircle2 size={14} />
+                                    )}
+                                    {balance > 0
+                                        ? `Balance ${currency(balance)}`
+                                        : "No balance remaining"}
+                                </span>
                             </div>
+                        </div>
+                        <div className="sm:text-right shrink-0 rounded-2xl border border-white/20 bg-white/10 px-5 py-4 sm:bg-transparent sm:border-0 sm:px-0 sm:py-0">
+                            <div className="text-xs font-bold uppercase tracking-[.12em] text-[#d5e8db]">
+                                Order total
+                            </div>
+                            <div className="mt-1 text-3xl sm:text-4xl font-extrabold tracking-tight">
+                                {currency(finalTotal)}
+                            </div>
+                            <div className="mt-1 text-xs text-[#d8e8de]">
+                                {itemCount}{" "}
+                                {itemCount === 1 ? "piece" : "pieces"} ordered
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
-                            {/* ✅ FREE SHIPPING BELOW */}
-                            {order?.coupon?.isFreeShipping && (
-                                <div className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                                    🚚 Free delivery applied
-                                </div>
-                            )}
-
-                            {/* DELIVERY */}
-                            <div className="flex justify-between items-start">
-                                <span className="text-slate-500">Delivery</span>
-
-                                <div className="text-right">
-                                    <div
-                                        className={
-                                            order?.isDeliveryChargeRefunded
-                                                ? "line-through text-slate-400"
-                                                : ""
-                                        }
+                <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,.85fr)] xl:gap-8 items-start">
+                    <div className="min-w-0 space-y-6">
+                        {/* Item list: thumbnail first, readable text beside it at all widths. */}
+                        <section
+                            aria-labelledby="ordered-items-heading"
+                            className="overflow-hidden rounded-[26px] border border-[#e1eef0] bg-white shadow-[0_12px_36px_rgba(23,79,67,.035)]"
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8ede6] px-4 py-5 sm:px-6">
+                                <div>
+                                    <span className="text-[11px] font-bold tracking-[.14em] uppercase text-[#947950]">
+                                        Handpicked for you
+                                    </span>
+                                    <h2
+                                        id="ordered-items-heading"
+                                        className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-[#065975]"
                                     >
-                                        {order?.coupon?.isFreeShipping
-                                            ? "Free"
-                                            : delivery > 0
-                                                ? currency(delivery)
-                                                : "—"}
-                                    </div>
-
-                                    {order?.isDeliveryChargeRefunded && (
-                                        <div
-                                            className={`text-[11px] font-semibold mt-1 ${Number(order?.deliveryRefundAmount || 0) >= Number(order?.quotedDeliveryCharge || 0)
-                                                    ? "text-green-600"
-                                                    : "text-amber-600"
-                                                }`}
-                                        >
-                                            {Number(order?.deliveryRefundAmount || 0) >= Number(order?.quotedDeliveryCharge || 0)
-                                                ? `Delivery refunded (${currency(order?.deliveryRefundAmount || 0)})`
-                                                : `Partially refunded (${currency(order?.deliveryRefundAmount || 0)})`}
+                                        Items in your order
+                                    </h2>
+                                </div>
+                                <span className="rounded-full bg-[#e6f7f9] px-3 py-1.5 text-xs font-bold text-[#065975]">
+                                    {products.length + orderHampers.length}{" "}
+                                    {products.length + orderHampers.length === 1
+                                        ? "listing"
+                                        : "listings"}
+                                </span>
+                            </div>
+                            <div className="divide-y divide-[#f1f8f9]">
+                                {products.map((p, idx) => (
+                                    <article
+                                        key={`${p.productId ?? p.productNameSnapshot}-${idx}`}
+                                        className="flex min-w-0 gap-3 sm:gap-5 p-4 sm:p-6 transition-colors hover:bg-[#f9fcfd]"
+                                    >
+                                        <div className="relative h-20 w-20 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-2xl border border-[#e3eff2] bg-[#edf8fa]">
+                                            {p.productImage ? (
+                                                <Image
+                                                    src={p.productImage}
+                                                    alt={
+                                                        p.productNameSnapshot ||
+                                                        "Ordered item"
+                                                    }
+                                                    fill
+                                                    sizes="112px"
+                                                    className="object-contain p-2"
+                                                />
+                                            ) : (
+                                                <span className="absolute inset-0 flex items-center justify-center text-[#7ca8b5]">
+                                                    <Package size={28} />
+                                                </span>
+                                            )}
                                         </div>
+                                        <div className="min-w-0 flex-1">
+                                            <span className="text-[10px] uppercase font-bold tracking-[.14em] text-[#87988d]">
+                                                Handmade product
+                                            </span>
+                                            <h3 className="mt-1 break-words text-sm sm:text-base leading-snug font-bold text-[#173b4a]">
+                                                {p.productNameSnapshot}
+                                            </h3>
+                                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-500">
+                                                <span>
+                                                    Qty{" "}
+                                                    <strong className="font-bold text-[#344e42]">
+                                                        {p.quantity}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    {currency(
+                                                        Number(
+                                                            p.sellPrice ?? 0,
+                                                        ),
+                                                    )}{" "}
+                                                    each
+                                                </span>
+                                            </div>
+                                            <p className="mt-2 sm:mt-3 text-sm font-extrabold text-[#065975]">
+                                                {currency(
+                                                    Number(p.sellPrice ?? 0) *
+                                                        Number(p.quantity ?? 0),
+                                                )}
+                                            </p>
+                                        </div>
+                                    </article>
+                                ))}
+                                {orderHampers.map((h, idx) => (
+                                    <article
+                                        key={`${h.hamperId}-${idx}`}
+                                        className="flex min-w-0 gap-3 sm:gap-5 p-4 sm:p-6 transition-colors hover:bg-[#f9fcfd]"
+                                    >
+                                        <div className="relative h-20 w-20 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-2xl border border-[#e3eff2] bg-[#edf8fa]">
+                                            {h.hamperImage ? (
+                                                <Image
+                                                    src={h.hamperImage}
+                                                    alt={h.hamperNameSnapshot}
+                                                    fill
+                                                    sizes="112px"
+                                                    className="object-contain p-2"
+                                                />
+                                            ) : (
+                                                <span className="absolute inset-0 flex items-center justify-center text-[#7ca8b5]">
+                                                    <Gift size={30} />
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-[.14em] text-[#9d7643]">
+                                                <Gift size={12} /> Gift hamper
+                                            </span>
+                                            <h3 className="mt-1 break-words text-sm sm:text-base leading-snug font-bold text-[#173b4a]">
+                                                {h.hamperNameSnapshot}
+                                            </h3>
+                                            <p className="mt-2 text-xs sm:text-sm text-slate-500">
+                                                Qty {h.quantity} ·{" "}
+                                                {currency(
+                                                    Number(h.sellPrice ?? 0),
+                                                )}{" "}
+                                                each
+                                            </p>
+                                            {h.itemNotes && (
+                                                <p className="mt-2 rounded-xl bg-[#fff9ef] px-3 py-2 text-xs leading-relaxed text-[#795c39] break-words">
+                                                    Gift note: {h.itemNotes}
+                                                </p>
+                                            )}
+                                            {Boolean(h.products?.length) && (
+                                                <p className="mt-2 text-xs leading-relaxed text-slate-500 break-words">
+                                                    Inside:{" "}
+                                                    {h.products
+                                                        ?.map(
+                                                            (p) =>
+                                                                p.productNameSnapshot,
+                                                        )
+                                                        .filter(Boolean)
+                                                        .join(", ")}
+                                                </p>
+                                            )}
+                                            <p className="mt-3 text-sm font-extrabold text-[#065975]">
+                                                {currency(
+                                                    Number(
+                                                        h.totalPrice ??
+                                                            h.sellPrice *
+                                                                h.quantity,
+                                                    ),
+                                                )}
+                                            </p>
+                                        </div>
+                                    </article>
+                                ))}
+                                {products.length === 0 &&
+                                    orderHampers.length === 0 && (
+                                        <div className="p-8 text-center text-sm text-slate-500">
+                                            No item details are available for
+                                            this order.
+                                        </div>
+                                    )}
+                            </div>
+                        </section>
+
+                        {/* Tracking timeline only shows the stages returned by the API. */}
+                        <section
+                            aria-labelledby="order-progress-heading"
+                            className="rounded-[26px] border border-[#e1eef0] bg-white px-5 py-6 sm:px-7 sm:py-7 shadow-[0_12px_36px_rgba(23,79,67,.035)]"
+                        >
+                            <div className="flex items-center gap-3 mb-6">
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#ebf4ec] text-[#065975]">
+                                    <Truck size={20} />
+                                </span>
+                                <div>
+                                    <h2
+                                        id="order-progress-heading"
+                                        className="text-lg font-extrabold text-[#065975]"
+                                    >
+                                        Order updates
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        Your order journey so far
+                                    </p>
+                                </div>
+                            </div>
+                            {Boolean(order.orderStatusTimeline?.length) ? (
+                                <ol className="space-y-0">
+                                    {order.orderStatusTimeline!.map(
+                                        (step, idx) => (
+                                            <li
+                                                key={`${step.status}-${idx}`}
+                                                className="relative flex gap-4 pb-6 last:pb-0"
+                                            >
+                                                {idx !==
+                                                    order.orderStatusTimeline!
+                                                        .length -
+                                                        1 && (
+                                                    <div
+                                                        aria-hidden="true"
+                                                        className="absolute left-[9px] top-6 bottom-0 w-[2px] bg-[#e0eae0]"
+                                                    />
+                                                )}
+                                                <span
+                                                    aria-hidden="true"
+                                                    className={`relative mt-1 h-5 w-5 shrink-0 rounded-full border-[5px] ${idx === 0 ? "border-[#0c7d96] bg-white" : "border-[#c9ddd0] bg-white"}`}
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                                        <span className="font-bold text-sm text-[#173b4a]">
+                                                            {step.status}
+                                                        </span>
+                                                        <time className="text-xs font-medium text-[#7c8c81]">
+                                                            {formatShortDate(
+                                                                step.date,
+                                                            )}
+                                                        </time>
+                                                    </div>
+                                                    {step.notes && (
+                                                        <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-500 break-words">
+                                                            {step.notes}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ),
+                                    )}
+                                </ol>
+                            ) : (
+                                <p className="text-sm text-slate-500">
+                                    Updates will appear here when available.
+                                </p>
+                            )}
+                        </section>
+
+                        <section
+                            aria-label="Order addresses"
+                            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                        >
+                            <div className="rounded-[24px] border border-[#e1eef0] bg-white p-5 sm:p-6">
+                                <h2 className="flex items-center gap-2 font-extrabold text-[#065975]">
+                                    <MapPin size={18} /> Delivery address
+                                </h2>
+                                <div className="mt-4 leading-6">
+                                    {renderAddress(
+                                        order.orderCustomerAddressDetails
+                                            ?.deliveryAddress,
                                     )}
                                 </div>
                             </div>
-
-                            {/* DIVIDER */}
-                            <div className="border-t my-2" />
-
-                            {/* TOTAL */}
-                            <div className="flex justify-between font-semibold text-base">
-                                <span>Total</span>
-                                <span className="text-[#065975]">{currency(finalTotal)}</span>
+                            <div className="rounded-[24px] border border-[#e1eef0] bg-white p-5 sm:p-6">
+                                <h2 className="flex items-center gap-2 font-extrabold text-[#065975]">
+                                    <ReceiptText size={18} /> Billing address
+                                </h2>
+                                <div className="mt-4 leading-6">
+                                    {renderAddress(
+                                        order.orderCustomerAddressDetails
+                                            ?.billingAddress,
+                                    )}
+                                </div>
                             </div>
+                        </section>
+                    </div>
 
-                            {/* SAVINGS */}
-                            {totalSavings > 0 && (
-                                <div className="mt-2 flex justify-center">
-                                    <div className="px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white text-[11px] font-semibold">
-                                        🎉 You saved {currency(totalSavings)}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* PAID */}
-                            <div className="flex justify-between font-semibold mt-2">
-                                <span>Total Paid</span>
-                                <span>{currency(totalPaid)}</span>
-                            </div>
-
-                            {/* BALANCE */}
-                            {balance > 0 && (
-                                <div className="flex justify-between text-rose-600 font-semibold">
-                                    <span>Outstanding</span>
-                                    <span>{currency(balance)}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        <hr />
-
-                        <div className="space-y-3">
-                            {paymentAggregates.length === 0 ? (
-                                <div className="text-sm text-slate-400">
-                                    No payment records
-                                </div>
-                            ) : (
-                                paymentAggregates.map((pm) => (
-                                    <div
-                                        key={pm.method}
-                                        className="flex justify-between text-sm"
+                    {/* Readable invoice-like totals, pinned on large monitors only. */}
+                    <aside className="min-w-0 space-y-5 xl:sticky xl:top-24">
+                        <section
+                            aria-labelledby="order-payment-heading"
+                            className="overflow-hidden rounded-[26px] border border-[#d8e6d8] bg-white shadow-[0_16px_42px_rgba(23,79,67,.07)]"
+                        >
+                            <div className="bg-[#f0f7ef] px-5 py-5 sm:px-6">
+                                <div className="flex items-center gap-2 text-[#065975]">
+                                    <CreditCard size={19} />{" "}
+                                    <h2
+                                        id="order-payment-heading"
+                                        className="text-lg font-extrabold"
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <span className="capitalize font-medium">
-                                                {pm.method}
-                                            </span>
-
-                                            {pm.statuses.length > 0 && (
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                                                    {pm.statuses[0]}
+                                        Payment summary
+                                    </h2>
+                                </div>
+                                <p className="mt-1 text-xs text-[#6d8376]">
+                                    A clear breakdown of your order
+                                </p>
+                            </div>
+                            <div className="space-y-4 p-5 sm:p-6 text-sm">
+                                <div className="flex justify-between gap-3">
+                                    <span className="text-slate-500">
+                                        Items subtotal
+                                    </span>
+                                    <span className="font-semibold">
+                                        {currency(itemsSubtotal)}
+                                    </span>
+                                </div>
+                                {couponDiscount > 0 && (
+                                    <div className="flex justify-between gap-3 text-[#24734d]">
+                                        <span>
+                                            Discount{" "}
+                                            {order.coupon?.code && (
+                                                <span className="ml-1 inline-block rounded-md bg-[#eaf5ed] px-1.5 py-0.5 text-[10px] font-bold">
+                                                    {order.coupon.code}
                                                 </span>
                                             )}
-                                        </div>
-
-                                        <span className="font-semibold">
-                                            {currency(pm.amount)}
+                                        </span>
+                                        <span className="font-bold">
+                                            −{currency(couponDiscount)}
                                         </span>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* ================= ORDER HISTORY ================= */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
-                    <div className="text-lg font-semibold mb-4">
-                        Order History
-                    </div>
-
-                    {order.orderStatusTimeline && order.orderStatusTimeline.length > 0 ? (
-                        <div className="space-y-4">
-                            {order.orderStatusTimeline.map((s, idx) => (
-                                <div key={idx} className="flex items-start gap-4">
-
-                                    <div className="flex flex-col items-center">
-                                        <div className="w-3 h-3 bg-[#065975] rounded-full mt-1"></div>
-                                        {idx !== (order.orderStatusTimeline?.length ?? 0) - 1 && (
-                                            <div className="w-0.5 flex-1 bg-slate-200"></div>
+                                )}
+                                <div className="flex justify-between gap-3">
+                                    <span className="text-slate-500">
+                                        Delivery
+                                    </span>
+                                    <span className="font-semibold">
+                                        {order.coupon?.isFreeShipping ? (
+                                            <span className="text-[#0c7d96]">
+                                                Free
+                                            </span>
+                                        ) : (
+                                            currency(delivery)
                                         )}
-                                    </div>
-
-                                    <div>
-                                        <div className="font-semibold text-slate-900">
-                                            {s.status}
-                                        </div>
-
-                                        <div className="text-xs text-slate-500">
-                                            {formatShortDate(s.date)}
-                                        </div>
-
-                                        {s.notes && (
-                                            <div className="text-xs text-slate-400 mt-1">
-                                                {s.notes}
-                                            </div>
-                                        )}
-                                    </div>
-
+                                    </span>
                                 </div>
-                            ))}
+                                {order.isDeliveryChargeRefunded && (
+                                    <p className="rounded-xl bg-[#f2f8f0] px-3 py-2 text-xs leading-relaxed text-[#0a7791]">
+                                        Delivery refund recorded:{" "}
+                                        {currency(
+                                            order.deliveryRefundAmount || 0,
+                                        )}
+                                    </p>
+                                )}
+                                <div className="border-t border-dashed border-[#d8e3da] pt-4 flex items-center justify-between gap-3">
+                                    <span className="text-base font-bold text-[#173b4a]">
+                                        Order total
+                                    </span>
+                                    <strong className="text-2xl font-extrabold tracking-tight text-[#065975]">
+                                        {currency(finalTotal)}
+                                    </strong>
+                                </div>
+                                {totalSavings > 0 && (
+                                    <p className="rounded-xl bg-[#eaf6e9] p-2.5 text-center text-xs font-bold text-[#0c7d96]">
+                                        You saved {currency(totalSavings)} on
+                                        this order
+                                    </p>
+                                )}
+                                <div className="border-t border-[#f1f8f9] pt-4 space-y-3">
+                                    <div className="flex justify-between gap-3">
+                                        <span className="text-slate-500">
+                                            Payments recorded
+                                        </span>
+                                        <span className="font-bold">
+                                            {currency(totalPaid)}
+                                        </span>
+                                    </div>
+                                    {balance > 0 && (
+                                        <div className="flex justify-between gap-3 rounded-xl bg-[#fff8e8] px-3 py-2 text-[#8e651e]">
+                                            <span className="font-bold">
+                                                Balance remaining
+                                            </span>
+                                            <span className="font-extrabold">
+                                                {currency(balance)}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                {paymentAggregates.length > 0 && (
+                                    <div className="border-t border-[#f1f8f9] pt-4 space-y-3">
+                                        <p className="text-[11px] uppercase tracking-[.12em] font-extrabold text-slate-400">
+                                            Payment method details
+                                        </p>
+                                        {paymentAggregates.map((pm) => (
+                                            <div
+                                                key={pm.method}
+                                                className="flex items-start justify-between gap-3 text-xs sm:text-sm"
+                                            >
+                                                <div className="min-w-0">
+                                                    <span className="font-semibold capitalize break-words">
+                                                        {pm.method}
+                                                    </span>
+                                                    {pm.statuses.length > 0 && (
+                                                        <span className="ml-2 inline-block rounded-full bg-[#e6f7f9] px-2 py-0.5 text-[10px] text-[#065975]">
+                                                            {pm.statuses.join(
+                                                                ", ",
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="shrink-0 font-bold">
+                                                    {currency(pm.amount)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                        <div className="flex gap-3 rounded-2xl border border-[#dfedf0] bg-white p-4 text-xs leading-5 text-[#607987]">
+                            <ShieldCheck
+                                size={21}
+                                className="shrink-0 text-[#0c7d96]"
+                            />
+                            <span>
+                                Keep this order number handy if you contact us
+                                about your purchase. Delivery details and
+                                payment updates reflect the information recorded
+                                for your order.
+                            </span>
                         </div>
-                    ) : (
-                        <div className="text-sm text-slate-400">
-                            No order history available
-                        </div>
-                    )}
+                    </aside>
                 </div>
-
             </main>
         </div>
     );

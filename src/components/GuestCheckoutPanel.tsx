@@ -2,10 +2,13 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { TicketPercent } from "lucide-react";
 
 // adjust this import to match where you placed AddressModal
 import type { Address } from "./AddressModal";
+import { getHamper, isHamperGuestLine, readGuestCart } from "@/lib/hampers";
 
 const TOKEN_KEY = "accessToken";
 
@@ -23,6 +26,10 @@ export type CartItem = {
     price: number;
     qty: number;
     img?: string;
+    type?: "SELL" | "HAMPER";
+    available?: boolean;
+    components?: { productId: string; quantity: number }[];
+    note?: string;
 };
 
 type Props = {
@@ -35,7 +42,10 @@ function isValidIndianPincode(pin: string) {
     return /^[1-9][0-9]{5}$/.test(pin);
 }
 
-export default function CheckoutPanel({ initialAddresses, initialCart }: Props) {
+export default function CheckoutPanel({
+    initialAddresses,
+    initialCart,
+}: Props) {
     const router = useRouter();
 
     const deliveryFetchIdRef = useRef(0);
@@ -52,7 +62,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartLoaded, setCartLoaded] = useState<boolean>(false);
-    const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState<
+        string | number | null
+    >(null);
     const [showForm, setShowForm] = useState(true);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -103,11 +115,23 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     const [loadingAddresses, setLoadingAddresses] = useState(false);
 
-    type ServiceEntry = { checking: boolean; prepaid: boolean | null; error?: string };
-    const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>({});
+    type ServiceEntry = {
+        checking: boolean;
+        prepaid: boolean | null;
+        error?: string;
+    };
+    const [serviceMap, setServiceMap] = useState<Record<string, ServiceEntry>>(
+        {},
+    );
 
-    type DeliveryEntry = { checking: boolean; value: number | null; error?: string };
-    const [deliveryMap, setDeliveryMap] = useState<Record<string, DeliveryEntry>>({});
+    type DeliveryEntry = {
+        checking: boolean;
+        value: number | null;
+        error?: string;
+    };
+    const [deliveryMap, setDeliveryMap] = useState<
+        Record<string, DeliveryEntry>
+    >({});
     const [backendTotal, setBackendTotal] = useState<number | null>(null);
 
     const mountedRef = useRef(true);
@@ -133,9 +157,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
     useEffect(() => {
         return () => {
-            if (deliveryTimeoutRef.current) clearTimeout(deliveryTimeoutRef.current);
-            if (deliveryPincodeTimeoutRef.current) clearTimeout(deliveryPincodeTimeoutRef.current);
-            if (billingPincodeTimeoutRef.current) clearTimeout(billingPincodeTimeoutRef.current);
+            if (deliveryTimeoutRef.current)
+                clearTimeout(deliveryTimeoutRef.current);
+            if (deliveryPincodeTimeoutRef.current)
+                clearTimeout(deliveryPincodeTimeoutRef.current);
+            if (billingPincodeTimeoutRef.current)
+                clearTimeout(billingPincodeTimeoutRef.current);
         };
     }, []);
 
@@ -187,7 +214,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 newErrors.billing_addressLine1 = "Billing address required";
             }
 
-            if (!billingForm.pincode || !isValidIndianPincode(billingForm.pincode)) {
+            if (
+                !billingForm.pincode ||
+                !isValidIndianPincode(billingForm.pincode)
+            ) {
                 newErrors.billing_pincode = "Enter valid billing pincode";
             }
         }
@@ -213,7 +243,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     // --- API helpers ---
     function getApiBase(): string {
         if (typeof window === "undefined") return "";
-        return process.env.NEXT_PUBLIC_API_BASE ? String(process.env.NEXT_PUBLIC_API_BASE) : "";
+        return process.env.NEXT_PUBLIC_API_BASE
+            ? String(process.env.NEXT_PUBLIC_API_BASE)
+            : "";
     }
 
     function buildUrl(path: string) {
@@ -249,12 +281,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     async function fetchPincodeServiceability(pincode: string) {
-        const url = buildUrl(`/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`);
+        const url = buildUrl(
+            `/logistic_partner/get_pincode_serviceability/${encodeURIComponent(pincode)}`,
+        );
         try {
-            const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
+            const res = await fetch(url, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+            });
             if (!res.ok) {
                 const json = await safeJson(res);
-                return { ok: false, message: json?.error || json?.message || `HTTP ${res.status}` };
+                return {
+                    ok: false,
+                    message:
+                        json?.error || json?.message || `HTTP ${res.status}`,
+                };
             }
             const json = await safeJson(res);
             const data = json?.data ?? null;
@@ -278,7 +319,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         setServiceMap((m) => ({
             ...m,
-            [key]: { checking: true, prepaid: null }
+            [key]: { checking: true, prepaid: null },
         }));
 
         try {
@@ -289,7 +330,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             if (result.ok) {
                 setServiceMap((m) => ({
                     ...m,
-                    [key]: { checking: false, prepaid: !!result.prepaid }
+                    [key]: { checking: false, prepaid: !!result.prepaid },
                 }));
             } else {
                 setServiceMap((m) => ({
@@ -297,8 +338,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     [key]: {
                         checking: false,
                         prepaid: null,
-                        error: result.message || "Service check failed"
-                    }
+                        error: result.message || "Service check failed",
+                    },
                 }));
             }
         } catch (err: any) {
@@ -309,19 +350,19 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 [key]: {
                     checking: false,
                     prepaid: null,
-                    error: err?.message ?? String(err)
-                }
+                    error: err?.message ?? String(err),
+                },
             }));
         }
     }
 
     async function apiFetchDeliveryCharge(
         pincode: string,
-        items: { productId: string; quantity: number }[]
+        items: { productId: string; quantity: number }[],
     ): Promise<{ ok: boolean; charge?: number; message?: string }> {
         try {
             const url = buildUrl(
-                `/logistic_partner/get_delivery_charge_for_guest/${encodeURIComponent(pincode)}`
+                `/logistic_partner/get_delivery_charge_for_guest/${encodeURIComponent(pincode)}`,
             );
 
             const res = await fetch(url, {
@@ -336,7 +377,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 const payload = await safeJson(res);
                 return {
                     ok: false,
-                    message: payload?.message || payload?.error || `HTTP ${res.status}`,
+                    message:
+                        payload?.message ||
+                        payload?.error ||
+                        `HTTP ${res.status}`,
                 };
             }
 
@@ -344,7 +388,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
             let charge = json?.data?.totalCharge;
 
-            if (typeof charge !== "number" && Array.isArray(json?.data?.boxes)) {
+            if (
+                typeof charge !== "number" &&
+                Array.isArray(json?.data?.boxes)
+            ) {
                 charge = json.data.boxes.reduce((sum: number, box: any) => {
                     return sum + (box.charge || 0);
                 }, 0);
@@ -375,9 +422,24 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         }));
 
         try {
-            const items = cart.map((it) => ({
-                productId: it.id,
-                quantity: it.qty,
+            // Guest logistics quotes consume PRODUCT component IDs, not hamper IDs.
+            const demand = new Map<string, number>();
+            for (const it of cart) {
+                const components =
+                    it.type === "HAMPER"
+                        ? it.components || []
+                        : [{ productId: it.id, quantity: 1 }];
+                for (const component of components) {
+                    demand.set(
+                        component.productId,
+                        (demand.get(component.productId) || 0) +
+                            component.quantity * it.qty,
+                    );
+                }
+            }
+            const items = [...demand].map(([productId, quantity]) => ({
+                productId,
+                quantity,
             }));
 
             const res = await apiFetchDeliveryCharge(key, items);
@@ -420,7 +482,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     // ---------- RAZORPAY HELPERS ----------
     function loadRazorpayScript(): Promise<void> {
         return new Promise((resolve, reject) => {
-            if (typeof window === "undefined") return reject(new Error("window is undefined"));
+            if (typeof window === "undefined")
+                return reject(new Error("window is undefined"));
             if ((window as any).Razorpay) return resolve();
             const id = "razorpay-js";
             if (document.getElementById(id)) {
@@ -495,7 +558,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             order_id: razorpayOrder.id,
             handler: async function (response: RazorpayHandlerResponse) {
                 try {
-                    const verifyUrl = buildUrl("/sell_order/verify_payment_for_guest");
+                    const verifyUrl = buildUrl(
+                        "/sell_order/verify_payment_for_guest",
+                    );
 
                     const payload = {
                         razorpayOrderId: response.razorpay_order_id,
@@ -504,36 +569,53 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     };
 
                     const headers: Record<string, string> = {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     };
 
                     const res = await fetch(verifyUrl, {
                         method: "POST",
                         headers,
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(payload),
                     });
 
                     const body = await safeJson(res);
                     console.log("VERIFY RESPONSE:", body);
 
-                    if (res.ok && (body?.ack === "success" || body?.status === "success")) {
+                    if (
+                        res.ok &&
+                        (body?.ack === "success" || body?.status === "success")
+                    ) {
                         // Prefer explicit numeric orderNumber field, otherwise try numeric orderId.
                         const numericOrderNumber =
-                            body?.orderNumber ?? (typeof body?.orderId === "number" || (/^\d+$/).test(String(body?.orderId)) ? body.orderId : null);
+                            body?.orderNumber ??
+                            (typeof body?.orderId === "number" ||
+                            /^\d+$/.test(String(body?.orderId))
+                                ? body.orderId
+                                : null);
 
                         // Prefer _id / object id, then fallback to payload's orderId (if it was objectId)
                         const objectOrderId =
                             body?._id && looksLikeObjectId(body._id)
                                 ? String(body._id)
-                                : (body?.orderId && looksLikeObjectId(body.orderId)
-                                    ? String(body.orderId)
-                                    : (orderId && looksLikeObjectId(orderId)
-                                        ? String(orderId)
-                                        : null));
+                                : body?.orderId &&
+                                    looksLikeObjectId(body.orderId)
+                                  ? String(body.orderId)
+                                  : orderId && looksLikeObjectId(orderId)
+                                    ? String(orderId)
+                                    : null;
 
                         const qp: string[] = [];
-                        if (numericOrderNumber !== null && numericOrderNumber !== undefined) qp.push(`orderNumber=${encodeURIComponent(String(numericOrderNumber))}`);
-                        if (objectOrderId) qp.push(`orderId=${encodeURIComponent(String(objectOrderId))}`);
+                        if (
+                            numericOrderNumber !== null &&
+                            numericOrderNumber !== undefined
+                        )
+                            qp.push(
+                                `orderNumber=${encodeURIComponent(String(numericOrderNumber))}`,
+                            );
+                        if (objectOrderId)
+                            qp.push(
+                                `orderId=${encodeURIComponent(String(objectOrderId))}`,
+                            );
 
                         const guestToken = body?.guestToken || body?.token;
 
@@ -552,36 +634,51 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                             const query = [
                                 `token=${encodeURIComponent(guestToken)}`,
-                                ...qp
+                                ...qp,
                             ].join("&");
 
                             router.replace(`/guest-order-success?${query}`);
                         } else {
                             // fallback (rare case)
-                            router.replace("/guest-order-failed?reason=Missing guest token");
+                            router.replace(
+                                "/guest-order-failed?reason=Missing guest token",
+                            );
                         }
                         return;
                     } else {
-                        const reason = body?.message || body?.error || "Payment verification failed";
+                        const reason =
+                            body?.message ||
+                            body?.error ||
+                            "Payment verification failed";
                         const serverOrderId = body?.orderId ?? orderId ?? "";
                         router.replace(
-                            `/guest-order-failed?reason=${encodeURIComponent(String(reason))}${serverOrderId ? `&orderId=${encodeURIComponent(String(serverOrderId))}` : ""}`
+                            `/guest-order-failed?reason=${encodeURIComponent(String(reason))}${serverOrderId ? `&orderId=${encodeURIComponent(String(serverOrderId))}` : ""}`,
                         );
                         return;
                     }
 
                     // non-ok HTTP
-                    const finalReason = body?.message || body?.error || `Verification HTTP ${res.status}`;
+                    const finalReason =
+                        body?.message ||
+                        body?.error ||
+                        `Verification HTTP ${res.status}`;
                     const finalOrderId = body?.orderId ?? orderId ?? "";
-                    console.warn("Payment verification failed:", res.status, body);
+                    console.warn(
+                        "Payment verification failed:",
+                        res.status,
+                        body,
+                    );
                     router.replace(
-                        `/guest-order-failed?reason=${encodeURIComponent(String(finalReason))}${finalOrderId ? `&orderId=${encodeURIComponent(String(finalOrderId))}` : ""}`
+                        `/guest-order-failed?reason=${encodeURIComponent(String(finalReason))}${finalOrderId ? `&orderId=${encodeURIComponent(String(finalOrderId))}` : ""}`,
                     );
                     return;
                 } catch (err: any) {
                     console.error("Verify request threw:", err);
-                    const reason = err?.message || "Verification request failed";
-                    router.replace(`/guest-order-failed?reason=${encodeURIComponent(String(reason))}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`);
+                    const reason =
+                        err?.message || "Verification request failed";
+                    router.replace(
+                        `/guest-order-failed?reason=${encodeURIComponent(String(reason))}${orderId ? `&orderId=${encodeURIComponent(String(orderId))}` : ""}`,
+                    );
                     return;
                 }
             },
@@ -589,11 +686,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 ondismiss: () => {
                     setPaymentInProgress(false);
                     placeOrderLockRef.current = false;
-                }
+                },
             },
             prefill: prefillCustomer,
             display: {
-                hide: [{ method: "paylater" }, { method: "emi" }, { method: "cardless_emi" }],
+                hide: [
+                    { method: "paylater" },
+                    { method: "emi" },
+                    { method: "cardless_emi" },
+                ],
                 preferences: { show_default_blocks: false },
                 sequence: [],
             },
@@ -621,7 +722,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             const guestRaw = localStorage.getItem(STORAGE_KEYS.guest);
             const deliveryRaw = localStorage.getItem(STORAGE_KEYS.delivery);
             const billingRaw = localStorage.getItem(STORAGE_KEYS.billing);
-            const billingSameRaw = localStorage.getItem(STORAGE_KEYS.billingSame);
+            const billingSameRaw = localStorage.getItem(
+                STORAGE_KEYS.billingSame,
+            );
 
             if (guestRaw) setGuestInfo(JSON.parse(guestRaw));
 
@@ -636,7 +739,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             if (billingSameRaw !== null) {
                 setBillingSame(JSON.parse(billingSameRaw));
             }
-
         } catch (err) {
             console.warn("Failed to restore checkout state", err);
         } finally {
@@ -649,7 +751,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         try {
             localStorage.setItem(STORAGE_KEYS.guest, JSON.stringify(guestInfo));
-        } catch { }
+        } catch {}
     }, [guestInfo]);
 
     useEffect(() => {
@@ -657,23 +759,29 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         try {
             localStorage.setItem(STORAGE_KEYS.delivery, JSON.stringify(form));
-        } catch { }
+        } catch {}
     }, [form]);
 
     useEffect(() => {
         if (!hydratedRef.current) return;
 
         try {
-            localStorage.setItem(STORAGE_KEYS.billing, JSON.stringify(billingForm));
-        } catch { }
+            localStorage.setItem(
+                STORAGE_KEYS.billing,
+                JSON.stringify(billingForm),
+            );
+        } catch {}
     }, [billingForm]);
 
     useEffect(() => {
         if (!hydratedRef.current) return;
 
         try {
-            localStorage.setItem(STORAGE_KEYS.billingSame, JSON.stringify(billingSame));
-        } catch { }
+            localStorage.setItem(
+                STORAGE_KEYS.billingSame,
+                JSON.stringify(billingSame),
+            );
+        } catch {}
     }, [billingSame]);
 
     // --- End Razorpay helpers ---
@@ -706,41 +814,82 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     return;
                 }
 
-                // 👉 FETCH REAL PRODUCTS FROM API
-                const ids = [...new Set(items.map(i => i.productId))].join(",");
-
-                const res = await fetch(buildUrl(`/product/sell?ids=${ids}`));
-                const json = await safeJson(res);
-
-                if (!res.ok || !json) {
+                // Product IDs and hamper IDs must never be mixed into the product endpoint.
+                const ids = [
+                    ...new Set(
+                        items
+                            .filter((i) => i.productId && i.type !== "HAMPER")
+                            .map((i) => i.productId),
+                    ),
+                ].join(",");
+                const res = ids
+                    ? await fetch(buildUrl(`/product/sell?ids=${ids}`))
+                    : null;
+                const json = res ? await safeJson(res) : null;
+                if (res && (!res.ok || !json))
                     throw new Error("Failed to fetch products");
-                }
-
-                const products = Array.isArray(json?.productData) ? json.productData : [];
+                const products = Array.isArray(json?.productData)
+                    ? json.productData
+                    : [];
 
                 const mapped = products.map((p: any) => {
-                    const cartItem = items.find(i => String(i.productId) === String(p._id));
+                    const cartItem = items.find(
+                        (i) => String(i.productId) === String(p._id),
+                    );
 
                     return {
                         id: p._id,
                         title: p.productName,
-                        price: p.latestSalePrice?.discountedPrice ?? p.latestSalePrice?.actualPrice ?? 0,
+                        price:
+                            p.latestSalePrice?.discountedPrice ??
+                            p.latestSalePrice?.actualPrice ??
+                            0,
                         qty: cartItem?.quantity ?? 1,
                         img: p.productImage,
                     };
                 });
 
-                if (mapped.length === 0) {
-                    localStorage.removeItem("wcm_guest_cart_v1");
+                const hamperItems: CartItem[] = await Promise.all(
+                    items.filter(isHamperGuestLine).map(async (line) => {
+                        try {
+                            const h = await getHamper(line.hamperId, true);
+                            return {
+                                id: line.hamperId,
+                                title: h.hamperName,
+                                price: Number(h.price),
+                                qty: line.quantity,
+                                img: h.hamperImage || undefined,
+                                type: "HAMPER" as const,
+                                note: line.note,
+                                available:
+                                    h.isAvailableForSale &&
+                                    h.maxOrderQuantity >= line.quantity,
+                                components: (h.products || []).map((c) => ({
+                                    productId: c.productId,
+                                    quantity: c.quantity,
+                                })),
+                            };
+                        } catch {
+                            return {
+                                id: line.hamperId,
+                                title: "Unavailable gift hamper",
+                                price: 0,
+                                qty: line.quantity,
+                                type: "HAMPER" as const,
+                                available: false,
+                                note: line.note,
+                            };
+                        }
+                    }),
+                );
+                if (mapped.length === 0 && hamperItems.length === 0) {
                     setCart([]);
                     router.replace("/cart");
                     return;
                 }
-
-                setCart(mapped);
+                setCart([...mapped, ...hamperItems]);
                 setCartLoaded(true);
                 setCheckingAuth(false);
-
             } catch (err) {
                 console.warn("Failed to load guest cart", err);
                 setCart([]);
@@ -753,11 +902,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }, []);
 
     useEffect(() => {
-        if (
-            form.city &&
-            form.state &&
-            isValidIndianPincode(form.pincode)
-        ) {
+        if (form.city && form.state && isValidIndianPincode(form.pincode)) {
             setAddresses([form]);
             setSelectedAddressId(form.id);
 
@@ -778,11 +923,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (!cartLoaded) return;
         if (cart.length === 0) return;
 
-        if (
-            form.city &&
-            form.state &&
-            isValidIndianPincode(form.pincode)
-        ) {
+        if (form.city && form.state && isValidIndianPincode(form.pincode)) {
             const key = form.pincode;
 
             const prev = deliveryMap[key];
@@ -804,18 +945,20 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         form.state,
         form.addressLine1,
         cart,
-        cartLoaded
+        cartLoaded,
     ]);
 
     useEffect(() => {
         try {
             const count = cart.reduce((s, it) => s + (Number(it.qty) || 1), 0);
             try {
-                if (typeof window !== "undefined") localStorage.setItem("cartCount", String(count));
+                if (typeof window !== "undefined")
+                    localStorage.setItem("cartCount", String(count));
             } catch {
                 /* ignore */
             }
-            if (typeof window !== "undefined") window.dispatchEvent(new Event("cartChanged"));
+            if (typeof window !== "undefined")
+                window.dispatchEvent(new Event("cartChanged"));
         } catch (err) {
             console.error("[CheckoutPanel] update cartCount error", err);
         }
@@ -829,7 +972,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         if (!orderPlacedRef.current && cartLoaded && cart.length === 0) {
             try {
-                if (typeof window !== "undefined" && !window.location.pathname.startsWith("/cart")) {
+                if (
+                    typeof window !== "undefined" &&
+                    !window.location.pathname.startsWith("/cart")
+                ) {
                     router.replace("/cart");
                 }
             } catch (err) {
@@ -849,6 +995,19 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
             setPaymentInProgress(false);
         };
 
+        if (
+            cart.some(
+                (it) =>
+                    it.available === false ||
+                    (it.type === "HAMPER" && !it.components?.length),
+            )
+        ) {
+            alert(
+                "One or more gift hampers are unavailable. Please update your cart.",
+            );
+            unlock();
+            return;
+        }
         if (currentDeliveryCharge === null) {
             alert("Delivery charge not calculated yet. Please wait.");
             unlock();
@@ -948,25 +1107,29 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 billingAddress: billingSame
                     ? null
                     : {
-                        recipientName: guestInfo.name,
-                        recipientContact: guestInfo.mobile,
-                        addressLine1: billingForm.addressLine1,
-                        addressLine2: billingForm.addressLine2,
-                        addressLine3: billingForm.addressLine3,
-                        landmark: billingForm.landmark,
-                        state: billingForm.state,
-                        district: billingForm.district,
-                        city: billingForm.city,
-                        pincode: billingForm.pincode,
-                    },
+                          recipientName: guestInfo.name,
+                          recipientContact: guestInfo.mobile,
+                          addressLine1: billingForm.addressLine1,
+                          addressLine2: billingForm.addressLine2,
+                          addressLine3: billingForm.addressLine3,
+                          landmark: billingForm.landmark,
+                          state: billingForm.state,
+                          district: billingForm.district,
+                          city: billingForm.city,
+                          pincode: billingForm.pincode,
+                      },
 
-                cartItems: cart.map((it) => ({
-                    productId: it.id,
-                    quantity: it.qty,
-                })),
+                cartItems: cart
+                    .filter((it) => it.type !== "HAMPER")
+                    .map((it) => ({ productId: it.id, quantity: it.qty })),
+                hamperItems: cart
+                    .filter((it) => it.type === "HAMPER")
+                    .map((it) => ({
+                        hamperId: it.id,
+                        quantity: it.qty,
+                        note: it.note || "",
+                    })),
             };
-
-            console.debug("[guestOrder] POST", body);
 
             const res = await fetch(url, {
                 method: "POST",
@@ -981,7 +1144,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 const key = json.key ?? null;
 
                 if (razorpayOrder && key) {
-
                     // USE BACKEND TOTAL (NOT LOCAL)
                     const finalAmount = json.finalPayableAmount;
 
@@ -1009,13 +1171,23 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                 setCart([]);
                 window.dispatchEvent(new Event("cartChanged"));
 
-                router.replace(`/guest-order-success`);
+                // Guest order details require the private confirmation token.
+                // Include it when returned by the API, just as in the Razorpay flow.
+                const confirmationToken = json?.guestToken ?? json?.token ?? json?.data?.guestToken ?? json?.data?.token;
+                router.replace(confirmationToken
+                    ? `/guest-order-success?token=${encodeURIComponent(String(confirmationToken))}`
+                    : `/guest-order-success`);
             } else {
-                const msg = json?.message || json?.error || "Guest order failed";
-                router.replace(`/guest-order-failed?reason=${encodeURIComponent(msg)}`);
+                const msg =
+                    json?.message || json?.error || "Guest order failed";
+                router.replace(
+                    `/guest-order-failed?reason=${encodeURIComponent(msg)}`,
+                );
             }
         } catch (err: any) {
-            router.replace(`/guest-order-failed?reason=${encodeURIComponent(err?.message || "Network error")}`);
+            router.replace(
+                `/guest-order-failed?reason=${encodeURIComponent(err?.message || "Network error")}`,
+            );
         } finally {
             setCreating(false);
             placeOrderLockRef.current = false;
@@ -1033,16 +1205,27 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         if (str === "") return null;
 
         try {
-            const u = new URL(str, typeof window !== "undefined" ? window.location.origin : undefined);
+            const u = new URL(
+                str,
+                typeof window !== "undefined"
+                    ? window.location.origin
+                    : undefined,
+            );
 
-            if (typeof window !== "undefined" && u.hostname === window.location.hostname && u.port === window.location.port) {
+            if (
+                typeof window !== "undefined" &&
+                u.hostname === window.location.hostname &&
+                u.port === window.location.port
+            ) {
                 return u.pathname + u.search + u.hash;
             }
             return u.toString();
         } catch {
             const apiBase = getApiBase().replace(/\/$/, "");
             if (str.startsWith("/")) return apiBase ? `${apiBase}${str}` : str;
-            return apiBase ? `${apiBase}/${str.replace(/^\/+/, "")}` : `/${str.replace(/^\/+/, "")}`;
+            return apiBase
+                ? `${apiBase}/${str.replace(/^\/+/, "")}`
+                : `/${str.replace(/^\/+/, "")}`;
         }
     }
 
@@ -1051,12 +1234,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return norm ?? "/images/placeholder.png";
     }
 
-    const subtotal = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
+    const subtotal = useMemo(
+        () => cart.reduce((s, it) => s + it.price * it.qty, 0),
+        [cart],
+    );
     const hasAddress = addresses.length > 0;
 
     const selectedAddress = useMemo(
-        () => addresses.find(a => a.id === selectedAddressId) || null,
-        [addresses, selectedAddressId]
+        () => addresses.find((a) => a.id === selectedAddressId) || null,
+        [addresses, selectedAddressId],
     );
 
     const selectedPincode = selectedAddress?.pincode ?? null;
@@ -1073,7 +1259,8 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
         return null;
     }, [selectedPincode, deliveryMap]);
 
-    const total = backendTotal ?? (subtotal + (Number(currentDeliveryCharge) || 0));
+    const total =
+        backendTotal ?? subtotal + (Number(currentDeliveryCharge) || 0);
 
     useEffect(() => {
         if (!selectedAddressId) return;
@@ -1087,10 +1274,11 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         const svc = serviceMap[current.pincode];
         if (svc && svc.prepaid === false) {
-            const firstGood = addresses.find((a) => {
-                const s = serviceMap[a.pincode];
-                return !(s && s.prepaid === false);
-            }) ?? null;
+            const firstGood =
+                addresses.find((a) => {
+                    const s = serviceMap[a.pincode];
+                    return !(s && s.prepaid === false);
+                }) ?? null;
             if (firstGood && firstGood.id !== selectedAddressId) {
                 setSelectedAddressId(firstGood.id);
             } else if (!firstGood && selectedAddressId !== null) {
@@ -1132,7 +1320,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         deliveryPincodeTimeoutRef.current = setTimeout(async () => {
             try {
-                const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+                const res = await fetch(
+                    `https://api.postalpincode.in/pincode/${pin}`,
+                );
                 const data = await res.json();
 
                 if (data?.[0]?.Status === "Success") {
@@ -1168,7 +1358,9 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
         billingPincodeTimeoutRef.current = setTimeout(async () => {
             try {
-                const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+                const res = await fetch(
+                    `https://api.postalpincode.in/pincode/${pin}`,
+                );
                 const data = await res.json();
 
                 if (data?.[0]?.Status === "Success") {
@@ -1188,33 +1380,48 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
     }
 
     return (
-        <div className="min-h-screen from-[#f8fbfb] to-white p-4 md:p-8 font-sans pb-32 md:pb-10">
-            <div className="max-w-6xl mx-auto">
+        <div className="min-h-screen font-sans pb-24 md:pb-12">
+            <div className="w-full max-w-[1520px] mx-auto">
                 <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#065975]">Checkout</h1>
-                        <p className="text-sm text-slate-500 mt-1">Simple, safe and delightful checkout experience</p>
+                        <h1 className="site-section-title">Checkout</h1>
+                        <p className="text-sm text-slate-500 mt-1">
+                            A few quick details, then your handmade gifts are on
+                            their way
+                        </p>
                     </div>
                 </header>
 
                 <main className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
                     {/* Left panel: addresses + billing checkbox (cart removed from here) */}
-                    <section className="bg-white rounded-2xl shadow-sm p-5 md:p-6 space-y-6">
+                    <section className="site-card p-4 sm:p-6 space-y-6">
                         <div className="mb-6 space-y-6">
                             <div className="space-y-4">
-                                <h2 className="text-lg font-semibold">Contact details</h2>
+                                <h2 className="text-lg font-semibold">
+                                    Contact details
+                                </h2>
 
                                 <div data-error="name">
                                     <input
                                         placeholder="Full Name"
                                         value={guestInfo.name}
                                         onChange={(e) => {
-                                            setGuestInfo({ ...guestInfo, name: e.target.value });
-                                            setErrors(prev => ({ ...prev, name: "" }));
+                                            setGuestInfo({
+                                                ...guestInfo,
+                                                name: e.target.value,
+                                            });
+                                            setErrors((prev) => ({
+                                                ...prev,
+                                                name: "",
+                                            }));
                                         }}
                                         className={`w-full border rounded-lg px-3 py-2 ${errors.name ? "border-red-500" : ""}`}
                                     />
-                                    {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+                                    {errors.name && (
+                                        <p className="text-xs text-red-500 mt-1">
+                                            {errors.name}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div data-error="email">
@@ -1222,12 +1429,22 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         placeholder="Email (optional)"
                                         value={guestInfo.email}
                                         onChange={(e) => {
-                                            setGuestInfo({ ...guestInfo, email: e.target.value });
-                                            setErrors(prev => ({ ...prev, email: "" }));
+                                            setGuestInfo({
+                                                ...guestInfo,
+                                                email: e.target.value,
+                                            });
+                                            setErrors((prev) => ({
+                                                ...prev,
+                                                email: "",
+                                            }));
                                         }}
                                         className={`w-full border rounded-lg px-3 py-2 ${errors.email ? "border-red-500" : ""}`}
                                     />
-                                    {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+                                    {errors.email && (
+                                        <p className="text-xs text-red-500 mt-1">
+                                            {errors.email}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div data-error="mobile">
@@ -1235,41 +1452,70 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         placeholder="Mobile"
                                         value={guestInfo.mobile}
                                         onChange={(e) => {
-                                            setGuestInfo({ ...guestInfo, mobile: e.target.value });
-                                            setErrors(prev => ({ ...prev, mobile: "" }));
+                                            setGuestInfo({
+                                                ...guestInfo,
+                                                mobile: e.target.value,
+                                            });
+                                            setErrors((prev) => ({
+                                                ...prev,
+                                                mobile: "",
+                                            }));
                                         }}
                                         className={`w-full border rounded-lg px-3 py-2 ${errors.mobile ? "border-red-500" : ""}`}
                                     />
-                                    {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
+                                    {errors.mobile && (
+                                        <p className="text-xs text-red-500 mt-1">
+                                            {errors.mobile}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <div>
-                                <h2 className="text-lg font-semibold">Delivery address</h2>
-                                <p className="text-sm text-slate-500">Select where you'd like us to deliver</p>
+                                <h2 className="text-lg font-semibold">
+                                    Delivery address
+                                </h2>
+                                <p className="text-sm text-slate-500">
+                                    Select where you'd like us to deliver
+                                </p>
                                 <p className="text-xs text-slate-500">
-                                    Fields marked with <span className="text-red-500">*</span> are required
+                                    Fields marked with{" "}
+                                    <span className="text-red-500">*</span> are
+                                    required
                                 </p>
                             </div>
 
                             {showForm && (
                                 <div className="border rounded-xl p-4 bg-slate-50 space-y-3 mt-4">
-
                                     {/* Address Line 1 */}
                                     <div>
                                         <label className="text-sm font-medium">
-                                            Address Line 1 <span className="text-red-500">*</span>
+                                            Address Line 1{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="addressLine1">
                                             <input
                                                 placeholder="House / Flat / Building"
                                                 value={form.addressLine1}
                                                 onChange={(e) => {
-                                                    setForm({ ...form, addressLine1: e.target.value });
-                                                    setErrors(prev => ({ ...prev, addressLine1: "" }));
+                                                    setForm({
+                                                        ...form,
+                                                        addressLine1:
+                                                            e.target.value,
+                                                    });
+                                                    setErrors((prev) => ({
+                                                        ...prev,
+                                                        addressLine1: "",
+                                                    }));
                                                 }}
                                                 className={`w-full border p-2 rounded mt-1 ${errors.addressLine1 ? "border-red-500" : ""}`}
                                             />
-                                            {errors.addressLine1 && <p className="text-xs text-red-500 mt-1">{errors.addressLine1}</p>}
+                                            {errors.addressLine1 && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {errors.addressLine1}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1281,7 +1527,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <input
                                             placeholder="Street / Area"
                                             value={form.addressLine2 || ""}
-                                            onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    addressLine2:
+                                                        e.target.value,
+                                                })
+                                            }
                                             className="w-full border p-2 rounded mt-1"
                                         />
                                     </div>
@@ -1294,7 +1546,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <input
                                             placeholder="Apartment / Floor / Wing"
                                             value={form.addressLine3 || ""}
-                                            onChange={(e) => setForm({ ...form, addressLine3: e.target.value })}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    addressLine3:
+                                                        e.target.value,
+                                                })
+                                            }
                                             className="w-full border p-2 rounded mt-1"
                                         />
                                     </div>
@@ -1307,7 +1565,12 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         <input
                                             placeholder="Nearby landmark"
                                             value={form.landmark || ""}
-                                            onChange={(e) => setForm({ ...form, landmark: e.target.value })}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    landmark: e.target.value,
+                                                })
+                                            }
                                             className="w-full border p-2 rounded mt-1"
                                         />
                                     </div>
@@ -1315,26 +1578,43 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     {/* Pincode */}
                                     <div>
                                         <label className="text-sm font-medium">
-                                            Pincode <span className="text-red-500">*</span>
+                                            Pincode{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="pincode">
                                             <input
                                                 placeholder="6-digit pincode"
                                                 value={form.pincode}
                                                 onChange={(e) => {
-                                                    handlePincodeChange(e.target.value.replace(/\D/g, "").slice(0, 6));
-                                                    setErrors(prev => ({ ...prev, pincode: "" }));
+                                                    handlePincodeChange(
+                                                        e.target.value
+                                                            .replace(/\D/g, "")
+                                                            .slice(0, 6),
+                                                    );
+                                                    setErrors((prev) => ({
+                                                        ...prev,
+                                                        pincode: "",
+                                                    }));
                                                 }}
                                                 className={`w-full border p-2 rounded mt-1 ${errors.pincode ? "border-red-500" : ""}`}
                                             />
-                                            {errors.pincode && <p className="text-xs text-red-500 mt-1">{errors.pincode}</p>}
+                                            {errors.pincode && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {errors.pincode}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* City */}
                                     <div>
                                         <label className="text-sm font-medium">
-                                            City <span className="text-red-500">*</span>
+                                            City{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="city">
                                             <input
@@ -1342,14 +1622,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                 readOnly
                                                 className={`w-full border p-2 rounded mt-1 bg-gray-100 ${errors.city ? "border-red-500" : ""}`}
                                             />
-                                            {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city}</p>}
+                                            {errors.city && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {errors.city}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* District */}
                                     <div>
                                         <label className="text-sm font-medium">
-                                            District <span className="text-red-500">*</span>
+                                            District{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="district">
                                             <input
@@ -1357,14 +1644,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                 readOnly
                                                 className={`w-full border p-2 rounded mt-1 bg-gray-100 ${errors.district ? "border-red-500" : ""}`}
                                             />
-                                            {errors.district && <p className="text-xs text-red-500 mt-1">{errors.district}</p>}
+                                            {errors.district && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {errors.district}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* State */}
                                     <div>
                                         <label className="text-sm font-medium">
-                                            State <span className="text-red-500">*</span>
+                                            State{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="state">
                                             <input
@@ -1372,10 +1666,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                                 readOnly
                                                 className={`w-full border p-2 rounded mt-1 bg-gray-100 ${errors.state ? "border-red-500" : ""}`}
                                             />
-                                            {errors.state && <p className="text-xs text-red-500 mt-1">{errors.state}</p>}
+                                            {errors.state && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {errors.state}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
-
                                 </div>
                             )}
                         </div>
@@ -1402,7 +1699,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             const addr = addresses[0];
                                             setBillingForm({
                                                 ...addr,
-                                                id: `billing_${Date.now()}`
+                                                id: `billing_${Date.now()}`,
                                             });
                                         }
                                     }}
@@ -1415,21 +1712,37 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                             {!billingSame && (
                                 <div className="border rounded-xl p-4 bg-slate-50 space-y-3">
-
                                     <div>
                                         <label className="text-sm font-medium">
-                                            Address Line 1 <span className="text-red-500">*</span>
+                                            Address Line 1{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="billing_addressLine1">
                                             <input
                                                 value={billingForm.addressLine1}
                                                 onChange={(e) => {
-                                                    setBillingForm({ ...billingForm, addressLine1: e.target.value });
-                                                    setErrors(prev => ({ ...prev, billing_addressLine1: "" }));
+                                                    setBillingForm({
+                                                        ...billingForm,
+                                                        addressLine1:
+                                                            e.target.value,
+                                                    });
+                                                    setErrors((prev) => ({
+                                                        ...prev,
+                                                        billing_addressLine1:
+                                                            "",
+                                                    }));
                                                 }}
                                                 className={`w-full border p-2 rounded mt-1 ${errors.billing_addressLine1 ? "border-red-500" : ""}`}
                                             />
-                                            {errors.billing_addressLine1 && <p className="text-xs text-red-500 mt-1">{errors.billing_addressLine1}</p>}
+                                            {errors.billing_addressLine1 && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {
+                                                        errors.billing_addressLine1
+                                                    }
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1438,8 +1751,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             Address Line 2 (optional)
                                         </label>
                                         <input
-                                            value={billingForm.addressLine2 || ""}
-                                            onChange={(e) => setBillingForm({ ...billingForm, addressLine2: e.target.value })}
+                                            value={
+                                                billingForm.addressLine2 || ""
+                                            }
+                                            onChange={(e) =>
+                                                setBillingForm({
+                                                    ...billingForm,
+                                                    addressLine2:
+                                                        e.target.value,
+                                                })
+                                            }
                                             className="w-full border p-2 rounded mt-1"
                                         />
                                     </div>
@@ -1450,9 +1771,15 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             Address Line 3 (optional)
                                         </label>
                                         <input
-                                            value={billingForm.addressLine3 || ""}
+                                            value={
+                                                billingForm.addressLine3 || ""
+                                            }
                                             onChange={(e) =>
-                                                setBillingForm({ ...billingForm, addressLine3: e.target.value })
+                                                setBillingForm({
+                                                    ...billingForm,
+                                                    addressLine3:
+                                                        e.target.value,
+                                                })
                                             }
                                             className="w-full border p-2 rounded mt-1"
                                         />
@@ -1464,31 +1791,53 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                         </label>
                                         <input
                                             value={billingForm.landmark || ""}
-                                            onChange={(e) => setBillingForm({ ...billingForm, landmark: e.target.value })}
+                                            onChange={(e) =>
+                                                setBillingForm({
+                                                    ...billingForm,
+                                                    landmark: e.target.value,
+                                                })
+                                            }
                                             className="w-full border p-2 rounded mt-1"
                                         />
                                     </div>
 
                                     <div>
                                         <label className="text-sm font-medium">
-                                            Pincode <span className="text-red-500">*</span>
+                                            Pincode{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <div data-error="billing_pincode">
                                             <input
                                                 value={billingForm.pincode}
                                                 onChange={(e) => {
-                                                    handleBillingPincodeChange(e.target.value.replace(/\D/g, "").slice(0, 6));
-                                                    setErrors(prev => ({ ...prev, billing_pincode: "" }));
+                                                    handleBillingPincodeChange(
+                                                        e.target.value
+                                                            .replace(/\D/g, "")
+                                                            .slice(0, 6),
+                                                    );
+                                                    setErrors((prev) => ({
+                                                        ...prev,
+                                                        billing_pincode: "",
+                                                    }));
                                                 }}
                                                 className={`w-full border p-2 rounded mt-1 ${errors.billing_pincode ? "border-red-500" : ""}`}
                                             />
-                                            {errors.billing_pincode && <p className="text-xs text-red-500 mt-1">{errors.billing_pincode}</p>}
+                                            {errors.billing_pincode && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    {errors.billing_pincode}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div>
                                         <label className="text-sm font-medium">
-                                            City <span className="text-red-500">*</span>
+                                            City{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <input
                                             value={billingForm.city || ""}
@@ -1500,7 +1849,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     {/* District */}
                                     <div>
                                         <label className="text-sm font-medium">
-                                            District <span className="text-red-500">*</span>
+                                            District{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <input
                                             value={billingForm.district || ""}
@@ -1511,7 +1863,10 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                     <div>
                                         <label className="text-sm font-medium">
-                                            State <span className="text-red-500">*</span>
+                                            State{" "}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </label>
                                         <input
                                             value={billingForm.state || ""}
@@ -1519,7 +1874,6 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                             className="w-full border p-2 rounded mt-1 bg-gray-100"
                                         />
                                     </div>
-
                                 </div>
                             )}
                         </div>
@@ -1528,13 +1882,33 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                     </section>
 
                     {/* Right panel / summary */}
-                    <aside className="bg-linear-to-b from-white to-[#f7fbfb] rounded-2xl shadow-lg p-5 md:p-6 xl:sticky xl:top-6">
+                    <aside className="site-card p-4 sm:p-6 xl:sticky xl:top-28">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Order summary</h2>
-                            <span className="text-sm text-slate-500">{cart.length} item{cart.length !== 1 ? "s" : ""}</span>
+                            <h2 className="text-lg font-semibold">
+                                Order summary
+                            </h2>
+                            <span className="text-sm text-slate-500">
+                                {cart.length} item{cart.length !== 1 ? "s" : ""}
+                            </span>
                         </div>
 
-                        <p className="text-sm text-slate-500 mt-1">Secure payment — we never store your card details</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Secure payment — we never store your card details
+                        </p>
+
+                        <div className="mt-5 rounded-2xl border border-[#bde5ea] bg-[#f1fafb] p-4">
+                            <div className="flex items-start gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#d4f1f3] text-[#065975]">
+                                    <TicketPercent aria-hidden="true" className="h-5 w-5" />
+                                </span>
+                                <div>
+                                    <h3 className="font-bold text-[#065975]">Offers & discount codes</h3>
+                                    <p className="mt-1 text-xs leading-5 text-slate-600">Have a coupon? Sign in to verify and apply offers before placing your order.</p>
+                                    <Link href="/login?redirect=/checkout" className="mt-2 inline-flex rounded-lg bg-[#065975] px-3 py-2 text-xs font-bold text-white hover:bg-[#0b7795]">Sign in to use a code →</Link>
+                                    <p className="mt-2 text-xs text-slate-500">Or continue with guest checkout at the regular price.</p>
+                                </div>
+                            </div>
+                        </div>
 
                         <div className="mt-4 space-y-3 text-sm">
                             <div className="flex justify-between">
@@ -1549,19 +1923,31 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                                     <div className="text-xs text-amber-600 font-medium">
                                         Add address to calculate delivery
                                     </div>
-                                ) : selectedPincode && deliveryMap[selectedPincode]?.checking ? (
-                                    <div className="text-xs text-gray-400">Calculating...</div>
-                                ) : selectedPincode && deliveryMap[selectedPincode]?.error ? (
-                                    <div className="text-xs text-red-500">Delivery unavailable</div>
+                                ) : selectedPincode &&
+                                  deliveryMap[selectedPincode]?.checking ? (
+                                    <div className="text-xs text-gray-400">
+                                        Calculating...
+                                    </div>
+                                ) : selectedPincode &&
+                                  deliveryMap[selectedPincode]?.error ? (
+                                    <div className="text-xs text-red-500">
+                                        Delivery unavailable
+                                    </div>
                                 ) : currentDeliveryCharge === null ? (
-                                    <div className="text-xs text-gray-400">—</div>
+                                    <div className="text-xs text-gray-400">
+                                        —
+                                    </div>
                                 ) : (
-                                    <div>{formatINR(currentDeliveryCharge)}</div>
+                                    <div>
+                                        {formatINR(currentDeliveryCharge)}
+                                    </div>
                                 )}
                             </div>
 
                             <div className="border-t pt-3 mt-3 flex justify-between items-center">
-                                <div className="text-lg font-extrabold">Total</div>
+                                <div className="text-lg font-extrabold">
+                                    Total
+                                </div>
                                 {!hasAddress ? (
                                     <div className="text-xs text-amber-600">
                                         Add address to see final total
@@ -1576,10 +1962,20 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                             </div>
                         </div>
 
+                        {cart.some((it) => it.available === false) && (
+                            <p
+                                role="alert"
+                                className="text-sm text-rose-600 mt-3"
+                            >
+                                A gift hamper is unavailable. Return to your
+                                cart to update it.
+                            </p>
+                        )}
                         {/* Delivery preview */}
                         {form.city && form.state && form.pincode && (
                             <p className="text-xs text-slate-500 mb-2">
-                                Delivering to {form.city}, {form.state} — {form.pincode}
+                                Delivering to {form.city}, {form.state} —{" "}
+                                {form.pincode}
                             </p>
                         )}
 
@@ -1587,21 +1983,49 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <div className="mt-2 flex gap-3">
                             <button
                                 onClick={placeOrder}
-                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating || !hasAddress ? "opacity-60 cursor-not-allowed bg-gray-200 text-gray-500" : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white hover:brightness-95"}`}
-                                disabled={creating || paymentInProgress}
-                                aria-disabled={creating || paymentInProgress}
+                                className={`flex-1 py-3 rounded-xl font-semibold shadow transition-transform duration-150 active:scale-[0.98] ${creating || !hasAddress ? "opacity-60 cursor-not-allowed bg-gray-200 text-gray-500" : "bg-linear-to-r from-[#065975] via-[#117b94] to-[#19839a] text-white hover:brightness-95"}`}
+                                disabled={
+                                    creating ||
+                                    paymentInProgress ||
+                                    !cart.length ||
+                                    cart.some((it) => it.available === false)
+                                }
+                                aria-disabled={
+                                    creating ||
+                                    paymentInProgress ||
+                                    !cart.length ||
+                                    cart.some((it) => it.available === false)
+                                }
                             >
-                                {creating ? "Placing order…" : `Place order • ${formatINR(backendTotal ?? total)}`}
+                                {creating
+                                    ? "Placing order…"
+                                    : `Place order • ${formatINR(backendTotal ?? total)}`}
                             </button>
                         </div>
 
                         <p className="text-xs text-slate-400 mt-3">
-                            By placing order you agree to our <span className="text-[#065975]">Terms &amp; Conditions</span>.
+                            By placing your order you agree to our{" "}
+                            <Link
+                                href="/terms"
+                                className="site-text-link underline"
+                            >
+                                Terms &amp; Conditions
+                            </Link>{" "}
+                            and acknowledge our{" "}
+                            <Link
+                                href="/privacy"
+                                className="site-text-link underline"
+                            >
+                                Privacy Policy
+                            </Link>
+                            .
                         </p>
 
                         {/* --- Your cart section --- */}
                         <div className="mt-6">
-                            <h3 className="text-md font-medium mb-3">Your cart</h3>
+                            <h3 className="text-md font-medium mb-3">
+                                Your cart
+                            </h3>
 
                             {/* grid with 2 items per row */}
                             <div className="flex flex-col gap-4">
@@ -1634,11 +2058,16 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                             <div className="flex items-center justify-between mt-3">
                                                 <div className="text-sm text-slate-600">
-                                                    Qty <span className="font-semibold">{it.qty}</span>
+                                                    Qty{" "}
+                                                    <span className="font-semibold">
+                                                        {it.qty}
+                                                    </span>
                                                 </div>
 
                                                 <div className="text-base font-bold text-[#065975]">
-                                                    {formatINR(it.price * it.qty)}
+                                                    {formatINR(
+                                                        it.price * it.qty,
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -1647,9 +2076,13 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                                 {cart.length === 0 && (
                                     <div className="col-span-full text-center py-8 border rounded-xl">
-                                        <p className="text-slate-500 mb-3">Your cart is empty</p>
+                                        <p className="text-slate-500 mb-3">
+                                            Your cart is empty
+                                        </p>
                                         <button
-                                            onClick={() => router.push("/products")}
+                                            onClick={() =>
+                                                router.push("/products")
+                                            }
                                             className="px-4 py-2 bg-[#065975] text-white rounded-lg text-sm hover:brightness-95 transition"
                                         >
                                             Continue shopping
@@ -1663,7 +2096,7 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
 
                 {/* MOBILE FIXED BOTTOM BAR */}
                 <div className="fixed left-0 right-0 bottom-0 z-50 md:hidden bg-white/95 backdrop-blur border-t px-4 py-3 shadow-2xl">
-                    <div className="max-w-6xl mx-auto flex items-center gap-3">
+                    <div className="w-full max-w-[1520px] mx-auto flex items-center gap-3">
                         <div className="flex-1">
                             <div className="text-sm text-slate-500">Total</div>
                             <div className="text-lg font-extrabold">
@@ -1675,13 +2108,21 @@ export default function CheckoutPanel({ initialAddresses, initialCart }: Props) 
                         <button
                             onClick={placeOrder}
                             className={`ml-2 inline-flex items-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-[0.98]
-                                ${creating || paymentInProgress
-                                    ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
-                                    : "bg-linear-to-r from-[#065975] via-[#0c7c89] to-[#0ea5a0] text-white shadow-lg hover:brightness-95"
+                                ${
+                                    creating || paymentInProgress
+                                        ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                                        : "bg-linear-to-r from-[#065975] via-[#117b94] to-[#19839a] text-white shadow-lg hover:brightness-95"
                                 }`}
-                            disabled={creating || paymentInProgress}
+                            disabled={
+                                creating ||
+                                paymentInProgress ||
+                                !cart.length ||
+                                cart.some((it) => it.available === false)
+                            }
                         >
-                            {creating ? "Placing…" : `Place order • ${formatINR(backendTotal ?? total)}`}
+                            {creating
+                                ? "Placing…"
+                                : `Place order • ${formatINR(backendTotal ?? total)}`}
                         </button>
                     </div>
                 </div>

@@ -13,11 +13,10 @@ export default function ComingSoonSimple(): React.ReactElement {
                 className="w-full max-w-6xl bg-white/90 backdrop-blur-md shadow-xl border border-slate-200 rounded-3xl overflow-hidden"
             >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10 p-8 md:p-14 w-full">
-
                     {/* LEFT SIDE - Brand + Message */}
                     <section className="flex flex-col justify-center space-y-6">
                         <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center text-2xl font-bold shadow-md">
+                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#065975] to-[#568764] text-white grid place-items-center text-2xl font-bold shadow-md">
                                 W
                             </div>
                             <div>
@@ -35,13 +34,17 @@ export default function ComingSoonSimple(): React.ReactElement {
                         </h2>
 
                         <p className="text-slate-600 text-base leading-relaxed">
-                            We’re still working on this section. Thank you for your patience!
-                            Feel free to browse the main collection or explore our updates meanwhile.
+                            We’re still working on this section. Thank you for
+                            your patience! Feel free to browse the main
+                            collection or explore our updates meanwhile.
                         </p>
 
                         <ul className="text-slate-700 space-y-1 text-sm">
-                            <li>• Follow our Instagram for updates & new outfits</li>
-                            <li>• Browse the main clothing collection</li>
+                            <li>
+                                • Follow our Instagram for updates & new
+                                handmade gifts
+                            </li>
+                            <li>• Browse the handmade crochet collection</li>
                             <li>• Contact us for custom requests</li>
                         </ul>
                     </section>
@@ -58,8 +61,8 @@ export default function ComingSoonSimple(): React.ReactElement {
                                 Coming Soon
                             </h3>
                             <p className="text-slate-600 max-w-sm mx-auto">
-                                We're putting final touches on this page to make it perfect.
-                                It will be available shortly.
+                                We're putting final touches on this page to make
+                                it perfect. It will be available shortly.
                             </p>
                         </motion.div>
                     </section>

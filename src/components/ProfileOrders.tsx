@@ -31,6 +31,15 @@ type ApiOrder = {
     orderId?: string;
     orderStatus?: ApiOrderStatus;
     orderProductsDetails: ApiOrderProduct[];
+    orderHampersDetails?: {
+        hamperId: string;
+        hamperNameSnapshot: string;
+        hamperImage?: string | null;
+        quantity: number;
+        sellPrice: number;
+        totalPrice: number;
+        itemNotes?: string;
+    }[];
     coupon?: {
         code?: string;
         type?: "PERCENTAGE" | "FLAT" | "FREE_SHIPPING";
@@ -50,13 +59,21 @@ function currency(n: number) {
 function monthKey(iso?: string) {
     if (!iso) return "Unknown";
     const d = new Date(iso);
-    return d.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+    return d.toLocaleString("en-IN", {
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Kolkata",
+    });
 }
 
 function formatShortDate(iso?: string) {
     if (!iso) return "-";
     const d = new Date(iso);
-    return d.toLocaleString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+    return d.toLocaleString("en-IN", {
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Kolkata",
+    });
 }
 
 function formatStatus(status?: string) {
@@ -131,14 +148,22 @@ export default function OrdersCompact({
                     throw new Error(json.message ?? "API ack != success");
                 }
 
-                const raw = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+                const raw = Array.isArray(json.data)
+                    ? json.data
+                    : Array.isArray(json)
+                      ? json
+                      : [];
                 setOrders(raw as ApiOrder[]);
 
-                const total = typeof json.totalRecords === "number" ? json.totalRecords : 0;
+                const total =
+                    typeof json.totalRecords === "number"
+                        ? json.totalRecords
+                        : 0;
                 setServerTotalRecords(total);
 
                 // If backend normalized the page/limit, respect it
-                if (typeof json.page === "number" && json.page !== page) setPage(json.page);
+                if (typeof json.page === "number" && json.page !== page)
+                    setPage(json.page);
                 if (typeof json.limit === "number" && json.limit !== perPage) {
                     // keep perPage in sync only if you want the server to control limit
                     // setPerPage(json.limit);
@@ -156,7 +181,17 @@ export default function OrdersCompact({
         return () => {
             mounted = false;
         };
-    }, [apiBase, page, perPage, query, dateFrom, dateTo, minItems, minTotal, refreshToggle]);
+    }, [
+        apiBase,
+        page,
+        perPage,
+        query,
+        dateFrom,
+        dateTo,
+        minItems,
+        minTotal,
+        refreshToggle,
+    ]);
 
     // Derived pagination info
     const total = serverTotalRecords;
@@ -197,8 +232,12 @@ export default function OrdersCompact({
         <section className="bg-white rounded-2xl p-6 shadow-md border border-slate-100">
             <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Orders</h2>
-                    <p className="text-sm text-slate-500">Recent purchases and quick actions</p>
+                    <h2 className="text-2xl font-bold text-slate-900">
+                        Orders
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                        Recent purchases and quick actions
+                    </p>
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
@@ -232,34 +271,66 @@ export default function OrdersCompact({
                     <div className="bg-white border rounded-lg p-4 shadow-sm">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             <div>
-                                <label className="block text-xs text-slate-600">Date from</label>
-                                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="mt-1 w-full text-sm px-2 py-1 border rounded-md" />
+                                <label className="block text-xs text-slate-600">
+                                    Date from
+                                </label>
+                                <input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={(e) =>
+                                        setDateFrom(e.target.value)
+                                    }
+                                    className="mt-1 w-full text-sm px-2 py-1 border rounded-md"
+                                />
                             </div>
 
                             <div>
-                                <label className="block text-xs text-slate-600">Date to</label>
-                                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="mt-1 w-full text-sm px-2 py-1 border rounded-md" />
+                                <label className="block text-xs text-slate-600">
+                                    Date to
+                                </label>
+                                <input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(e) => setDateTo(e.target.value)}
+                                    className="mt-1 w-full text-sm px-2 py-1 border rounded-md"
+                                />
                             </div>
 
                             <div>
-                                <label className="block text-xs text-slate-600">Min items</label>
+                                <label className="block text-xs text-slate-600">
+                                    Min items
+                                </label>
                                 <input
                                     type="number"
                                     min={0}
                                     value={minItems as any}
-                                    onChange={(e) => setMinItems(e.target.value === "" ? "" : Number(e.target.value))}
+                                    onChange={(e) =>
+                                        setMinItems(
+                                            e.target.value === ""
+                                                ? ""
+                                                : Number(e.target.value),
+                                        )
+                                    }
                                     className="mt-1 w-full text-sm px-2 py-1 border rounded-md"
                                     placeholder="e.g. 2"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs text-slate-600">Min total (₹)</label>
+                                <label className="block text-xs text-slate-600">
+                                    Min total (₹)
+                                </label>
                                 <input
                                     type="number"
                                     min={0}
                                     value={minTotal as any}
-                                    onChange={(e) => setMinTotal(e.target.value === "" ? "" : Number(e.target.value))}
+                                    onChange={(e) =>
+                                        setMinTotal(
+                                            e.target.value === ""
+                                                ? ""
+                                                : Number(e.target.value),
+                                        )
+                                    }
                                     className="mt-1 w-full text-sm px-2 py-1 border rounded-md"
                                     placeholder="e.g. 200"
                                 />
@@ -267,11 +338,20 @@ export default function OrdersCompact({
                         </div>
 
                         <div className="mt-3 flex items-center gap-3">
-                            <button onClick={() => setFiltersOpen(false)} className="px-3 py-1 rounded-md bg-[#065975] text-white text-sm">
+                            <button
+                                onClick={() => setFiltersOpen(false)}
+                                className="px-3 py-1 rounded-md bg-[#065975] text-white text-sm"
+                            >
                                 Apply
                             </button>
 
-                            <button onClick={() => { clearFilters(); setFiltersOpen(false); }} className="px-3 py-1 rounded-md border text-sm">
+                            <button
+                                onClick={() => {
+                                    clearFilters();
+                                    setFiltersOpen(false);
+                                }}
+                                className="px-3 py-1 rounded-md border text-sm"
+                            >
                                 Clear
                             </button>
 
@@ -287,11 +367,15 @@ export default function OrdersCompact({
                 {/* Top pagination/status row */}
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                     <div className="text-sm text-slate-600">
-                        Showing <span className="font-medium">{pageItems.length}</span> of <span className="font-medium">{total}</span> orders
+                        Showing{" "}
+                        <span className="font-medium">{pageItems.length}</span>{" "}
+                        of <span className="font-medium">{total}</span> orders
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <label className="text-xs text-slate-500 hidden sm:inline">Per page</label>
+                        <label className="text-xs text-slate-500 hidden sm:inline">
+                            Per page
+                        </label>
                         <select
                             value={perPage}
                             onChange={(e) => {
@@ -312,7 +396,10 @@ export default function OrdersCompact({
                 {loading && (
                     <div className="grid gap-4">
                         {Array.from({ length: perPage }).map((_, i) => (
-                            <div key={i} className="animate-pulse flex items-center justify-between gap-4 bg-slate-50 p-4 rounded-lg">
+                            <div
+                                key={i}
+                                className="animate-pulse flex items-center justify-between gap-4 bg-slate-50 p-4 rounded-lg"
+                            >
                                 <div className="flex-1 space-y-2">
                                     <div className="h-4 w-1/3 bg-slate-200 rounded" />
                                     <div className="h-3 w-1/2 bg-slate-200 rounded mt-2" />
@@ -323,16 +410,25 @@ export default function OrdersCompact({
                     </div>
                 )}
 
-                {!loading && error && <div className="text-sm text-rose-600">Error: {error}</div>}
+                {!loading && error && (
+                    <div className="text-sm text-rose-600">Error: {error}</div>
+                )}
 
                 {!loading && !error && pageItems.length === 0 && (
                     <div className="p-6 border rounded-lg bg-linear-to-br from-slate-50 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
-                            <div className="text-lg font-semibold">No orders found</div>
-                            <div className="text-sm text-slate-500 mt-1">Try adjusting filters or search.</div>
+                            <div className="text-lg font-semibold">
+                                No orders found
+                            </div>
+                            <div className="text-sm text-slate-500 mt-1">
+                                Try adjusting filters or search.
+                            </div>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => setRefreshToggle((s) => s + 1)} className="px-4 py-2 rounded-full bg-[#065975] text-white">
+                            <button
+                                onClick={() => setRefreshToggle((s) => s + 1)}
+                                className="px-4 py-2 rounded-full bg-[#065975] text-white"
+                            >
                                 Refresh
                             </button>
                         </div>
@@ -343,51 +439,124 @@ export default function OrdersCompact({
                     !error &&
                     grouped.map((grp) => (
                         <div key={grp.month}>
-                            <h3 className="text-sm font-semibold text-slate-600 mb-3">{grp.month}</h3>
+                            <h3 className="text-sm font-semibold text-slate-600 mb-3">
+                                {grp.month}
+                            </h3>
                             <div className="space-y-3">
                                 {grp.orders
-                                    .sort((a, b) => Number(new Date(b.purchaseDate)) - Number(new Date(a.purchaseDate)))
+                                    .sort(
+                                        (a, b) =>
+                                            Number(new Date(b.purchaseDate)) -
+                                            Number(new Date(a.purchaseDate)),
+                                    )
                                     .map((o) => {
                                         const id = o.orderId ?? o._id;
-                                        const aggregated = aggregateProducts(o.orderProductsDetails || []);
-                                        const collapsedPreview = aggregated.slice(0, 4); // show up to 4 items
-                                        const extra = Math.max(0, aggregated.length - collapsedPreview.length);
+                                        // Hampers are top-level priced lines; their components are not additional order items.
+                                        const hamperProducts: ApiOrderProduct[] =
+                                            (o.orderHampersDetails || []).map(
+                                                (h) => ({
+                                                    productId: h.hamperId,
+                                                    productNameSnapshot: `🎁 ${h.hamperNameSnapshot}`,
+                                                    quantity: h.quantity,
+                                                    sellPrice: h.sellPrice,
+                                                    productImage: h.hamperImage,
+                                                }),
+                                            );
+                                        const aggregated = aggregateProducts([
+                                            ...(o.orderProductsDetails || []),
+                                            ...hamperProducts,
+                                        ]);
+                                        const collapsedPreview =
+                                            aggregated.slice(0, 4); // show up to 4 items
+                                        const extra = Math.max(
+                                            0,
+                                            aggregated.length -
+                                                collapsedPreview.length,
+                                        );
                                         const isExpanded = !!expanded[id];
 
-                                        const apiItemsTotal = Number(o.orderTotal ?? 0);
-                                        const computedItemsTotal = (o.orderProductsDetails || []).reduce(
-                                            (s, p) => s + (Number(p.sellPrice ?? 0) * Number(p.quantity ?? 0)),
-                                            0
+                                        const apiItemsTotal = Number(
+                                            o.orderTotal ?? 0,
                                         );
-                                        const itemsTotal = o.orderTotal != null
-                                            ? Number(o.orderTotal)
-                                            : computedItemsTotal;
-                                        const delivery = Number(o.quotedDeliveryCharge ?? 0);
-                                        const grandTotal = o.finalPayableAmount != null
-                                            ? Number(o.finalPayableAmount)
-                                            : itemsTotal + delivery;
+                                        const computedItemsTotal = [
+                                            ...(o.orderProductsDetails || []),
+                                            ...hamperProducts,
+                                        ].reduce(
+                                            (s, p) =>
+                                                s +
+                                                Number(p.sellPrice ?? 0) *
+                                                    Number(p.quantity ?? 0),
+                                            0,
+                                        );
+                                        const itemsTotal =
+                                            o.orderTotal != null
+                                                ? Number(o.orderTotal)
+                                                : computedItemsTotal;
+                                        const delivery = Number(
+                                            o.quotedDeliveryCharge ?? 0,
+                                        );
+                                        const grandTotal =
+                                            o.finalPayableAmount != null
+                                                ? Number(o.finalPayableAmount)
+                                                : itemsTotal + delivery;
 
-                                        const totalItemsCount = (o.orderProductsDetails || []).reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
-                                        const aggTotalCount = aggregated.reduce((s, p) => s + (Number(p.quantity ?? 0) || 0), 0);
-                                        const totalCount = Math.max(totalItemsCount, aggTotalCount);
+                                        const totalItemsCount = [
+                                            ...(o.orderProductsDetails || []),
+                                            ...hamperProducts,
+                                        ].reduce(
+                                            (s, p) =>
+                                                s +
+                                                (Number(p.quantity ?? 0) || 0),
+                                            0,
+                                        );
+                                        const aggTotalCount = aggregated.reduce(
+                                            (s, p) =>
+                                                s +
+                                                (Number(p.quantity ?? 0) || 0),
+                                            0,
+                                        );
+                                        const totalCount = Math.max(
+                                            totalItemsCount,
+                                            aggTotalCount,
+                                        );
 
-                                        const couponDiscount = Number(o.coupon?.discountAmount ?? o.couponAmount ?? 0);
+                                        const couponDiscount = Number(
+                                            o.coupon?.discountAmount ??
+                                                o.couponAmount ??
+                                                0,
+                                        );
 
-                                        const deliverySaved = o.coupon?.isFreeShipping
-                                            ? Number(o.quotedDeliveryCharge ?? 0)
+                                        const deliverySaved = o.coupon
+                                            ?.isFreeShipping
+                                            ? Number(
+                                                  o.quotedDeliveryCharge ?? 0,
+                                              )
                                             : 0;
 
-                                        const totalSavings = couponDiscount + deliverySaved;
+                                        const totalSavings =
+                                            couponDiscount + deliverySaved;
 
                                         return (
                                             <article
                                                 key={id}
                                                 className="group bg-white border rounded-lg p-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start hover:shadow-lg transition cursor-pointer"
-                                                onClick={() => setExpanded((s) => ({ ...s, [id]: !s[id] }))}
+                                                onClick={() =>
+                                                    setExpanded((s) => ({
+                                                        ...s,
+                                                        [id]: !s[id],
+                                                    }))
+                                                }
                                                 role="button"
                                                 tabIndex={0}
                                                 onKeyDown={(e) => {
-                                                    if (e.key === "Enter" || e.key === " ") setExpanded((s) => ({ ...s, [id]: !s[id] }));
+                                                    if (
+                                                        e.key === "Enter" ||
+                                                        e.key === " "
+                                                    )
+                                                        setExpanded((s) => ({
+                                                            ...s,
+                                                            [id]: !s[id],
+                                                        }));
                                                 }}
                                             >
                                                 <div className="min-w-0">
@@ -396,112 +565,207 @@ export default function OrdersCompact({
                                                             <div className="text-sm font-semibold">
                                                                 <Link
                                                                     href={`/profile/order/${encodeURIComponent(String(id))}`}
-                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) =>
+                                                                        e.stopPropagation()
+                                                                    }
                                                                     className="hover:underline"
                                                                 >
-                                                                    Order #{o.orderNumber}
+                                                                    Order #
+                                                                    {
+                                                                        o.orderNumber
+                                                                    }
                                                                 </Link>
                                                             </div>
 
                                                             {/* ORDER STATUS */}
                                                             <div className="flex items-center gap-2 mt-0.5">
                                                                 <span className="px-2 py-0.5 text-[11px] rounded-full bg-green-100 text-green-700 font-medium">
-                                                                    {formatStatus(o.orderStatus?.status)}
+                                                                    {formatStatus(
+                                                                        o
+                                                                            .orderStatus
+                                                                            ?.status,
+                                                                    )}
                                                                 </span>
 
-                                                                {o.orderStatus?.date && (
+                                                                {o.orderStatus
+                                                                    ?.date && (
                                                                     <span className="text-xs text-slate-500">
-                                                                        {formatShortDate(o.orderStatus.date)}
+                                                                        {formatShortDate(
+                                                                            o
+                                                                                .orderStatus
+                                                                                .date,
+                                                                        )}
                                                                     </span>
                                                                 )}
                                                             </div>
                                                         </div>
 
                                                         <div className="text-xs text-slate-500">
-                                                            {formatShortDate(o.purchaseDate)}
+                                                            {formatShortDate(
+                                                                o.purchaseDate,
+                                                            )}
                                                         </div>
                                                     </div>
 
-                                                    {
-                                                        !isExpanded && (
-                                                            <div className="mt-3 space-y-2">
-                                                                {collapsedPreview.map((p, i) => {
-                                                                    const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
+                                                    {!isExpanded && (
+                                                        <div className="mt-3 space-y-2">
+                                                            {collapsedPreview.map(
+                                                                (p, i) => {
+                                                                    const isHamper =
+                                                                        p.productNameSnapshot.startsWith(
+                                                                            "🎁 ",
+                                                                        );
+                                                                    const href =
+                                                                        isHamper
+                                                                            ? `/hampers/${encodeURIComponent(String(p.productId))}`
+                                                                            : p.productId
+                                                                              ? `/products/${encodeURIComponent(String(p.productId))}`
+                                                                              : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
                                                                     return (
                                                                         <Link
-                                                                            href={href}
+                                                                            href={
+                                                                                href
+                                                                            }
                                                                             key={`${p.productId ?? p.productNameSnapshot}-${i}`}
-                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onClick={(
+                                                                                e,
+                                                                            ) =>
+                                                                                e.stopPropagation()
+                                                                            }
                                                                             className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
                                                                         >
                                                                             <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
                                                                                 {p.productImage ? (
                                                                                     <Image
-                                                                                        src={p.productImage}
+                                                                                        src={
+                                                                                            p.productImage
+                                                                                        }
                                                                                         alt={
-                                                                                            typeof p.productNameSnapshot === "string" && p.productNameSnapshot.trim()
+                                                                                            typeof p.productNameSnapshot ===
+                                                                                                "string" &&
+                                                                                            p.productNameSnapshot.trim()
                                                                                                 ? `${p.productNameSnapshot} product image`
                                                                                                 : "Product image"
                                                                                         }
                                                                                         fill
                                                                                         sizes="48px"
-                                                                                        style={{ objectFit: "cover" }}
+                                                                                        style={{
+                                                                                            objectFit:
+                                                                                                "cover",
+                                                                                        }}
                                                                                     />
                                                                                 ) : (
-                                                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
+                                                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-500">
+                                                                                        No
+                                                                                        image
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
                                                                             <div className="min-w-0">
-                                                                                <div className="text-sm font-medium wrap-break-word leading-tight">{p.productNameSnapshot}</div>
-                                                                                <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
+                                                                                <div className="text-sm font-medium wrap-break-word leading-tight">
+                                                                                    {
+                                                                                        p.productNameSnapshot
+                                                                                    }
+                                                                                </div>
+                                                                                <div className="text-xs text-slate-500">
+                                                                                    Qty{" "}
+                                                                                    {
+                                                                                        p.quantity
+                                                                                    }{" "}
+                                                                                    •{" "}
+                                                                                    {currency(
+                                                                                        p.sellPrice *
+                                                                                            p.quantity,
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
                                                                         </Link>
                                                                     );
-                                                                })}
-                                                                {extra > 0 && <div className="flex items-center justify-center text-sm text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border">+{extra} more</div>}
-                                                            </div>
-                                                        )
-                                                    }
+                                                                },
+                                                            )}
+                                                            {extra > 0 && (
+                                                                <div className="flex items-center justify-center text-sm text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border">
+                                                                    +{extra}{" "}
+                                                                    more
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
 
-                                                    {
-                                                        isExpanded && (
-                                                            <div className="mt-3 text-sm text-slate-700 space-y-2">
-                                                                {aggregated.map((p, i) => {
-                                                                    const href = p.productId ? `/products/${encodeURIComponent(String(p.productId))}` : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
+                                                    {isExpanded && (
+                                                        <div className="mt-3 text-sm text-slate-700 space-y-2">
+                                                            {aggregated.map(
+                                                                (p, i) => {
+                                                                    const href =
+                                                                        p.productId
+                                                                            ? `/products/${encodeURIComponent(String(p.productId))}`
+                                                                            : `/products/search?q=${encodeURIComponent(p.productNameSnapshot)}`;
                                                                     return (
                                                                         <Link
-                                                                            href={href}
+                                                                            href={
+                                                                                href
+                                                                            }
                                                                             key={`${p.productId ?? p.productNameSnapshot}-expanded-${i}`}
-                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onClick={(
+                                                                                e,
+                                                                            ) =>
+                                                                                e.stopPropagation()
+                                                                            }
                                                                             className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-lg border hover:bg-slate-100 transition"
                                                                         >
                                                                             <div className="w-12 h-12 rounded overflow-hidden relative bg-white border shrink-0">
                                                                                 {p.productImage ? (
                                                                                     <Image
-                                                                                        src={p.productImage}
+                                                                                        src={
+                                                                                            p.productImage
+                                                                                        }
                                                                                         alt={
-                                                                                            typeof p.productNameSnapshot === "string" && p.productNameSnapshot.trim()
+                                                                                            typeof p.productNameSnapshot ===
+                                                                                                "string" &&
+                                                                                            p.productNameSnapshot.trim()
                                                                                                 ? `${p.productNameSnapshot} product image`
                                                                                                 : "Product image"
                                                                                         }
                                                                                         fill
                                                                                         sizes="48px"
-                                                                                        style={{ objectFit: "cover" }}
+                                                                                        style={{
+                                                                                            objectFit:
+                                                                                                "cover",
+                                                                                        }}
                                                                                     />
                                                                                 ) : (
-                                                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-500">No image</div>
+                                                                                    <div className="w-full h-full grid place-items-center text-xs text-slate-500">
+                                                                                        No
+                                                                                        image
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
                                                                             <div className="min-w-0">
-                                                                                <div className="text-sm font-medium wrap-break-word leading-tight">{p.productNameSnapshot}</div>
-                                                                                <div className="text-xs text-slate-500">Qty {p.quantity} • {currency(p.sellPrice * p.quantity)}</div>
+                                                                                <div className="text-sm font-medium wrap-break-word leading-tight">
+                                                                                    {
+                                                                                        p.productNameSnapshot
+                                                                                    }
+                                                                                </div>
+                                                                                <div className="text-xs text-slate-500">
+                                                                                    Qty{" "}
+                                                                                    {
+                                                                                        p.quantity
+                                                                                    }{" "}
+                                                                                    •{" "}
+                                                                                    {currency(
+                                                                                        p.sellPrice *
+                                                                                            p.quantity,
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
                                                                         </Link>
                                                                     );
-                                                                })}
-                                                            </div>
-                                                        )
-                                                    }
+                                                                },
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <aside className="flex flex-col items-end gap-3 md:gap-4">
@@ -509,44 +773,66 @@ export default function OrdersCompact({
                                                         {/* ITEMS */}
                                                         <div className="flex justify-between items-center text-sm">
                                                             <span className="text-slate-600">
-                                                                Items <span className="text-xs text-slate-400">({totalCount})</span>
+                                                                Items{" "}
+                                                                <span className="text-xs text-slate-400">
+                                                                    (
+                                                                    {totalCount}
+                                                                    )
+                                                                </span>
                                                             </span>
                                                             <span className="font-medium text-slate-800">
-                                                                {currency(itemsTotal)}
+                                                                {currency(
+                                                                    itemsTotal,
+                                                                )}
                                                             </span>
                                                         </div>
 
                                                         {/* COUPON ROW */}
                                                         <div className="mt-3 flex items-center justify-between min-h-[24px] w-full">
-
-                                                            {couponDiscount > 0 ? (
+                                                            {couponDiscount >
+                                                            0 ? (
                                                                 <>
                                                                     <div className="flex items-center gap-2 min-w-0">
-
-                                                                        {o.coupon?.code && (
+                                                                        {o
+                                                                            .coupon
+                                                                            ?.code && (
                                                                             <span className="px-2 py-[3px] text-[10px] font-semibold rounded-md bg-[#065975] text-white tracking-wide shrink-0">
-                                                                                {o.coupon.code}
+                                                                                {
+                                                                                    o
+                                                                                        .coupon
+                                                                                        .code
+                                                                                }
                                                                             </span>
                                                                         )}
 
                                                                         <span className="text-[11px] text-green-700 font-medium truncate">
-                                                                            {o.coupon?.type === "PERCENTAGE"
+                                                                            {o
+                                                                                .coupon
+                                                                                ?.type ===
+                                                                            "PERCENTAGE"
                                                                                 ? `${o.coupon.value ?? 0}% OFF`
-                                                                                : o.coupon?.type === "FLAT"
-                                                                                    ? `Flat ${currency(o.coupon.value ?? 0)} OFF`
-                                                                                    : "Discount"}
+                                                                                : o
+                                                                                        .coupon
+                                                                                        ?.type ===
+                                                                                    "FLAT"
+                                                                                  ? `Flat ${currency(o.coupon.value ?? 0)} OFF`
+                                                                                  : "Discount"}
                                                                         </span>
                                                                     </div>
 
                                                                     <span className="text-sm font-semibold text-green-700 shrink-0">
-                                                                        -{currency(couponDiscount)}
+                                                                        -
+                                                                        {currency(
+                                                                            couponDiscount,
+                                                                        )}
                                                                     </span>
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     <div className="flex items-center gap-2 min-w-0">
                                                                         <span className="text-[11px] px-2 py-[3px] rounded-md bg-slate-100 text-slate-500 font-medium">
-                                                                            No offers
+                                                                            No
+                                                                            offers
                                                                         </span>
                                                                     </div>
 
@@ -558,54 +844,65 @@ export default function OrdersCompact({
                                                         </div>
 
                                                         {/* FREE SHIPPING */}
-                                                        {o.coupon?.isFreeShipping && (
+                                                        {o.coupon
+                                                            ?.isFreeShipping && (
                                                             <div className="mt-1 text-[11px] text-green-600 flex items-center gap-1">
-                                                                🚚 <span>Free delivery</span>
+                                                                🚚{" "}
+                                                                <span>
+                                                                    Free
+                                                                    delivery
+                                                                </span>
                                                             </div>
                                                         )}
 
                                                         {/* DELIVERY */}
                                                         <div className="flex justify-between items-start text-sm text-slate-600 mt-3">
-
-                                                            <span>Delivery</span>
+                                                            <span>
+                                                                Delivery
+                                                            </span>
 
                                                             <div className="text-right">
-
-                                                                {o.coupon?.isFreeShipping ? (
-
+                                                                {o.coupon
+                                                                    ?.isFreeShipping ? (
                                                                     <span className="font-medium text-green-600">
                                                                         Free
                                                                     </span>
-
                                                                 ) : o.isDeliveryChargeRefunded ? (
-
                                                                     <div className="flex flex-col items-end">
-
                                                                         {/* ORIGINAL DELIVERY */}
                                                                         <span className="line-through text-slate-400">
-                                                                            {delivery > 0 ? currency(delivery) : "—"}
+                                                                            {delivery >
+                                                                            0
+                                                                                ? currency(
+                                                                                      delivery,
+                                                                                  )
+                                                                                : "—"}
                                                                         </span>
 
                                                                         {/* REFUND STATUS */}
                                                                         <span className="text-rose-600 font-medium text-xs">
-
-                                                                            {Number(o.deliveryRefundAmount || 0) >=
-                                                                                Number(o.quotedDeliveryCharge || 0)
+                                                                            {Number(
+                                                                                o.deliveryRefundAmount ||
+                                                                                    0,
+                                                                            ) >=
+                                                                            Number(
+                                                                                o.quotedDeliveryCharge ||
+                                                                                    0,
+                                                                            )
                                                                                 ? `Refunded ${currency(o.deliveryRefundAmount || 0)}`
                                                                                 : `Partially Refunded ${currency(o.deliveryRefundAmount || 0)}`}
-
                                                                         </span>
-
                                                                     </div>
-
                                                                 ) : (
-
                                                                     <span className="font-medium text-slate-800">
-                                                                        {delivery > 0 ? currency(delivery) : "—"}
+                                                                        {delivery >
+                                                                        0
+                                                                            ? currency(
+                                                                                  delivery,
+                                                                              )
+                                                                            : "—"}
                                                                     </span>
-
                                                                 )}
-
                                                             </div>
                                                         </div>
 
@@ -617,16 +914,22 @@ export default function OrdersCompact({
                                                             <span className="text-sm font-semibold text-slate-700">
                                                                 Total
                                                             </span>
-                                                            <span className="text-xl font-extrabold text-[#0B5C73] tracking-tight tracking-tight">
-                                                                {currency(grandTotal)}
+                                                            <span className="text-xl font-extrabold text-[#065975] tracking-tight tracking-tight">
+                                                                {currency(
+                                                                    grandTotal,
+                                                                )}
                                                             </span>
                                                         </div>
 
                                                         {/* SAVINGS BADGE (HIGHLIGHT) */}
                                                         <div className="mt-3 w-full h-[26px] flex items-center justify-center">
-                                                            {totalSavings > 0 && (
+                                                            {totalSavings >
+                                                                0 && (
                                                                 <div className="w-full text-center px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-black text-[11px] font-semibold">
-                                                                    🎉 You saved {currency(totalSavings)}
+                                                                    🎉 You saved{" "}
+                                                                    {currency(
+                                                                        totalSavings,
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -636,12 +939,16 @@ export default function OrdersCompact({
                                                         {/* View details link — stops propagation so expand doesn't toggle */}
                                                         <Link
                                                             href={`/profile/order/${encodeURIComponent(String(id))}`}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="w-full inline-flex items-center justify-center gap-2 p-2 rounded-md bg-[#065975] text-white hover:bg-[#05485c] transition font-medium text-sm"
+                                                            onClick={(e) =>
+                                                                e.stopPropagation()
+                                                            }
+                                                            className="w-full inline-flex items-center justify-center gap-2 p-2 rounded-md bg-[#065975] text-white hover:bg-[#103c31] transition font-medium text-sm"
                                                             title={`View details for order #${o.orderNumber}`}
                                                         >
                                                             <FileText className="w-4 h-4" />
-                                                            <span>View details</span>
+                                                            <span>
+                                                                View details
+                                                            </span>
                                                         </Link>
 
                                                         {/* <button
@@ -661,18 +968,19 @@ export default function OrdersCompact({
                                     })}
                             </div>
                         </div>
-                    ))
-                }
+                    ))}
 
                 {/* Pagination controls */}
-                {
-                    !loading && !error && total > 0 && (
-                        <div className="mt-6 flex items-center justify-center">
-                            <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
-                        </div>
-                    )
-                }
-            </div >
-        </section >
+                {!loading && !error && total > 0 && (
+                    <div className="mt-6 flex items-center justify-center">
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            onPageChange={(p) => setPage(p)}
+                        />
+                    </div>
+                )}
+            </div>
+        </section>
     );
 }
