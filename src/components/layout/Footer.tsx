@@ -120,6 +120,14 @@ export default function Footer({
                             </Link>
                         </li>
                         <li>
+                            <Link
+                                className="hover:text-[#065975]"
+                                href="/stalls"
+                            >
+                                Visit our stalls
+                            </Link>
+                        </li>
+                        <li>
                             <Link className="hover:text-[#065975]" href="/cart">
                                 Your cart
                             </Link>

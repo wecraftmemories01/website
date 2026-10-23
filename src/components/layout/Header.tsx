@@ -26,6 +26,7 @@ const links = [
     { label: "Home", href: "/" },
     { label: "Shop all", href: "/products" },
     { label: "Gift hampers", href: "/hampers" },
+    { label: "Our stalls", href: "/stalls" },
     { label: "Contact", href: "/contact" },
 ];
 
