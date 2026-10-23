@@ -85,6 +85,15 @@ export default function Header({
             menuButtonRef.current?.focus();
         };
     }, [menuOpen]);
+    // Close an open mobile drawer when resizing into desktop navigation.
+    useEffect(() => {
+        const desktop = window.matchMedia("(min-width: 1100px)");
+        const onBreakpointChange = () => {
+            if (desktop.matches) setMenuOpen(false);
+        };
+        desktop.addEventListener("change", onBreakpointChange);
+        return () => desktop.removeEventListener("change", onBreakpointChange);
+    }, []);
     useEffect(() => {
         if (searchOpen) searchRef.current?.focus();
     }, [searchOpen]);
@@ -133,17 +142,21 @@ export default function Header({
             <header className="wcm-header sticky top-0 z-50 border-b border-[#e0edf0] bg-white/95 backdrop-blur-xl">
                 <div className={containerClass}>
                     <div className="flex min-h-[68px] lg:min-h-[82px] items-center gap-2 sm:gap-5">
-                        <button
-                            ref={menuButtonRef}
-                            type="button"
-                            className="site-icon-button lg:hidden"
-                            aria-label="Open menu"
-                            aria-expanded={menuOpen}
-                            aria-controls="mobile-store-menu"
-                            onClick={() => setMenuOpen(true)}
-                        >
-                            <Menu size={23} />
-                        </button>
+                        {/* Hide the whole wrapper: `.site-icon-button` sets its own
+                            display in globals.css, overriding Tailwind's `hidden`. */}
+                        <div className="shrink-0 min-[1100px]:hidden">
+                            <button
+                                ref={menuButtonRef}
+                                type="button"
+                                className="site-icon-button"
+                                aria-label="Open menu"
+                                aria-expanded={menuOpen}
+                                aria-controls="mobile-store-menu"
+                                onClick={() => setMenuOpen(true)}
+                            >
+                                <Menu size={23} />
+                            </button>
+                        </div>
                         <Link
                             href="/"
                             className="shrink-0 flex items-center gap-2 sm:gap-3 group"
@@ -160,7 +173,7 @@ export default function Header({
                         </Link>
                         <nav
                             aria-label="Main navigation"
-                            className="hidden lg:flex items-center gap-1 ml-4"
+                            className="hidden min-[1100px]:flex items-center gap-1 ml-4"
                         >
                             {links.map((link) =>
                                 navLink(link.label, link.href),
@@ -273,7 +286,7 @@ export default function Header({
             <AnimatePresence>
                 {menuOpen && (
                     <div
-                        className="fixed inset-0 z-[100] lg:hidden"
+                        className="fixed inset-0 z-[100] min-[1100px]:hidden"
                         id="mobile-store-menu"
                     >
                         <motion.button

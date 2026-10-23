@@ -106,7 +106,7 @@ export async function logout(redirectTo = "/login") {
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
         });
-    } catch { }
+    } catch {}
 
     if (refreshTimer) {
         clearTimeout(refreshTimer);
@@ -137,7 +137,6 @@ export async function logout(redirectTo = "/login") {
 ========================= */
 
 export async function refreshAccessToken(): Promise<boolean> {
-
     // 🚫 Do not refresh on auth pages
     if (typeof window !== "undefined") {
         const path = window.location.pathname;
@@ -200,7 +199,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 
 export async function authFetch(
     input: RequestInfo,
-    init: RequestInit = {}
+    init: RequestInit = {},
 ): Promise<Response> {
     let token = getStoredAccessToken();
     const headers = new Headers(init.headers ?? {});
@@ -263,11 +262,12 @@ export function scheduleSilentRefresh() {
         clearTimeout(refreshTimer);
     }
 
-    if (delay > 0) {
-        refreshTimer = setTimeout(() => {
-            refreshAccessToken();
-        }, delay);
-    }
+    refreshTimer = setTimeout(
+        () => {
+            void refreshAccessToken();
+        },
+        Math.max(0, delay),
+    );
 }
 
 /* =========================
@@ -279,7 +279,25 @@ export function persistAuth(data: AuthShape | null) {
 
     authGeneration++;
     const now = Date.now();
-    const expiresIn = data.token.expiresIn ?? 0;
+    // Prefer the API expiry, falling back to the JWT exp claim when omitted.
+    // Without either value, schedule against the site's 10-minute access-token lifetime.
+    let jwtExpiresIn: number | undefined;
+    try {
+        const payload = data.token.accessToken.split(".")[1];
+        if (payload) {
+            const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+            const decoded = JSON.parse(atob(base64));
+            if (typeof decoded.exp === "number") {
+                jwtExpiresIn = Math.max(
+                    0,
+                    decoded.exp - Math.floor(now / 1000),
+                );
+            }
+        }
+    } catch {
+        /* Non-JWT access tokens use the API lifetime. */
+    }
+    const expiresIn = data.token.expiresIn ?? jwtExpiresIn ?? 600;
 
     const tokenObtainedAt = new Date(now).toISOString();
     const tokenExpiresAt = expiresIn
@@ -297,7 +315,7 @@ export function persistAuth(data: AuthShape | null) {
                 tokenObtainedAt,
                 tokenExpiresAt,
             },
-        })
+        }),
     );
 
     localStorage.setItem(TOKEN_KEY, data.token.accessToken);
@@ -305,4 +323,12 @@ export function persistAuth(data: AuthShape | null) {
     scheduleSilentRefresh();
 
     window.dispatchEvent(new Event("authChanged"));
+}
+/** Restore a valid session before protected requests, including after a sleeping tab. */
+export async function ensureFreshAccessToken(): Promise<string | null> {
+    const auth = getAuth();
+    if (!auth?.customerId && !getStoredAccessToken()) return null;
+    if (isTokenValid()) return getStoredAccessToken();
+    const refreshed = await refreshAccessToken();
+    return refreshed ? getStoredAccessToken() : null;
 }

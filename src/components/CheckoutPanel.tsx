@@ -15,7 +15,11 @@ import { useRouter } from "next/navigation";
 // adjust this import to match where you placed AddressModal
 import AddressModal, { Address } from "./AddressModal";
 import { cartHamperLines } from "@/lib/hampers";
-import { getStoredAccessToken } from "@/lib/auth";
+import {
+    getStoredAccessToken,
+    authFetch,
+    ensureFreshAccessToken,
+} from "@/lib/auth";
 
 const TOKEN_KEY = "accessToken";
 
@@ -60,7 +64,13 @@ export default function CheckoutPanel({
         [cart],
     );
     const couponCartKey = useMemo(
-        () => cart.map((item) => `${item.type || "SELL"}:${item.id}:${item.qty}:${item.price}`).join("|"),
+        () =>
+            cart
+                .map(
+                    (item) =>
+                        `${item.type || "SELL"}:${item.id}:${item.qty}:${item.price}`,
+                )
+                .join("|"),
         [cart],
     );
     const couponOverrideRef = useRef(false);
@@ -500,7 +510,7 @@ export default function CheckoutPanel({
         const token = getAuthToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
 
-        const res = await fetch(url, { method: "GET", headers });
+        const res = await authFetch(url, { method: "GET", headers });
         if (res.status === 401) {
             handleUnauthorized();
             throw new Error("Unauthorized");
@@ -594,7 +604,7 @@ export default function CheckoutPanel({
         const token = getAuthToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
 
-        const res = await fetch(url, { method: "GET", headers });
+        const res = await authFetch(url, { method: "GET", headers });
         if (res.status === 401) {
             handleUnauthorized();
             throw new Error("Unauthorized");
@@ -666,7 +676,7 @@ export default function CheckoutPanel({
             isDefault: !!addr.isDefault,
         };
 
-        const res = await fetch(url, {
+        const res = await authFetch(url, {
             method: "POST",
             headers,
             body: JSON.stringify(payload),
@@ -1144,6 +1154,7 @@ export default function CheckoutPanel({
             }
 
             (async () => {
+                await ensureFreshAccessToken();
                 const cust = getStoredCustomerId();
                 if (!cust) {
                     router.replace("/login");
@@ -1290,6 +1301,7 @@ export default function CheckoutPanel({
 
             (async () => {
                 try {
+                    await ensureFreshAccessToken();
                     const serverCart = await apiGetCart(cust);
                     setCart(Array.isArray(serverCart) ? serverCart : []);
                 } catch (err) {
@@ -1488,7 +1500,7 @@ export default function CheckoutPanel({
                 // Never submit browser-owned prices or hamper component data.
             };
 
-            const res = await fetch(url, {
+            const res = await authFetch(url, {
                 method: "POST",
                 headers,
                 body: JSON.stringify(body),
@@ -1699,7 +1711,10 @@ export default function CheckoutPanel({
                 Array.isArray(data?.lockedCoupons) ? data.lockedCoupons : [],
             );
             // Keep the offer attached to the cart it was checked against.
-            setBestCouponData({ cartKey: couponCartKey, offer: data?.bestCoupon || null });
+            setBestCouponData({
+                cartKey: couponCartKey,
+                offer: data?.bestCoupon || null,
+            });
         })().finally(() => {
             if (active) setCouponSuggestionsLoading(false);
         });
@@ -1711,16 +1726,33 @@ export default function CheckoutPanel({
     // Production-style checkout: automatically verify/apply the best offer,
     // without replacing a previously saved or manually chosen coupon.
     useEffect(() => {
-        if (!cartLoaded || !couponReady || appliedCoupon || couponLoading || couponOverrideRef.current) return;
+        if (
+            !cartLoaded ||
+            !couponReady ||
+            appliedCoupon ||
+            couponLoading ||
+            couponOverrideRef.current
+        )
+            return;
         if (bestCouponData?.cartKey !== couponCartKey) return;
         const offer = bestCouponData?.offer;
-        const code = offer?.valid === true ? String(offer?.coupon?.code || "").trim() : "";
+        const code =
+            offer?.valid === true
+                ? String(offer?.coupon?.code || "").trim()
+                : "";
         if (!code) return;
         const attemptKey = `${couponCartKey}:${code}`;
         if (autoCouponAttemptRef.current === attemptKey) return;
         autoCouponAttemptRef.current = attemptKey;
         void applyCouponCode(code, true);
-    }, [cartLoaded, couponReady, appliedCoupon, couponLoading, bestCouponData, couponCartKey]);
+    }, [
+        cartLoaded,
+        couponReady,
+        appliedCoupon,
+        couponLoading,
+        bestCouponData,
+        couponCartKey,
+    ]);
 
     const hasAddress = addresses.length > 0 && selectedAddressId !== null;
 
