@@ -4,11 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
     ArrowRight,
-    CalendarDays,
     MapPin,
     Search,
     ShoppingBag,
-    Sparkles,
     Store,
     X,
 } from "lucide-react";
@@ -17,34 +15,36 @@ import type { PublicStall, StallStatus } from "@/types/stall";
 import StallCard from "./StallCard";
 
 type Filter = "all" | StallStatus;
-const filters: { value: Filter; label: string }[] = [
-    { value: "all", label: "All stalls" },
-    { value: "ongoing", label: "Ongoing" },
-    { value: "upcoming", label: "Upcoming" },
-    { value: "completed", label: "Past stalls" },
+const filters: { key: Filter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "ongoing", label: "Happening now" },
+    { key: "upcoming", label: "Upcoming" },
+    { key: "completed", label: "Past" },
 ];
-
-const sectionText: Record<StallStatus, { title: string; note: string }> = {
-    ongoing: {
-        title: "Visit us today",
-        note: "These stalls are currently active.",
+const sections: { key: StallStatus; title: string; description: string }[] = [
+    {
+        key: "ongoing",
+        title: "Happening now",
+        description: "Come meet us at these stalls",
     },
-    upcoming: {
-        title: "Plan your next visit",
-        note: "Save the dates and come meet us in person.",
+    {
+        key: "upcoming",
+        title: "Coming up next",
+        description: "Save the date for your next visit",
     },
-    completed: {
-        title: "Stalls we loved",
-        note: "A look back at our previous pop-ups and exhibitions.",
+    {
+        key: "completed",
+        title: "Our past pop-ups",
+        description: "A little look back at where we've been",
     },
-};
+];
 
 export default function StallsClient() {
     const [stalls, setStalls] = useState<PublicStall[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [retry, setRetry] = useState(0);
-    const [activeFilter, setActiveFilter] = useState<Filter>("all");
+    const [filter, setFilter] = useState<Filter>("all");
     const [search, setSearch] = useState("");
 
     useEffect(() => {
@@ -75,357 +75,223 @@ export default function StallsClient() {
 
     const visible = useMemo(() => {
         const q = search.trim().toLocaleLowerCase();
-        const priority: Record<StallStatus, number> = {
-            ongoing: 0,
-            upcoming: 1,
-            completed: 2,
-        };
-        return stalls
-            .filter(
-                (stall) =>
-                    (activeFilter === "all" || stall.status === activeFilter) &&
-                    (!q ||
-                        [
-                            stall.name,
-                            stall.stallNumber,
-                            stall.locationName,
-                            stall.address,
-                            stall.description,
-                            ...stall.products.map((p) => p.name),
-                        ]
-                            .join(" ")
-                            .toLocaleLowerCase()
-                            .includes(q)),
-            )
-            .sort(
-                (a, b) =>
-                    priority[a.status] - priority[b.status] ||
-                    (a.status === "completed"
-                        ? b.endDate.localeCompare(a.endDate)
-                        : a.startDate.localeCompare(b.startDate)) ||
-                    a.name.localeCompare(b.name),
-            );
-    }, [stalls, activeFilter, search]);
+        return stalls.filter(
+            (stall) =>
+                (filter === "all" || stall.status === filter) &&
+                (!q ||
+                    [
+                        stall.name,
+                        stall.stallNumber,
+                        stall.locationName,
+                        stall.address,
+                        stall.description,
+                        ...stall.products.map((p) => p.name),
+                    ]
+                        .join(" ")
+                        .toLocaleLowerCase()
+                        .includes(q)),
+        );
+    }, [stalls, filter, search]);
 
-    const sections = useMemo(
+    const groups = useMemo(
         () =>
-            (["ongoing", "upcoming", "completed"] as StallStatus[])
-                .map((status) => ({
-                    status,
-                    stalls: visible.filter((stall) => stall.status === status),
+            sections
+                .map((section) => ({
+                    ...section,
+                    items: visible
+                        .filter((s) => s.status === section.key)
+                        .sort((a, b) =>
+                            section.key === "completed"
+                                ? b.endDate.localeCompare(a.endDate)
+                                : a.startDate.localeCompare(b.startDate),
+                        ),
                 }))
-                .filter((section) => section.stalls.length > 0),
+                .filter((s) => s.items.length > 0),
         [visible],
     );
 
-    const highlighted =
-        stalls.find((s) => s.status === "ongoing") ||
-        stalls.find((s) => s.status === "upcoming");
-
     return (
-        <div className="mx-auto max-w-[1440px] pb-12 text-[#173f4f]">
-            <section className="mb-6 overflow-hidden rounded-[30px] border border-[#dde9ee] bg-[linear-gradient(135deg,#f1fbfd_0%,#fff8f3_100%)] shadow-[0_18px_48px_rgba(15,67,86,.07)]">
-                <div className="grid gap-6 px-5 py-5 sm:px-7 sm:py-7 xl:grid-cols-[1.2fr_0.8fr] xl:items-center xl:px-8">
-                    <div>
-                        <p className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#0c7796] ring-1 ring-[#d9e8ee]">
-                            <Store size={14} /> Meet We Craft Memories in person
-                        </p>
-                        <h1 className="mt-4 font-serif text-[clamp(1.9rem,4vw,3.6rem)] font-semibold leading-[1.08] tracking-tight text-[#153f50]">
-                            Visit our stalls, explore handmade treasures, and
-                            shop online if you can&apos;t make it.
-                        </h1>
-                        <p className="mt-3 max-w-3xl text-sm leading-7 text-[#617b85] sm:text-base">
-                            Discover ongoing, upcoming, and past stalls with all
-                            the details you need — dates, timings, venue, stall
-                            number, and a preview of the handmade products
-                            we&apos;re showcasing.
-                        </p>
-                        <div className="mt-5 flex flex-wrap gap-3">
-                            <a
-                                href="#stall-directory"
-                                className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#0b6f8b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#085a71]"
-                            >
-                                Explore stalls <ArrowRight size={17} />
-                            </a>
-                            <Link
-                                href="/products"
-                                className="inline-flex min-h-12 items-center gap-2 rounded-full border border-[#f0ddd2] bg-[#fff8f2] px-6 py-3 text-sm font-semibold text-[#9b5b2f] transition hover:bg-[#fff1e5]"
-                            >
-                                <ShoppingBag size={17} /> Shop online
-                            </Link>
-                        </div>
+        <div className="mx-auto max-w-[1400px] pb-10 text-[#183e46]">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                <div className="min-w-0">
+                    <div className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.17em] text-[#af6c47]">
+                        <span className="h-2 w-2 rounded-full bg-[#d78a55]" />{" "}
+                        Meet We Craft Memories
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                        <div className="rounded-[24px] border border-[#dbe9ee] bg-white p-4 shadow-[0_10px_28px_rgba(16,66,86,.05)]">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7b9199]">
-                                Happening now
-                            </p>
-                            <p className="mt-2 text-3xl font-semibold text-[#173f4f]">
-                                {counts.ongoing}
-                            </p>
-                            <p className="mt-1 text-sm text-[#6d848d]">
-                                Stalls you can visit right away
-                            </p>
-                        </div>
-                        <div className="rounded-[24px] border border-[#dbe9ee] bg-white p-4 shadow-[0_10px_28px_rgba(16,66,86,.05)]">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7b9199]">
-                                Coming up
-                            </p>
-                            <p className="mt-2 text-3xl font-semibold text-[#173f4f]">
-                                {counts.upcoming}
-                            </p>
-                            <p className="mt-1 text-sm text-[#6d848d]">
-                                Upcoming pop-ups to plan for
-                            </p>
-                        </div>
-                        <div className="rounded-[24px] border border-[#dbe9ee] bg-white p-4 shadow-[0_10px_28px_rgba(16,66,86,.05)]">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7b9199]">
-                                Why visit
-                            </p>
-                            <p className="mt-2 text-lg font-semibold text-[#173f4f]">
-                                Handmade joy, in person
-                            </p>
-                            <p className="mt-1 text-sm text-[#6d848d]">
-                                See textures, colors, and details up close.
-                            </p>
-                        </div>
-                    </div>
+                    <h1 className="text-[clamp(1.8rem,3.3vw,2.9rem)] font-extrabold leading-[1.08] tracking-[-.055em] text-[#173e46]">
+                        Find us at our stalls{" "}
+                        <span className="text-[#c1744b]">♡</span>
+                    </h1>
+                    <p className="mt-1.5 text-[13px] leading-6 text-[#667b80] sm:text-sm">
+                        Discover where we&apos;re popping up, when to visit and
+                        what we&apos;re bringing.
+                    </p>
                 </div>
-                {highlighted && (
-                    <div className="border-t border-[#e5eef1] bg-white/70 px-5 py-4 sm:px-7 xl:px-8">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="min-w-0">
-                                <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#0b7896]">
-                                    <Sparkles size={14} /> Featured stall
-                                </p>
-                                <p className="mt-1 truncate text-base font-semibold text-[#173f4f]">
-                                    {highlighted.name}
-                                </p>
-                                <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#66808a]">
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <CalendarDays size={15} />{" "}
-                                        {highlighted.startDate ===
-                                        highlighted.endDate
-                                            ? highlighted.startDate
-                                            : `${highlighted.startDate} to ${highlighted.endDate}`}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <MapPin size={15} />{" "}
-                                        {highlighted.locationName ||
-                                            "Venue details available"}
-                                    </span>
-                                </p>
-                            </div>
-                            <div className="flex flex-wrap gap-3">
-                                <Link
-                                    href={`/stalls/${highlighted.id}`}
-                                    className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#0b6f8b] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#085a71]"
-                                >
-                                    View details <ArrowRight size={16} />
-                                </Link>
-                                <Link
-                                    href="/products"
-                                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#e2eaee] bg-white px-5 py-2.5 text-sm font-semibold text-[#1d4c5d] transition hover:bg-[#f8fbfc]"
-                                >
-                                    Browse products
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </section>
+                <Link
+                    href="/products"
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-[#e8d5c5] bg-[#fff7ef] px-4 py-2.5 text-sm font-bold text-[#a45c35] transition hover:border-[#d7a985] hover:bg-[#fff0df] sm:self-center"
+                >
+                    <ShoppingBag size={17} /> Can&apos;t visit? Shop online{" "}
+                    <ArrowRight size={15} />
+                </Link>
+            </div>
 
-            <section
-                id="stall-directory"
-                className="scroll-mt-28 rounded-[28px] border border-[#e3edf1] bg-white p-4 shadow-[0_10px_34px_rgba(14,66,86,.05)] sm:p-5 lg:p-6"
-            >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#0b7896]">
-                            Stall directory
-                        </p>
-                        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[#173f4f] sm:text-3xl">
-                            Find the perfect stall to visit
-                        </h2>
-                        <p className="mt-2 text-sm leading-6 text-[#6b838d]">
-                            Ongoing stalls are shown first, followed by upcoming
-                            plans and then past events.
-                        </p>
-                    </div>
-                    <div className="flex flex-col gap-3 lg:w-[420px]">
-                        <div
-                            role="group"
-                            aria-label="Stall status filter"
-                            className="flex flex-wrap gap-2"
-                        >
-                            {filters.map((tab) => {
-                                const selected = activeFilter === tab.value;
-                                return (
-                                    <button
-                                        type="button"
-                                        key={tab.value}
-                                        onClick={() =>
-                                            setActiveFilter(tab.value)
-                                        }
-                                        aria-pressed={selected}
-                                        className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition ${selected ? "bg-[#0b6f8b] text-white shadow-[0_8px_24px_rgba(11,111,139,.18)]" : "border border-[#dce8ed] bg-[#f8fbfc] text-[#57727d] hover:bg-white"}`}
-                                    >
-                                        {tab.label}
-                                        {!loading && !error && (
-                                            <span
-                                                className={`rounded-full px-2 py-0.5 text-[11px] ${selected ? "bg-white/20" : "bg-white text-[#69808a] ring-1 ring-[#dfe9ee]"}`}
-                                            >
-                                                {counts[tab.value]}
-                                            </span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <div className="relative">
-                            <Search
-                                size={18}
-                                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8ca2aa]"
-                            />
-                            <input
-                                type="search"
-                                value={search}
-                                onChange={(event) =>
-                                    setSearch(event.target.value)
-                                }
-                                placeholder="Search by stall, location, or product..."
-                                aria-label="Search stalls"
-                                className="min-h-12 w-full rounded-2xl border border-[#dfe8ec] bg-[#fbfdfe] py-3 pl-11 pr-10 text-sm outline-none transition focus:border-[#77b8cb] focus:ring-2 focus:ring-[#d6ecf2]"
-                            />
-                            {search && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSearch("")}
-                                    aria-label="Clear search"
-                                    className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-[#839aa3] hover:bg-[#edf7fa]"
-                                >
-                                    <X size={16} />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {loading ? (
+            <div className="sticky top-14 z-20 mb-5 rounded-[20px] border border-[#e1eae8] bg-white/95 p-2.5 shadow-[0_8px_26px_rgba(20,61,72,.075)] backdrop-blur-xl sm:p-3">
+                <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
                     <div
-                        className="mt-6 space-y-4"
-                        role="status"
-                        aria-label="Loading stalls"
+                        role="group"
+                        aria-label="Filter stalls"
+                        className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
-                        {[0, 1].map((item) => (
-                            <div
-                                key={item}
-                                className="h-[380px] animate-pulse rounded-[28px] bg-[#edf4f6]"
-                            />
+                        {filters.map(({ key, label }) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setFilter(key)}
+                                aria-pressed={filter === key}
+                                className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-bold transition sm:px-4 ${filter === key ? "bg-[#097c86] text-white shadow-[0_3px_9px_rgba(9,124,134,.16)]" : "bg-[#f3f8f7] text-[#557178] hover:bg-[#e6f4f2]"}`}
+                            >
+                                {label}
+                                {!loading && !error && (
+                                    <span
+                                        className={`rounded-md px-1.5 py-0.5 text-[11px] ${filter === key ? "bg-white/20" : "bg-white text-[#6f8488]"}`}
+                                    >
+                                        {counts[key]}
+                                    </span>
+                                )}
+                            </button>
                         ))}
                     </div>
-                ) : error ? (
-                    <div className="mt-6 rounded-[24px] border border-[#e5ecef] bg-[#fbfdfe] px-6 py-12 text-center">
-                        <p className="text-lg font-semibold text-[#173f4f]">
-                            We couldn&apos;t load the stalls right now
-                        </p>
-                        <p className="mt-2 text-sm text-[#708691]">
-                            Please try again in a moment.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setLoading(true);
-                                setRetry((n) => n + 1);
-                            }}
-                            className="mt-4 rounded-full bg-[#0b6f8b] px-5 py-3 text-sm font-semibold text-white"
-                        >
-                            Try again
-                        </button>
-                    </div>
-                ) : sections.length === 0 ? (
-                    <div className="mt-6 rounded-[24px] border border-[#e5ecef] bg-[#fbfdfe] px-6 py-12 text-center">
-                        <MapPin className="mx-auto text-[#98aeb6]" size={30} />
-                        <h3 className="mt-4 text-xl font-semibold text-[#173f4f]">
-                            No matching stalls found
-                        </h3>
-                        <p className="mt-2 text-sm text-[#708691]">
-                            Try another search term or switch back to All
-                            stalls.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setActiveFilter("all");
-                                setSearch("");
-                            }}
-                            className="mt-4 rounded-full border border-[#dbe7eb] bg-white px-5 py-3 text-sm font-semibold text-[#1d4c5d]"
-                        >
-                            Show all stalls
-                        </button>
-                    </div>
-                ) : (
-                    <div className="mt-8 space-y-9">
-                        {sections.map((section) => (
-                            <section
-                                key={section.status}
-                                aria-labelledby={`stall-section-${section.status}`}
+                    <div className="relative w-full lg:max-w-[310px]">
+                        <Search
+                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8da1a3]"
+                            size={17}
+                        />
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Search stall, place or product"
+                            aria-label="Search stalls"
+                            className="min-h-10 w-full rounded-xl border border-[#e1e9e8] bg-[#fbfcfc] py-2 pl-9 pr-9 text-[13px] text-[#173e46] outline-none focus:border-[#69b7b7] focus:ring-2 focus:ring-[#d9efed]"
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                aria-label="Clear search"
+                                onClick={() => setSearch("")}
+                                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full hover:bg-[#e9f3f2]"
                             >
-                                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                                    <div>
-                                        <h3
-                                            id={`stall-section-${section.status}`}
-                                            className="text-2xl font-semibold tracking-tight text-[#173f4f]"
-                                        >
-                                            {sectionText[section.status].title}
-                                        </h3>
-                                        <p className="mt-1 text-sm text-[#6a838d]">
-                                            {sectionText[section.status].note}
-                                        </p>
-                                    </div>
-                                    <span className="rounded-full bg-[#eef7fa] px-3 py-1.5 text-sm font-semibold text-[#0b7896]">
-                                        {section.stalls.length}{" "}
-                                        {section.stalls.length === 1
-                                            ? "stall"
-                                            : "stalls"}
+                                <X size={15} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {loading ? (
+                <div
+                    role="status"
+                    aria-label="Loading stalls"
+                    className="space-y-4"
+                >
+                    {[0, 1].map((n) => (
+                        <div
+                            key={n}
+                            className="h-[285px] animate-pulse rounded-[24px] bg-[#edf3f1]"
+                        />
+                    ))}
+                </div>
+            ) : error ? (
+                <div className="rounded-[24px] border border-[#e3e9e8] bg-white px-6 py-14 text-center">
+                    <Store size={30} className="mx-auto text-[#9aafb0]" />
+                    <h2 className="mt-3 text-lg font-bold">
+                        We couldn&apos;t load the stalls
+                    </h2>
+                    <p className="mt-1 text-sm text-[#6e8588]">
+                        Please check your connection and try again.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setLoading(true);
+                            setRetry((r) => r + 1);
+                        }}
+                        className="mt-4 rounded-xl bg-[#087b86] px-5 py-2.5 text-sm font-bold text-white"
+                    >
+                        Try again
+                    </button>
+                </div>
+            ) : groups.length === 0 ? (
+                <div className="rounded-[24px] border border-[#e3e9e8] bg-white px-6 py-14 text-center">
+                    <MapPin size={30} className="mx-auto text-[#9aafb0]" />
+                    <h2 className="mt-3 text-lg font-bold">
+                        No matching stalls found
+                    </h2>
+                    <p className="mt-1 text-sm text-[#6e8588]">
+                        Try another search or see all our stalls.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setFilter("all");
+                            setSearch("");
+                        }}
+                        className="mt-4 rounded-xl bg-[#087b86] px-5 py-2.5 text-sm font-bold text-white"
+                    >
+                        Show all stalls
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-7">
+                    {groups.map((section) => (
+                        <section
+                            key={section.key}
+                            aria-labelledby={`stalls-${section.key}`}
+                        >
+                            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <h2
+                                        id={`stalls-${section.key}`}
+                                        className="text-[1.25rem] font-extrabold tracking-[-.035em] text-[#183e46] sm:text-[1.5rem]"
+                                    >
+                                        {section.title}
+                                    </h2>
+                                    <span className="rounded-full bg-[#f0f5f4] px-2.5 py-1 text-xs font-bold text-[#5e797c]">
+                                        {section.items.length}
                                     </span>
                                 </div>
-                                <div className="space-y-5">
-                                    {section.stalls.map((stall) => (
-                                        <StallCard
-                                            key={stall.id}
-                                            stall={stall}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-                        ))}
-                    </div>
-                )}
-            </section>
-
-            <section className="mt-8 rounded-[30px] border border-[#eee2d7] bg-[linear-gradient(135deg,#fff7f1_0%,#fffdfb_100%)] px-6 py-7 shadow-[0_14px_34px_rgba(88,58,30,.04)] sm:px-8">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#ae6a3b]">
-                            Can&apos;t make it to the stall?
-                        </p>
-                        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[#5a3820] sm:text-3xl">
-                            Take the handmade experience home from our website
-                        </h2>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#876b56]">
-                            Browse beautiful handmade products online anytime —
-                            perfect when you can&apos;t visit us in person.
-                        </p>
-                    </div>
-                    <Link
-                        href="/products"
-                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#c9793b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b7682f]"
-                    >
-                        <ShoppingBag size={18} /> Shop the collection
-                    </Link>
+                                <p className="text-xs text-[#819395] sm:text-[13px]">
+                                    {section.description}
+                                </p>
+                            </div>
+                            <div className="space-y-3.5">
+                                {section.items.map((stall) => (
+                                    <StallCard key={stall.id} stall={stall} />
+                                ))}
+                            </div>
+                        </section>
+                    ))}
                 </div>
-            </section>
+            )}
+
+            <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-[20px] border border-[#e9ddcf] bg-[linear-gradient(105deg,#fff7ed,#fcfcf6)] px-5 py-5 sm:flex-row sm:items-center sm:px-7">
+                <div>
+                    <p className="text-base font-extrabold tracking-tight text-[#714c36]">
+                        Handmade happiness, wherever you are.
+                    </p>
+                    <p className="mt-1 text-[13px] text-[#886e5b]">
+                        Can&apos;t come to the stall? Discover our pieces
+                        online.
+                    </p>
+                </div>
+                <Link
+                    href="/products"
+                    className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl bg-[#be764b] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#a86339]"
+                >
+                    Explore products <ArrowRight size={16} />
+                </Link>
+            </div>
         </div>
     );
 }

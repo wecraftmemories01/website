@@ -1,270 +1,195 @@
 import Link from "next/link";
 import {
     ArrowRight,
-    ArrowUpRight,
     CalendarDays,
     Clock3,
     MapPin,
+    Navigation,
     ShoppingBag,
-    Sparkles,
-    Store,
     Ticket,
 } from "lucide-react";
 import type { PublicStall } from "@/types/stall";
-import {
-    formatStallRange,
-    formatStallTime,
-    STALL_STATUS,
-    stallMapUrl,
-} from "@/lib/stalls";
+import { formatStallRange, formatStallTime, stallMapUrl } from "@/lib/stalls";
 import StallProductImage from "./StallProductImage";
 
-const statusStyles = {
+const styles = {
     ongoing: {
-        bar: "from-emerald-500 to-teal-500",
-        soft: "bg-emerald-50 text-emerald-800 border-emerald-200",
-        panel: "bg-[linear-gradient(180deg,#f4fdf8_0%,#ffffff_100%)]",
-        accent: "text-emerald-700",
+        label: "Happening today",
+        badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+        dot: "bg-emerald-500",
+        accent: "border-emerald-300",
     },
     upcoming: {
-        bar: "from-sky-500 to-cyan-500",
-        soft: "bg-sky-50 text-sky-800 border-sky-200",
-        panel: "bg-[linear-gradient(180deg,#f5fbff_0%,#ffffff_100%)]",
-        accent: "text-sky-700",
+        label: "Coming up",
+        badge: "bg-sky-50 text-sky-800 ring-sky-200",
+        dot: "bg-sky-500",
+        accent: "border-sky-200",
     },
     completed: {
-        bar: "from-slate-400 to-slate-500",
-        soft: "bg-slate-100 text-slate-700 border-slate-200",
-        panel: "bg-[linear-gradient(180deg,#fafbfc_0%,#ffffff_100%)]",
-        accent: "text-slate-700",
+        label: "Past event",
+        badge: "bg-stone-100 text-stone-700 ring-stone-200",
+        dot: "bg-stone-400",
+        accent: "border-stone-200",
     },
 } as const;
 
 export default function StallCard({ stall }: { stall: PublicStall }) {
-    const firstSession = stall.schedule[0];
-    const status = STALL_STATUS[stall.status];
-    const style = statusStyles[stall.status];
-    const mapUrl = stallMapUrl(stall);
-    const preview = stall.products.slice(0, 4);
-    const totalProducts = stall.productCount ?? stall.products.length;
+    const style = styles[stall.status];
+    const directions = stallMapUrl(stall);
+    const images = stall.products.slice(0, 3);
+    const count = stall.productCount ?? stall.products.length;
+    const hours = stall.schedule[0]
+        ? `${formatStallTime(stall.schedule[0].startTime)} – ${formatStallTime(stall.schedule[0].endTime)}`
+        : null;
+    const varyingHours = stall.schedule.some(
+        (day) =>
+            day.startTime !== stall.schedule[0]?.startTime ||
+            day.endTime !== stall.schedule[0]?.endTime,
+    );
 
     return (
         <article
-            className={`group overflow-hidden rounded-[28px] border border-[#dde9ee] ${style.panel} shadow-[0_14px_42px_rgba(14,66,86,.07)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_56px_rgba(14,66,86,.12)]`}
+            className={`group overflow-hidden rounded-[24px] border bg-white shadow-[0_10px_30px_rgba(19,62,75,.055)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(19,62,75,.1)] ${style.accent}`}
         >
-            <div className={`h-1.5 w-full bg-gradient-to-r ${style.bar}`} />
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-                <div className="p-5 sm:p-6 lg:p-7">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span
-                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold ${style.soft}`}
-                                >
-                                    <span
-                                        className={`h-2 w-2 rounded-full ${stall.status === "ongoing" ? "bg-emerald-500" : stall.status === "upcoming" ? "bg-sky-500" : "bg-slate-400"}`}
-                                    />
-                                    {status.label}
-                                </span>
-                                {stall.stallNumber && (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#58717c] ring-1 ring-[#dfebef]">
-                                        <Ticket size={13} /> Stall{" "}
-                                        {stall.stallNumber}
-                                    </span>
-                                )}
-                            </div>
-                            <h3 className="mt-3 text-[1.55rem] font-semibold leading-tight tracking-tight text-[#173f4f] sm:text-[1.8rem]">
-                                {stall.name}
-                            </h3>
-                            {stall.locationName && (
-                                <p className="mt-2 inline-flex items-start gap-2 text-sm font-medium text-[#55707b]">
-                                    <MapPin
-                                        size={16}
-                                        className="mt-0.5 shrink-0 text-[#0e7796]"
-                                    />
-                                    <span>{stall.locationName}</span>
-                                </p>
-                            )}
-                            {stall.description && (
-                                <p className="mt-3 max-w-4xl text-sm leading-7 text-[#627b85] sm:text-[15px]">
-                                    {stall.description}
-                                </p>
-                            )}
-                        </div>
-                        {stall.products.length > 0 && (
-                            <div className="hidden rounded-2xl bg-white/90 px-4 py-3 ring-1 ring-[#e3edf1] sm:block">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0b7896]">
-                                    What you'll find
-                                </p>
-                                <p className="mt-1 text-lg font-semibold text-[#173f4f]">
-                                    {totalProducts} designs
-                                </p>
-                                <p className="mt-1 text-xs text-[#738891]">
-                                    A curated handmade showcase
-                                </p>
-                            </div>
+            <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_240px] xl:grid-cols-[minmax(0,1fr)_285px]">
+                <div className="min-w-0 px-4 py-4 sm:px-6 sm:py-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span
+                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-extrabold ring-1 ring-inset ${style.badge}`}
+                        >
+                            <span
+                                className={`h-2 w-2 rounded-full ${style.dot} ${stall.status === "ongoing" ? "animate-pulse" : ""}`}
+                            />
+                            {style.label}
+                        </span>
+                        {stall.stallNumber && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#f5f7f6] px-3 py-1 text-xs font-bold text-[#54666a]">
+                                <Ticket size={13} /> Stall {stall.stallNumber}
+                            </span>
                         )}
                     </div>
-
-                    <div className="mt-5 grid gap-3 md:grid-cols-3">
-                        <div className="rounded-[22px] border border-[#e4ecef] bg-white p-4">
-                            <div className="flex items-start gap-3">
-                                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#edf8fb] text-[#0c7796]">
-                                    <CalendarDays size={18} />
-                                </span>
-                                <div>
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#79909a]">
-                                        Dates
-                                    </p>
-                                    <p className="mt-1 text-sm font-semibold text-[#244b5b]">
-                                        {formatStallRange(stall)}
-                                    </p>
-                                    <p className="mt-1 text-xs text-[#728892]">
-                                        {stall.dayCount}{" "}
-                                        {stall.dayCount === 1 ? "day" : "days"}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="rounded-[22px] border border-[#e4ecef] bg-white p-4">
-                            <div className="flex items-start gap-3">
-                                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#edf8fb] text-[#0c7796]">
-                                    <Clock3 size={18} />
-                                </span>
-                                <div>
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#79909a]">
-                                        Timings
-                                    </p>
-                                    <p className="mt-1 text-sm font-semibold text-[#244b5b]">
-                                        {firstSession
-                                            ? `${formatStallTime(firstSession.startTime)} – ${formatStallTime(firstSession.endTime)}`
-                                            : "To be announced"}
-                                    </p>
-                                    <p className="mt-1 text-xs text-[#728892]">
-                                        {stall.schedule.length > 1
-                                            ? "Daily timings available"
-                                            : "Visit during these hours"}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="rounded-[22px] border border-[#e4ecef] bg-white p-4">
-                            <div className="flex items-start gap-3">
-                                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#edf8fb] text-[#0c7796]">
-                                    <Sparkles size={18} />
-                                </span>
-                                <div>
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#79909a]">
-                                        Why visit
-                                    </p>
-                                    <p className="mt-1 text-sm font-semibold text-[#244b5b]">
-                                        Meet us in person
-                                    </p>
-                                    <p className="mt-1 text-xs text-[#728892]">
-                                        Discover handmade pieces up close
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-5 flex flex-wrap gap-3">
+                    <div className="mt-3">
                         <Link
                             href={`/stalls/${stall.id}`}
-                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#0b6f8b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#085a71]"
+                            className="inline-block max-w-full text-[clamp(1.3rem,2vw,1.75rem)] font-extrabold leading-tight tracking-[-.035em] text-[#173f47] hover:text-[#007f8c]"
                         >
-                            View stall details <ArrowRight size={17} />
+                            {stall.name}
                         </Link>
-                        {mapUrl && (
+                        {stall.description && (
+                            <p className="mt-1.5 line-clamp-2 text-[13px] leading-5 text-[#667981]">
+                                {stall.description}
+                            </p>
+                        )}
+                    </div>
+                    <div className="mt-4 grid gap-x-5 gap-y-2 border-t border-[#edf1ef] pt-3 sm:grid-cols-2 xl:grid-cols-3">
+                        <p className="flex items-start gap-2 text-[13px] leading-5 text-[#405b61]">
+                            <CalendarDays
+                                className="mt-0.5 shrink-0 text-[#c57149]"
+                                size={16}
+                            />
+                            <span>
+                                <strong className="block font-bold text-[#203f47]">
+                                    {formatStallRange(stall)}
+                                </strong>
+                                <span className="text-xs text-[#70848a]">
+                                    {stall.dayCount}{" "}
+                                    {stall.dayCount === 1 ? "day" : "days"}
+                                </span>
+                            </span>
+                        </p>
+                        <p className="flex items-start gap-2 text-[13px] leading-5 text-[#405b61]">
+                            <Clock3
+                                className="mt-0.5 shrink-0 text-[#c57149]"
+                                size={16}
+                            />
+                            <span>
+                                <strong className="block font-bold text-[#203f47]">
+                                    {hours || "Timings to be announced"}
+                                </strong>
+                                <span className="text-xs text-[#70848a]">
+                                    {varyingHours
+                                        ? "Hours vary by date"
+                                        : "Daily opening hours"}
+                                </span>
+                            </span>
+                        </p>
+                        <p className="flex items-start gap-2 text-[13px] leading-5 text-[#405b61] sm:col-span-2 xl:col-span-1">
+                            <MapPin
+                                className="mt-0.5 shrink-0 text-[#c57149]"
+                                size={16}
+                            />
+                            <span>
+                                <strong className="block font-bold text-[#203f47]">
+                                    {stall.locationName ||
+                                        "Location to be announced"}
+                                </strong>
+                                {stall.address && (
+                                    <span className="line-clamp-1 text-xs text-[#70848a]">
+                                        {stall.address}
+                                    </span>
+                                )}
+                            </span>
+                        </p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <Link
+                            href={`/stalls/${stall.id}`}
+                            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#087b86] px-4 py-2 text-[13px] font-bold text-white transition hover:bg-[#05616b]"
+                        >
+                            Visit details <ArrowRight size={16} />
+                        </Link>
+                        {directions && (
                             <a
-                                href={mapUrl}
+                                href={directions}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex min-h-12 items-center gap-2 rounded-full border border-[#cae0e8] bg-white px-5 py-3 text-sm font-semibold text-[#1d4c5d] transition hover:bg-[#f4fbfd]"
+                                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-[#cfe1df] bg-white px-3.5 py-2 text-[13px] font-bold text-[#27616a] transition hover:bg-[#f0faf8]"
                             >
-                                <MapPin size={17} /> Get directions
+                                <Navigation size={15} /> Directions
                             </a>
                         )}
                         <Link
                             href="/products"
-                            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-[#f0ddd2] bg-[#fff8f3] px-5 py-3 text-sm font-semibold text-[#9b5b2f] transition hover:bg-[#fff2e8]"
+                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[13px] font-semibold text-[#a85e37] hover:bg-[#fff5ed]"
                         >
-                            <ShoppingBag size={17} /> Shop online instead
+                            <ShoppingBag size={15} /> Shop online
                         </Link>
                     </div>
                 </div>
-
-                <div className="border-t border-[#e5edf0] bg-white/85 p-5 xl:border-l xl:border-t-0 xl:p-6">
-                    {preview.length > 0 ? (
-                        <>
-                            <div className="flex items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0b7896]">
-                                        Showcase preview
-                                    </p>
-                                    <h4 className="mt-1 text-lg font-semibold text-[#173f4f]">
-                                        A taste of what&apos;s waiting
-                                    </h4>
+                {images.length > 0 && (
+                    <Link
+                        href={`/stalls/${stall.id}#stall-showcase`}
+                        aria-label={`See ${stall.name} showcase`}
+                        className="relative flex min-h-[110px] items-center gap-2 overflow-hidden border-t border-[#edf1ef] bg-[#f9f5ef] p-2.5 lg:h-full lg:min-h-[235px] lg:border-l lg:border-t-0"
+                    >
+                        <div className="grid h-[106px] w-full grid-cols-3 gap-2 lg:h-full lg:max-h-[235px]">
+                            {images.map((product) => (
+                                <div
+                                    key={product.id}
+                                    className="min-w-0 overflow-hidden rounded-xl bg-white"
+                                >
+                                    <StallProductImage
+                                        src={product.image}
+                                        alt={product.name}
+                                        sizes="(max-width: 1024px) 30vw, 110px"
+                                    />
                                 </div>
-                                <span
-                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${style.accent} bg-white ring-1 ring-[#e3edf1]`}
-                                >
-                                    {totalProducts} total
-                                </span>
-                            </div>
-                            <div className="mt-4 grid grid-cols-2 gap-3">
-                                {preview.map((product) => (
-                                    <div
-                                        key={product.id}
-                                        className="min-w-0 rounded-[22px] border border-[#e6eef1] bg-white p-2 shadow-[0_8px_20px_rgba(18,62,80,.04)]"
-                                    >
-                                        <div className="aspect-square overflow-hidden rounded-[18px] bg-[#f2f9fa]">
-                                            <StallProductImage
-                                                src={product.image}
-                                                alt={product.name}
-                                                sizes="160px"
-                                            />
-                                        </div>
-                                        <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-[#325462]">
-                                            {product.name}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-4 rounded-[20px] bg-[linear-gradient(135deg,#eef9fb_0%,#fff8f2_100%)] p-4 ring-1 ring-[#e5edf0]">
-                                <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#173f4f]">
-                                    <Store
-                                        size={16}
-                                        className="text-[#0d7897]"
-                                    />{" "}
-                                    Visit the stall for the full collection
-                                </p>
-                                <p className="mt-1 text-xs leading-5 text-[#6f858e]">
-                                    Can&apos;t make it in person? Browse our
-                                    online store anytime.
-                                </p>
-                                <Link
-                                    href="/products"
-                                    className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#0c7290] hover:underline"
-                                >
-                                    Explore the website{" "}
-                                    <ArrowUpRight size={15} />
-                                </Link>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex h-full min-h-[230px] flex-col items-center justify-center rounded-[24px] border border-dashed border-[#d7e6eb] bg-[#fbfdfe] px-6 text-center">
-                            <Store size={26} className="text-[#9bb1b9]" />
-                            <p className="mt-3 text-sm font-semibold text-[#224958]">
-                                Product highlights coming soon
-                            </p>
-                            <p className="mt-1 text-xs leading-5 text-[#7a9099]">
-                                We&apos;ll soon share the handmade creations
-                                planned for this stall.
-                            </p>
+                            ))}
+                            {images.length === 1 && (
+                                <div className="col-span-2 flex items-center justify-center rounded-xl bg-white/75 px-3 text-center text-xs font-semibold text-[#647579]">
+                                    Handmade with care
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
+                        {count > 0 && (
+                            <span className="absolute bottom-4 right-4 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-extrabold text-[#26646b] shadow-sm">
+                                Explore {count}{" "}
+                                {count === 1 ? "design" : "designs"}{" "}
+                                <ArrowRight size={12} className="inline" />
+                            </span>
+                        )}
+                    </Link>
+                )}
             </div>
         </article>
     );

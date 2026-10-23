@@ -23,7 +23,7 @@ export async function fetchPublicStalls(
     );
     if (data.ack !== "success" || !Array.isArray(data.stalls))
         throw new Error("Invalid stall response");
-    return data.stalls;
+    return data.stalls.map(withCalendarStatus);
 }
 
 export async function fetchPublicStall(
@@ -36,7 +36,39 @@ export async function fetchPublicStall(
     );
     if (data.ack !== "success" || !data.stall)
         throw new Error("This stall isn't available right now.");
-    return data.stall;
+    return withCalendarStatus(data.stall);
+}
+
+/** Use the venue's local calendar day (India), not UTC or the viewer's timezone.
+ * A stall remains ongoing for its full final day even after closing hours.
+ * The public API may be cached or calculate statuses in a different timezone. */
+export function withCalendarStatus(stall: PublicStall): PublicStall {
+    const dates = stall.schedule
+        .map((day) => day.date)
+        .filter(isCalendarDate)
+        .sort();
+    const start = isCalendarDate(stall.startDate) ? stall.startDate : dates[0];
+    const end = isCalendarDate(stall.endDate)
+        ? stall.endDate
+        : dates[dates.length - 1];
+    if (!start || !end) return stall;
+
+    const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(new Date());
+    const get = (key: string) =>
+        parts.find((part) => part.type === key)?.value || "";
+    const today = `${get("year")}-${get("month")}-${get("day")}`;
+    const status: StallStatus =
+        today < start ? "upcoming" : today > end ? "completed" : "ongoing";
+    return { ...stall, status };
+}
+
+function isCalendarDate(value: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value || "");
 }
 
 function asUtcDate(date: string) {
