@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 import { getStoredAccessToken, getAuth, logout } from "@/lib/auth";
 import MobileCartItem from "@/components/ui/MobileCartItem";
 import HamperMediaImage from "@/components/HamperMediaImage";
@@ -69,6 +70,8 @@ type SavedItem = {
     qty?: number;
     _savedId?: string; // server saved id
     productId?: string | undefined; // optional product reference
+    sellStockQuantity?: number | string | null;
+    isAvailableForSale?: boolean | null;
 };
 
 /* ---------------- Helpers ---------------- */
@@ -77,6 +80,16 @@ function safeNumber(v: any): number | null {
     if (typeof v === "number") return v;
     const n = Number(String(v).replace(/[^\d.-]+/g, ""));
     return Number.isFinite(n) ? n : null;
+}
+
+// Stock 0 and explicitly disabled products cannot be purchased, even if the
+// API still returns isAvailableForSale: true (as with existing cart entries).
+function isProductUnavailable(item: {
+    sellStockQuantity?: number | string | null;
+    isAvailableForSale?: boolean | null;
+}): boolean {
+    const stock = safeNumber(item.sellStockQuantity);
+    return (stock !== null && stock <= 0) || item.isAvailableForSale === false;
 }
 
 function formatCurrency(amount: number | null | undefined): string {
@@ -203,16 +216,23 @@ async function apiGetSaved(customerId: string): Promise<SavedItem[]> {
 
         return arr.map((s: any) => {
             const product = s.product || s.productObj || s;
+            const productId = String(
+                product?.productId ?? product?._id ?? s.productId ?? s._id ?? "",
+            );
 
             return {
-                id: product?._id ?? s._id,
+                id: productId,
                 title: product?.productName ?? s.title ?? "Untitled",
                 price:
-                    product?.price?.discountedPrice ??
-                    product?.price?.actualPrice,
+                    safeNumber(product?.price?.discountedPrice) ??
+                    safeNumber(product?.price?.actualPrice),
                 img: product?.productImage ?? s.img ?? null,
                 _savedId: s._id,
-                productId: product?._id,
+                productId,
+                sellStockQuantity:
+                    product?.sellStockQuantity ?? s.sellStockQuantity ?? null,
+                isAvailableForSale:
+                    product?.isAvailableForSale ?? s.isAvailableForSale ?? null,
             } as SavedItem;
         });
     } catch (error: any) {
@@ -232,8 +252,16 @@ async function apiAddSaved(customerId: string, product: any) {
             productId: product.productId ?? product.id,
         });
 
+        if (res.data?.ack === "failure") {
+            throw new ApiError(
+                extractErrorMessage(res.data, "Unable to save item"),
+                res.data?.error?.code,
+                res.data,
+            );
+        }
         return res.data;
     } catch (error: any) {
+        if (error instanceof ApiError) throw error;
         throw new ApiError(
             error?.response?.data?.error?.message ||
                 error?.message ||
@@ -277,6 +305,29 @@ async function apiDeleteSavedByProduct(customerId: string, productId: string) {
     }
 }
 
+function SavedProductImage({
+    src,
+    alt,
+    unavailable,
+}: {
+    src?: string | null;
+    alt: string;
+    unavailable: boolean;
+}) {
+    const [failed, setFailed] = useState(false);
+    const url = failed ? null : publicImageUrl(src);
+    return (
+        <Image
+            src={url || "/no-image-placeholder.png"}
+            alt={alt}
+            width={64}
+            height={64}
+            onError={() => setFailed(true)}
+            className={`h-full w-full object-cover ${unavailable ? "grayscale opacity-65" : ""}`}
+        />
+    );
+}
+
 /* ---------------- Component ---------------- */
 export default function ClientCart() {
     const fetchIdRef = React.useRef(0);
@@ -284,6 +335,13 @@ export default function ClientCart() {
         new Map<string, ReturnType<typeof setTimeout>>(),
     );
     const cartLoadedRef = React.useRef(false);
+    const autoMoveRunningRef = React.useRef(false);
+    const autoMoveFailedRef = React.useRef(new Set<string>());
+    const [autoMovingIds, setAutoMovingIds] = useState<string[]>([]);
+    const [automaticallySavedCount, setAutomaticallySavedCount] = useState(0);
+    const [savedStockOverrides, setSavedStockOverrides] = useState<
+        Record<string, number>
+    >({});
 
     // Notify the header and other shopping widgets without reloading this page.
     const notifyOwnCartChange = () =>
@@ -330,7 +388,13 @@ export default function ClientCart() {
     const guestCartLoading = React.useRef(false);
 
     // derived counts used for disabling checkout
-    const totalItemsCount = (localCart?.sellItems ?? []).reduce(
+    const activeSellItems = (localCart?.sellItems ?? []).filter(
+        (it) => it.inUse !== false && !isProductUnavailable(it),
+    );
+    const unavailableSellItems = (localCart?.sellItems ?? []).filter(
+        (it) => it.inUse !== false && isProductUnavailable(it),
+    );
+    const totalItemsCount = activeSellItems.reduce(
         (sum, it) => sum + Number(it.quantity ?? 1),
         0,
     );
@@ -348,8 +412,12 @@ export default function ClientCart() {
         (it) => !it.hamper || it.isAvailable !== true,
     );
     const cartItemsCount = totalItemsCount + hamperCount;
-    const cartSubtotal = orderTotal(localCart?.sellItems) + hamperTotal;
-    const hasItems = cartItemsCount > 0 && !hasUnavailableHamper;
+    const cartSubtotal = orderTotal(activeSellItems) + hamperTotal;
+    const hasItems =
+        cartItemsCount > 0 &&
+        !hasUnavailableHamper &&
+        unavailableSellItems.length === 0 &&
+        autoMovingIds.length === 0;
 
     function redirectToLogin(): void {
         logout("/login");
@@ -364,7 +432,7 @@ export default function ClientCart() {
                 const stock = safeNumber(it.sellStockQuantity);
                 const currentQty = Number(it.quantity ?? 1);
 
-                if (stock === null) {
+                if (stock === null || stock <= 0) {
                     return {
                         ...it,
                         quantity: Math.max(1, Math.floor(currentQty)),
@@ -414,8 +482,10 @@ export default function ClientCart() {
             if (isAuthenticated) {
                 await syncGuestCartToServer();
 
+                // Show saved-for-later while the first cart request completes.
+                setSavedLoading(true);
                 await fetchCart();
-                fetchSavedItems();
+                void fetchSavedItems();
             } else {
                 loadGuestCart();
             }
@@ -489,9 +559,122 @@ export default function ClientCart() {
         }
     }
 
+    // Moving to saved-for-later is a two-step server change: save first, then
+    // delete the cart line. Treat an already-saved product as a successful save.
+    // Never remove the cart entry if saving failed (prevents data loss).
+    async function moveCartProductToSaved(
+        cart: Cart,
+        item: CartItem,
+    ): Promise<void> {
+        const customerId = getStoredCustomerId();
+        const cartId = cart.cartId ?? cart._id;
+        if (!customerId || !cartId || !item._id || !item.productId) {
+            throw new Error("Cart or customer information is missing.");
+        }
+
+        try {
+            await apiAddSaved(customerId, { productId: item.productId });
+        } catch (err: any) {
+            if (!(err instanceof ApiError) || String(err.code) !== "1003") {
+                throw err;
+            }
+            // 1003 means the item is already in Saved for Later.
+        }
+
+        const result = await removeFromCart(
+            cartId,
+            String(item._id),
+            String(item.productId),
+            "SELL",
+            "ClientCart",
+        );
+        if (!result?.success) {
+            // Some backends remove a cart item when it is saved. In that case
+            // the redundant DELETE can fail, but the move has succeeded.
+            const response = await api.get("/cart");
+            const freshCart = Array.isArray(response.data?.cartData)
+                ? response.data.cartData[0]
+                : response.data?.cartData;
+            const stillInCart = (freshCart?.sellItems ?? []).some(
+                (line: any) =>
+                    String(line._id) === String(item._id) ||
+                    String(line.productId) === String(item.productId),
+            );
+            if (stillInCart) {
+                throw new Error(
+                    typeof result?.message === "string"
+                        ? result.message
+                        : "Could not remove this item from your cart.",
+                );
+            }
+        }
+    }
+
+    // Runs after GET /cart (and subsequent silent refreshes). One migration
+    // runs at a time so React refreshes cannot trigger duplicate requests.
+    useEffect(() => {
+        if (!isAuthenticated || !localCart || autoMoveRunningRef.current) {
+            return;
+        }
+        const cartId = localCart.cartId ?? localCart._id;
+        if (!cartId || !getStoredCustomerId()) return;
+
+        const candidates = (localCart.sellItems ?? []).filter(
+            (item) =>
+                item.inUse !== false &&
+                isProductUnavailable(item) &&
+                Boolean(item._id && item.productId) &&
+                !autoMoveFailedRef.current.has(String(item._id)),
+        );
+        if (candidates.length === 0) return;
+
+        autoMoveRunningRef.current = true;
+        setAutoMovingIds(candidates.map((item) => String(item._id)));
+
+        void (async () => {
+            try {
+                for (const item of candidates) {
+                    try {
+                        await moveCartProductToSaved(localCart, item);
+                        setSavedStockOverrides((prev) => ({
+                            ...prev,
+                            [String(item.productId)]: 0,
+                        }));
+                        setAutomaticallySavedCount((n) => n + 1);
+                        // Do not leave sold-out products in the payable UI.
+                        fetchIdRef.current += 1;
+                        setLocalCart((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      sellItems: (prev.sellItems ?? []).filter(
+                                          (line) => line._id !== item._id,
+                                      ),
+                                  }
+                                : prev,
+                        );
+                    } catch (err: any) {
+                        autoMoveFailedRef.current.add(String(item._id));
+                        setError(
+                            `"${item.productPublicName || "An unavailable product"}" could not be moved to Saved for Later. It will not be included in checkout. ${err?.message || "Please try again."}`,
+                        );
+                    } finally {
+                        setAutoMovingIds((ids) =>
+                            ids.filter((id) => id !== String(item._id)),
+                        );
+                    }
+                }
+            } finally {
+                autoMoveRunningRef.current = false;
+                // Reconcile against the server and show the saved items even if
+                // this was the last product in the cart.
+                await Promise.all([fetchCart(), fetchSavedItems()]);
+            }
+        })();
+    }, [isAuthenticated, localCart]);
+
     async function fetchSavedItems(): Promise<void> {
         setSavedLoading(true);
-        setError(null);
         try {
             const customerId = getStoredCustomerId();
             if (!customerId) {
@@ -500,6 +683,64 @@ export default function ClientCart() {
                 return;
             }
             const items = await apiGetSaved(customerId);
+            const missingStockIds = items
+                .filter(
+                    (item) =>
+                        item.productId &&
+                        item.sellStockQuantity == null &&
+                        item.isAvailableForSale !== false,
+                )
+                .map((item) => String(item.productId));
+            if (missingStockIds.length) {
+                try {
+                    const response = await api.get("/product/sell", {
+                        params: { ids: [...new Set(missingStockIds)].join(",") },
+                    });
+                    const products = Array.isArray(response.data?.productData)
+                        ? response.data.productData
+                        : [];
+                    const byId = new Map<string, any>(
+                        products.map((p: any) => [
+                            String(p.productId ?? p._id),
+                            p,
+                        ]),
+                    );
+                    for (const saved of items) {
+                        const matched = byId.get(String(saved.productId));
+                        if (matched) {
+                            saved.sellStockQuantity =
+                                matched.sellStockQuantity ?? null;
+                            saved.isAvailableForSale =
+                                matched.isAvailableForSale ?? null;
+                        }
+                    }
+                    // The sell list may omit sold-out products. Its individual
+                    // detail endpoint still exposes sellStockQuantity.
+                    const stillUnknown = items.filter(
+                        (item) =>
+                            item.productId &&
+                            item.sellStockQuantity == null &&
+                            item.isAvailableForSale !== false,
+                    );
+                    const individual = await Promise.allSettled(
+                        stillUnknown.map((item) =>
+                            api.get(`/product/sell/${encodeURIComponent(String(item.productId))}`),
+                        ),
+                    );
+                    individual.forEach((result, index) => {
+                        if (result.status !== "fulfilled") return;
+                        const product = result.value.data?.productData;
+                        if (!product) return;
+                        stillUnknown[index].sellStockQuantity =
+                            product.sellStockQuantity ?? null;
+                        stillUnknown[index].isAvailableForSale =
+                            product.isAvailableForSale ?? null;
+                    });
+                } catch (err) {
+                    // Saved items are still usable even if the stock lookup fails.
+                    console.warn("Could not refresh saved product stock", err);
+                }
+            }
             setSavedItems(items);
         } catch (err: any) {
             console.error("fetchSavedItems error:", err);
@@ -572,6 +813,7 @@ export default function ClientCart() {
                         thumbnail: p.productImage,
                         productPublicName: p.productName,
                         sellStockQuantity: p.sellStockQuantity,
+                        isAvailableForSale: p.isAvailableForSale ?? null,
                         price: {
                             actualPrice: p.latestSalePrice?.actualPrice,
                             discountedPrice: p.latestSalePrice?.discountedPrice,
@@ -1000,6 +1242,7 @@ export default function ClientCart() {
         if (idxInFull === -1) return;
 
         const item = arr[idxInFull];
+        if (isProductUnavailable(item)) return;
         const stock = safeNumber(item.sellStockQuantity);
 
         let qty = Math.max(1, Math.floor(requestedQty));
@@ -1095,89 +1338,36 @@ export default function ClientCart() {
     /* ---------------- Save-for-later actions (with ApiError handling) ---------------- */
 
     async function saveForLater(itemId?: string): Promise<void> {
-        if (!itemId || !localCart) return;
-        const idx = (localCart.sellItems ?? []).findIndex(
-            (s) => s._id === itemId,
-        );
-        if (idx === -1) return;
-        const item = localCart.sellItems![idx];
-
-        const customerId = getStoredCustomerId();
-        const cartId = localCart?._id ?? localCart?.cartId;
-        if (!cartId) {
-            setError("Cart not initialized yet.");
-            return;
-        }
-
-        if (!customerId) {
+        if (!itemId || !localCart || saving || autoMovingIds.length > 0) return;
+        const item = (localCart.sellItems ?? []).find((s) => s._id === itemId);
+        if (!item) return;
+        if (!getStoredCustomerId()) {
             redirectToLogin();
             return;
         }
-
-        // Optimistically remove locally so UI feels snappy
-        setLocalCart((prev) => {
-            if (!prev) return prev;
-            const cp: Cart = {
-                ...prev,
-                sellItems: prev.sellItems?.map((i) => ({ ...i })) ?? [],
-            };
-            cp.sellItems = (cp.sellItems ?? []).filter((s) => s._id !== itemId);
-            return cp;
-        });
-
         setSaving(true);
+        setSavingItemId(itemId);
         setError(null);
         try {
-            const priceVal: number | undefined =
-                typeof item.price?.discountedPrice === "number"
-                    ? item.price!.discountedPrice
-                    : typeof item.price?.actualPrice === "number"
-                      ? item.price!.actualPrice
-                      : undefined;
-
-            await apiAddSaved(customerId, {
-                id: item.productId ?? item._id,
-                productId: item.productId,
-                productPublicName: item.productPublicName ?? undefined,
-                price: priceVal,
-                image: item.imagePath ?? item.thumbnail ?? null,
-            });
-
+            await moveCartProductToSaved(localCart, item);
+            fetchIdRef.current += 1;
+            setLocalCart((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          sellItems: (prev.sellItems ?? []).filter(
+                              (line) => line._id !== itemId,
+                          ),
+                      }
+                    : prev,
+            );
             await Promise.all([fetchCart(), fetchSavedItems()]);
         } catch (err: any) {
-            console.error("saveForLater error:", err);
-
-            // If this is our ApiError (contains server message and code), show that message.
-            if (err instanceof ApiError) {
-                // If server says 'already exists' (code 1003) - show friendly popup
-                if (err.code === 1003 || String(err.code) === "1003") {
-                    // open a friendly modal instead of showing raw ApiError
-                    setSavedExistsTitle(
-                        item.productPublicName ?? item.productId ?? "This item",
-                    );
-                    setSavedExistsModalOpen(true);
-
-                    // re-sync state from server so optimistic removal is undone
-                    await fetchCart();
-                    await fetchSavedItems();
-                    return;
-                }
-
-                // For other ApiError codes, show message banner
-                setError(err.message || "Could not save item for later");
-                await fetchCart();
-                await fetchSavedItems();
-                return;
-            }
-
-            // generic fallback
             setError(err?.message || "Could not save item for later");
-
-            // restore state
-            await fetchCart();
-            await fetchSavedItems();
+            await Promise.all([fetchCart(), fetchSavedItems()]);
         } finally {
             setSaving(false);
+            setSavingItemId(null);
         }
     }
 
@@ -1195,6 +1385,18 @@ export default function ClientCart() {
             return;
         }
         if (!saved) return;
+        if (
+            isProductUnavailable({
+                ...saved,
+                sellStockQuantity:
+                    saved.sellStockQuantity ??
+                    savedStockOverrides[String(saved.productId ?? saved.id)] ??
+                    null,
+            })
+        ) {
+            setError("This product is out of stock. You can move it back when it is available.");
+            return;
+        }
 
         setSaving(true);
         setError(null);
@@ -1420,7 +1622,8 @@ export default function ClientCart() {
         (!localCart ||
             (localCart.sellItems?.length ?? 0) +
                 (localCart.sellHamperItems?.length ?? 0) ===
-                0)
+                0) &&
+        !(isAuthenticated && (savedItems.length > 0 || savedLoading || automaticallySavedCount > 0))
     ) {
         return (
             <div className="p-8">
@@ -1431,6 +1634,17 @@ export default function ClientCart() {
 
     return (
         <>
+            {automaticallySavedCount > 0 && (
+                <div
+                    role="status"
+                    className="max-w-4xl mx-auto mb-4 rounded-2xl border border-[#c9e4d7] bg-[#f3fbf6] px-4 py-3 text-sm text-[#286347]"
+                >
+                    {automaticallySavedCount} out-of-stock product
+                    {automaticallySavedCount === 1 ? " was" : "s were"} automatically
+                    moved to <strong>Saved for later</strong>. You can find
+                    {automaticallySavedCount === 1 ? " it" : " them"} below.
+                </div>
+            )}
             {/* Error banner */}
             {error ? (
                 <div className="max-w-4xl mx-auto mb-4">
@@ -1462,10 +1676,10 @@ export default function ClientCart() {
                             (it) => it.inUse !== false,
                         ).length === 0 && hamperLines.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
-                                <p>No sell items in your cart.</p>
+                                <p>Your cart is clear. Items saved for later appear below.</p>
                                 <a
                                     href="/products"
-                                    className="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                                    className="mt-4 inline-block site-button-primary"
                                 >
                                     Shop Now
                                 </a>
@@ -1482,7 +1696,16 @@ export default function ClientCart() {
                                             <MobileCartItem
                                                 key={item._id ?? item.productId}
                                                 item={item}
+                                                outOfStock={isProductUnavailable(item)}
+                                                removeDisabled={
+                                                    saving ||
+                                                    deleting ||
+                                                    autoMovingIds.length > 0
+                                                }
                                                 disabled={
+                                                    isProductUnavailable(item) ||
+                                                    saving ||
+                                                    autoMovingIds.length > 0 ||
                                                     savingItemId === item._id ||
                                                     savingQuantityIds.includes(
                                                         String(item._id),
@@ -1524,7 +1747,16 @@ export default function ClientCart() {
                                             <DesktopCartItem
                                                 key={item._id ?? item.productId}
                                                 item={item}
+                                                outOfStock={isProductUnavailable(item)}
+                                                removeDisabled={
+                                                    saving ||
+                                                    deleting ||
+                                                    autoMovingIds.length > 0
+                                                }
                                                 disabled={
+                                                    isProductUnavailable(item) ||
+                                                    saving ||
+                                                    autoMovingIds.length > 0 ||
                                                     savingItemId === item._id ||
                                                     savingQuantityIds.includes(
                                                         String(item._id),
@@ -1556,6 +1788,13 @@ export default function ClientCart() {
                                         ))}
                                 </div>
                             </>
+                        )}
+                        {unavailableSellItems.length > 0 && (
+                            <p className="mt-3 text-xs text-amber-800" role="status">
+                                {isAuthenticated
+                                    ? "Unavailable products are being moved to Saved for later. If a move fails, you can remove the item manually."
+                                    : "Unavailable products are excluded from the order total. Sign in to save them for later."}
+                            </p>
                         )}
                         {hamperLines.length > 0 && (
                             <div className="mt-6 space-y-3">
@@ -1704,6 +1943,13 @@ export default function ClientCart() {
                         </div>
                     </div>
 
+                    {unavailableSellItems.length > 0 && (
+                        <p role="alert" className="text-sm text-amber-700">
+                            {autoMovingIds.length > 0
+                                ? "Moving sold-out products to Saved for later…"
+                                : "Sold-out products cannot be checked out. Remove unavailable items to continue."}
+                        </p>
+                    )}
                     {hasUnavailableHamper && (
                         <p role="alert" className="text-sm text-rose-600">
                             Some gift hampers are unavailable. Please update
@@ -1719,6 +1965,7 @@ export default function ClientCart() {
                                 !hasItems ||
                                 savingQuantityIds.length > 0 ||
                                 savingItemId !== null ||
+                                saving ||
                                 deleting
                             }
                             className="site-button-primary w-full disabled:opacity-50"
@@ -1735,6 +1982,7 @@ export default function ClientCart() {
                                 !hasItems ||
                                 savingQuantityIds.length > 0 ||
                                 savingItemId !== null ||
+                                saving ||
                                 deleting
                             }
                             className="site-button-primary w-full disabled:opacity-50"
@@ -1798,7 +2046,17 @@ export default function ClientCart() {
                                     {savedItems.map((s) => (
                                         <li
                                             key={s._savedId ?? s.id}
-                                            className="flex items-center gap-4"
+                                            className={`flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 rounded-xl p-2 transition-colors ${
+                                                isProductUnavailable({
+                                                    ...s,
+                                                    sellStockQuantity:
+                                                        s.sellStockQuantity ??
+                                                        savedStockOverrides[String(s.productId ?? s.id)] ??
+                                                        null,
+                                                })
+                                                    ? "bg-slate-100 border border-slate-200"
+                                                    : ""
+                                            }`}
                                         >
                                             <div className="w-16 h-16 rounded-md overflow-hidden border bg-white">
                                                 <Link
@@ -1809,23 +2067,43 @@ export default function ClientCart() {
                                                     }
                                                     className="block w-full h-full"
                                                 >
-                                                    <Image
-                                                        src={
-                                                            s.img ??
-                                                            "/placeholder-80x80.png"
-                                                        }
+                                                    <SavedProductImage
+                                                        src={s.img}
                                                         alt={s.title}
-                                                        width={64}
-                                                        height={64}
-                                                        className="object-cover"
+                                                        unavailable={isProductUnavailable({
+                                                            ...s,
+                                                            sellStockQuantity:
+                                                                s.sellStockQuantity ??
+                                                                savedStockOverrides[String(s.productId ?? s.id)] ??
+                                                                null,
+                                                        })}
                                                     />
                                                 </Link>
                                             </div>
 
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate">
+                                                <div className={`text-sm font-medium ${
+                                                    isProductUnavailable({
+                                                        ...s,
+                                                        sellStockQuantity:
+                                                            s.sellStockQuantity ??
+                                                            savedStockOverrides[String(s.productId ?? s.id)] ??
+                                                            null,
+                                                    }) ? "text-slate-500" : "text-slate-900"
+                                                }`}>
                                                     {s.title}
                                                 </div>
+                                                {isProductUnavailable({
+                                                    ...s,
+                                                    sellStockQuantity:
+                                                        s.sellStockQuantity ??
+                                                        savedStockOverrides[String(s.productId ?? s.id)] ??
+                                                        null,
+                                                }) && (
+                                                    <span className="mt-1 inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                        Out of stock · Saved for later
+                                                    </span>
+                                                )}
                                                 {typeof s.price ===
                                                     "number" && (
                                                     <div className="text-xs text-gray-500 mt-1">
@@ -1841,8 +2119,24 @@ export default function ClientCart() {
                                                     onClick={() =>
                                                         moveSavedToCart(s)
                                                     }
-                                                    disabled={saving}
-                                                    className="text-xs px-3 py-1 rounded border hover:bg-gray-50"
+                                                    disabled={
+                                                        saving ||
+                                                        isProductUnavailable({
+                                                            ...s,
+                                                            sellStockQuantity:
+                                                                s.sellStockQuantity ??
+                                                                savedStockOverrides[String(s.productId ?? s.id)] ??
+                                                                null,
+                                                        })
+                                                    }
+                                                    title={isProductUnavailable({
+                                                        ...s,
+                                                        sellStockQuantity:
+                                                            s.sellStockQuantity ??
+                                                            savedStockOverrides[String(s.productId ?? s.id)] ??
+                                                            null,
+                                                    }) ? "Available again when stock returns" : "Move to cart"}
+                                                    className="text-xs px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     Move to cart
                                                 </button>

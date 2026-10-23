@@ -1,9 +1,13 @@
 import Image from "next/image";
+import { useState } from "react";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 import { Minus, Plus, Trash2 } from "lucide-react";
 
 type Props = {
     item: any;
     disabled?: boolean;
+    outOfStock?: boolean;
+    removeDisabled?: boolean;
     onIncrease: () => void;
     onDecrease: () => void;
     onRemove: () => void;
@@ -14,6 +18,8 @@ type Props = {
 export default function MobileCartItem({
     item,
     disabled,
+    outOfStock = false,
+    removeDisabled = false,
     onIncrease,
     onDecrease,
     onRemove,
@@ -21,22 +27,36 @@ export default function MobileCartItem({
     lineTotal,
     formatCurrency,
 }: Props) {
+    const [imageError, setImageError] = useState(false);
+    const imageSrc =
+        (imageError ? null : publicImageUrl(item.imagePath)) ||
+        "/no-image-placeholder.png";
     return (
-        <div className="site-card p-3 sm:p-4">
+        <div
+            className={`site-card p-3 sm:p-4 ${outOfStock ? "bg-slate-100 border-slate-200" : ""}`}
+        >
             <div className="flex items-start gap-3">
                 <div className="h-21 w-21 shrink-0 rounded-xl bg-[#ecf8f9] overflow-hidden">
                     <Image
-                        src={item.imagePath || "/no-image-placeholder.png"}
+                        src={imageSrc}
+                        onError={() => setImageError(true)}
                         alt={item.productPublicName || "Product"}
                         width={84}
                         height={84}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${outOfStock ? "grayscale opacity-60" : ""}`}
                     />
                 </div>
                 <div className="min-w-0 grow">
-                    <h3 className="text-sm font-bold text-[#173b4a] leading-5">
+                    <h3
+                        className={`text-sm font-bold leading-5 ${outOfStock ? "text-slate-500" : "text-[#173b4a]"}`}
+                    >
                         {item.productPublicName}
                     </h3>
+                    {outOfStock && (
+                        <span className="mt-1 inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            Out of stock · Excluded from checkout
+                        </span>
+                    )}
                     <p className="mt-1 font-semibold text-[#065975]">
                         {formatCurrency(
                             item.price?.discountedPrice ??
@@ -47,8 +67,8 @@ export default function MobileCartItem({
                     <button
                         type="button"
                         onClick={onSave}
-                        disabled={disabled}
-                        className="text-xs text-slate-500 underline mt-2"
+                        disabled={disabled || outOfStock}
+                        className="text-xs text-slate-500 underline mt-2 disabled:opacity-50"
                     >
                         Save for later
                     </button>
@@ -57,7 +77,7 @@ export default function MobileCartItem({
                     type="button"
                     onClick={onRemove}
                     aria-label={`Remove ${item.productPublicName}`}
-                    disabled={disabled}
+                    disabled={removeDisabled}
                     className="site-icon-button !min-w-9 !min-h-9 text-rose-600"
                 >
                     <Trash2 size={18} />
@@ -69,7 +89,9 @@ export default function MobileCartItem({
                         type="button"
                         aria-label="Decrease quantity"
                         onClick={onDecrease}
-                        disabled={disabled || Number(item.quantity) <= 1}
+                        disabled={
+                            disabled || outOfStock || Number(item.quantity) <= 1
+                        }
                         className="site-icon-button !min-w-9 !min-h-9 disabled:opacity-40"
                     >
                         <Minus size={15} />
@@ -84,7 +106,7 @@ export default function MobileCartItem({
                         type="button"
                         aria-label="Increase quantity"
                         onClick={onIncrease}
-                        disabled={disabled}
+                        disabled={disabled || outOfStock}
                         className="site-icon-button !min-w-9 !min-h-9 disabled:opacity-40"
                     >
                         <Plus size={15} />
@@ -92,8 +114,12 @@ export default function MobileCartItem({
                 </div>
                 <div className="text-right">
                     <p className="text-xs text-slate-400">Subtotal</p>
-                    <p className="font-bold text-sm text-[#173b4a]">
-                        {formatCurrency(lineTotal)}
+                    <p
+                        className={`font-bold text-sm ${outOfStock ? "text-slate-400 line-through" : "text-[#173b4a]"}`}
+                    >
+                        {outOfStock
+                            ? "Not included"
+                            : formatCurrency(lineTotal)}
                     </p>
                 </div>
             </div>
