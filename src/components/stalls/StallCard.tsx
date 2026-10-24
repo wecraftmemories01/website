@@ -70,7 +70,7 @@ export default function StallCard({ stall }: { stall: PublicStall }) {
                     </div>
                     <div className="mt-3">
                         <Link
-                            href={`/stalls/${stall.id}`}
+                            href={`/stalls/${stall.slug || stall.id}`}
                             className="inline-block max-w-full text-[clamp(1.3rem,2vw,1.75rem)] font-extrabold leading-tight tracking-[-.035em] text-[#173f47] hover:text-[#007f8c]"
                         >
                             {stall.name}
@@ -133,7 +133,7 @@ export default function StallCard({ stall }: { stall: PublicStall }) {
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                         <Link
-                            href={`/stalls/${stall.id}`}
+                            href={`/stalls/${stall.slug || stall.id}`}
                             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#087b86] px-4 py-2 text-[13px] font-bold text-white transition hover:bg-[#05616b]"
                         >
                             Visit details <ArrowRight size={16} />
@@ -158,7 +158,7 @@ export default function StallCard({ stall }: { stall: PublicStall }) {
                 </div>
                 {images.length > 0 && (
                     <Link
-                        href={`/stalls/${stall.id}#stall-showcase`}
+                        href={`/stalls/${stall.slug || stall.id}#stall-showcase`}
                         aria-label={`See ${stall.name} showcase`}
                         className="relative flex min-h-[110px] items-center gap-2 overflow-hidden border-t border-[#edf1ef] bg-[#f9f5ef] p-2.5 lg:h-full lg:min-h-[235px] lg:border-l lg:border-t-0"
                     >

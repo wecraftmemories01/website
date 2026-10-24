@@ -8,13 +8,14 @@ export interface StallDay {
 
 export interface StallShowcaseProduct {
     id: string;
+    slug: string | null;
     name: string;
     image: string | null;
-    slug: string | null;
 }
 
 export interface PublicStall {
     id: string;
+    slug: string | null;
     name: string;
     stallNumber: string;
     description: string;
