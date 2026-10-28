@@ -133,6 +133,12 @@ export default function CheckoutPanel({
         Record<string, DeliveryEntry>
     >({});
     const [backendTotal, setBackendTotal] = useState<number | null>(null);
+    const [guestCouponInput,setGuestCouponInput] = useState('');
+    const [guestCouponCode,setGuestCouponCode] = useState('');
+    const [guestDiscount,setGuestDiscount] = useState(0);
+    const [guestFreeShipping,setGuestFreeShipping] = useState(false);
+    const [guestCouponError,setGuestCouponError] = useState('');
+    const [guestCouponBusy,setGuestCouponBusy] = useState(false);
 
     const mountedRef = useRef(true);
     const hydratedRef = useRef(false);
@@ -1119,6 +1125,7 @@ export default function CheckoutPanel({
                           pincode: billingForm.pincode,
                       },
 
+                couponCode: guestCouponCode || null,
                 cartItems: cart
                     .filter((it) => it.type !== "HAMPER")
                     .map((it) => ({ productId: it.id, quantity: it.qty })),
@@ -1238,6 +1245,33 @@ export default function CheckoutPanel({
         () => cart.reduce((s, it) => s + it.price * it.qty, 0),
         [cart],
     );
+    const couponCartKey = useMemo(()=>cart.map(it=>`${it.type || 'SELL'}:${it.id}:${it.qty}:${it.price}`).join('|'),[cart]);
+    useEffect(()=>{
+        setGuestCouponCode(''); setGuestDiscount(0); setGuestFreeShipping(false); setGuestCouponError('');
+    },[couponCartKey]);
+
+    async function applyGuestCoupon() {
+        const code = guestCouponInput.trim().toUpperCase();
+        if (!code) {setGuestCouponError('Enter a coupon code');return;}
+        setGuestCouponBusy(true);setGuestCouponError('');
+        try {
+            const res = await fetch(buildUrl('/coupon/validate'),{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({code,subtotal,cartItems:cart.map(it=>({
+                    ...(it.type==='HAMPER'?{hamperId:it.id}:{productId:it.id}),
+                    quantity:it.qty,price:it.price
+                }))})
+            });
+            const data = await safeJson(res);
+            if (!res.ok || data?.valid !== true) throw new Error(data?.message || 'Coupon not valid for this cart');
+            setGuestCouponCode(code);
+            setGuestDiscount(Number(data.discountAmount || 0));
+            setGuestFreeShipping(Boolean(data.isFreeShipping));
+            setGuestCouponInput('');
+        } catch (err) {
+            setGuestCouponError(err instanceof Error ? err.message : 'Coupon validation failed');
+        } finally {setGuestCouponBusy(false);}
+    }
     const hasAddress = addresses.length > 0;
 
     const selectedAddress = useMemo(
@@ -1260,7 +1294,7 @@ export default function CheckoutPanel({
     }, [selectedPincode, deliveryMap]);
 
     const total =
-        backendTotal ?? subtotal + (Number(currentDeliveryCharge) || 0);
+        backendTotal ?? Math.max(0,subtotal - guestDiscount) + (guestFreeShipping ? 0 : (Number(currentDeliveryCharge) || 0));
 
     useEffect(() => {
         if (!selectedAddressId) return;
@@ -1903,9 +1937,11 @@ export default function CheckoutPanel({
                                 </span>
                                 <div>
                                     <h3 className="font-bold text-[#065975]">Offers & discount codes</h3>
-                                    <p className="mt-1 text-xs leading-5 text-slate-600">Have a coupon? Sign in to verify and apply offers before placing your order.</p>
-                                    <Link href="/login?redirect=/checkout" className="mt-2 inline-flex rounded-lg bg-[#065975] px-3 py-2 text-xs font-bold text-white hover:bg-[#0b7795]">Sign in to use a code →</Link>
-                                    <p className="mt-2 text-xs text-slate-500">Or continue with guest checkout at the regular price.</p>
+                                    <p className="mt-1 text-xs leading-5 text-slate-600">Apply an eligible coupon even when checking out as a guest. First-order and customer-only offers require sign-in.</p>
+                                    <div className="mt-3 flex flex-wrap gap-2"><input aria-label="Coupon code" value={guestCouponInput} onChange={e=>setGuestCouponInput(e.target.value.toUpperCase())} className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Coupon code" disabled={guestCouponBusy}/><button type="button" onClick={()=>void applyGuestCoupon()} disabled={guestCouponBusy || !guestCouponInput.trim()} className="rounded-lg bg-[#065975] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{guestCouponBusy?'Checking…':'Apply'}</button></div>
+                                    {guestCouponError && <p role="alert" className="mt-2 text-sm text-rose-700">{guestCouponError}</p>}
+                                    {guestCouponCode && <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-emerald-800"><span>Applied: <strong>{guestCouponCode}</strong>{guestDiscount>0?` · Saved ${formatINR(guestDiscount)}`:guestFreeShipping?' · Free delivery':''}</span><button type="button" className="underline" onClick={()=>{setGuestCouponCode('');setGuestDiscount(0);setGuestFreeShipping(false);}}>Remove</button></div>}
+                                    <Link href="/login?redirect=/checkout" className="mt-3 inline-block text-xs font-medium text-[#065975] underline">Sign in for customer-only offers</Link>
                                 </div>
                             </div>
                         </div>
@@ -1916,6 +1952,7 @@ export default function CheckoutPanel({
                                 <div>{formatINR(subtotal)}</div>
                             </div>
 
+                            {guestCouponCode && guestDiscount>0 && <div className="flex justify-between font-semibold text-emerald-800"><span>Coupon discount</span><span>−{formatINR(guestDiscount)}</span></div>}
                             <div className="flex justify-between items-center">
                                 <div>Delivery</div>
 
@@ -1939,7 +1976,7 @@ export default function CheckoutPanel({
                                     </div>
                                 ) : (
                                     <div>
-                                        {formatINR(currentDeliveryCharge)}
+                                        {guestFreeShipping && guestCouponCode ? 'Free with coupon' : formatINR(currentDeliveryCharge)}
                                     </div>
                                 )}
                             </div>

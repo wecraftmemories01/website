@@ -16,6 +16,10 @@ import { useRouter } from "next/navigation";
 import AddressModal, { Address } from "./AddressModal";
 import { cartHamperLines } from "@/lib/hampers";
 import {
+    getAutomaticCouponCode,
+    isSavedCouponManuallySelected,
+} from "@/lib/checkoutCouponSelection";
+import {
     getStoredAccessToken,
     authFetch,
     ensureFreshAccessToken,
@@ -206,11 +210,18 @@ export default function CheckoutPanel({
         if (!cartLoaded) return;
         let active = true;
         let storedCode = "";
+        // Legacy saved coupons had no selectionMode; treat those as automatic
+        // so an old SAVE5 can be upgraded when FIRST10 becomes available.
+        couponOverrideRef.current = false;
         try {
             const raw = localStorage.getItem("wcm_coupon");
-            storedCode = raw
-                ? String(JSON.parse(raw)?.appliedCoupon || "")
-                : "";
+            const stored = raw ? JSON.parse(raw) : null;
+            storedCode = String(stored?.appliedCoupon || "");
+            couponOverrideRef.current = isSavedCouponManuallySelected(
+                stored?.selectionMode,
+                stored?.cartKey,
+                couponCartKey,
+            );
         } catch {
             /* invalid/old storage */
         }
@@ -237,6 +248,9 @@ export default function CheckoutPanel({
                     setDiscountedSubtotal(Math.max(0, subtotal - savings));
                     setIsCouponLocked(true);
                 } else {
+                    // A saved manual code that is no longer valid should
+                    // not prevent automatic selection of another valid offer.
+                    couponOverrideRef.current = false;
                     setAppliedCoupon(null);
                     setDiscountAmount(0);
                     setCouponFreeShipping(false);
@@ -271,6 +285,10 @@ export default function CheckoutPanel({
                         isCouponLocked,
                         subtotal,
                         couponFreeShipping,
+                        selectionMode: couponOverrideRef.current
+                            ? "manual"
+                            : "automatic",
+                        cartKey: couponCartKey,
                     }),
                 );
             } else {
@@ -286,6 +304,7 @@ export default function CheckoutPanel({
         isCouponLocked,
         subtotal,
         couponFreeShipping,
+        couponCartKey,
     ]);
 
     function removeCoupon(manual = true) {
@@ -1723,23 +1742,20 @@ export default function CheckoutPanel({
         };
     }, [subtotal, cartLoaded, couponCartKey]);
 
-    // Production-style checkout: automatically verify/apply the best offer,
-    // without replacing a previously saved or manually chosen coupon.
+    // Upgrade automatically selected coupons when the server finds a better
+    // offer. Do NOT override a coupon the customer explicitly selected.
+    // A stored legacy coupon without selection metadata is automatic.
     useEffect(() => {
-        if (
-            !cartLoaded ||
-            !couponReady ||
-            appliedCoupon ||
-            couponLoading ||
-            couponOverrideRef.current
-        )
-            return;
+        // Reject stale suggestions from a previous cart.
         if (bestCouponData?.cartKey !== couponCartKey) return;
-        const offer = bestCouponData?.offer;
-        const code =
-            offer?.valid === true
-                ? String(offer?.coupon?.code || "").trim()
-                : "";
+        const code = getAutomaticCouponCode({
+            cartLoaded,
+            couponReady,
+            couponLoading,
+            manualSelection: couponOverrideRef.current,
+            appliedCode: appliedCoupon,
+            bestCoupon: bestCouponData?.offer,
+        });
         if (!code) return;
         const attemptKey = `${couponCartKey}:${code}`;
         if (autoCouponAttemptRef.current === attemptKey) return;
@@ -2258,7 +2274,8 @@ export default function CheckoutPanel({
                                             ))}
                                     </div>
                                 ) : (
-                                    !couponSuggestionsLoading && (
+                                    !couponSuggestionsLoading &&
+                                    lockedCoupons.length === 0 && (
                                         <p className="mt-2 text-xs text-slate-500">
                                             No suggested offers right now. You
                                             can still try your own code above.
@@ -2275,10 +2292,20 @@ export default function CheckoutPanel({
                                                 <strong className="text-slate-800">
                                                     {offer.code}
                                                 </strong>
-                                                <p className="mt-1 text-amber-800">
-                                                    {offer.unlockMessage ||
-                                                        "Offer requirements not met"}
-                                                </p>
+                                                {Array.isArray(offer.unlockRequirements) &&
+                                                offer.unlockRequirements.length > 0 ? (
+                                                    <ul className="mt-1 space-y-1 text-amber-800" aria-label="Requirements to unlock">
+                                                        {offer.unlockRequirements.map((requirement: any, requirementIndex: number) => (
+                                                            <li key={`${requirement.type || "rule"}-${requirementIndex}`}>
+                                                                {requirement.message}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="mt-1 text-amber-800">
+                                                        {offer.unlockMessage || "Offer requirements not met"}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
