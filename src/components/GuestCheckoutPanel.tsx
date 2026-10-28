@@ -8,7 +8,7 @@ import { TicketPercent } from "lucide-react";
 
 // adjust this import to match where you placed AddressModal
 import type { Address } from "./AddressModal";
-import { getHamper, isHamperGuestLine, readGuestCart } from "@/lib/hampers";
+import { getHamper, isHamperGuestLine, readGuestCart, hamperGiftMessages } from "@/lib/hampers";
 
 const TOKEN_KEY = "accessToken";
 
@@ -30,6 +30,7 @@ export type CartItem = {
     available?: boolean;
     components?: { productId: string; quantity: number }[];
     note?: string;
+    giftMessages?: string[];
 };
 
 type Props = {
@@ -867,6 +868,7 @@ export default function CheckoutPanel({
                                 img: h.hamperImage || undefined,
                                 type: "HAMPER" as const,
                                 note: line.note,
+                                giftMessages: hamperGiftMessages(line),
                                 available:
                                     h.isAvailableForSale &&
                                     h.maxOrderQuantity >= line.quantity,
@@ -884,6 +886,7 @@ export default function CheckoutPanel({
                                 type: "HAMPER" as const,
                                 available: false,
                                 note: line.note,
+                                giftMessages: hamperGiftMessages(line),
                             };
                         }
                     }),
@@ -1135,6 +1138,7 @@ export default function CheckoutPanel({
                         hamperId: it.id,
                         quantity: it.qty,
                         note: it.note || "",
+                        giftMessages: it.giftMessages,
                     })),
             };
 
@@ -2091,6 +2095,18 @@ export default function CheckoutPanel({
                                                 <div className="text-sm text-slate-500 mt-1">
                                                     {formatINR(it.price)} each
                                                 </div>
+                                                {it.type === "HAMPER" && (
+                                                    <div className="mt-2 rounded-lg bg-teal-50/70 p-2.5 text-xs text-teal-900">
+                                                        {it.giftMessages?.map((message, index) => message ? (
+                                                            <p key={index} className="break-words whitespace-pre-wrap mt-1">
+                                                                <strong>{it.qty > 1 ? `Hamper ${index + 1}: ` : "Gift message: "}</strong>{message}
+                                                            </p>
+                                                        ) : null)}
+                                                        <Link href="/cart" className="mt-1 inline-block font-semibold underline">
+                                                            {it.giftMessages?.some(Boolean) ? "Edit gift messages" : "Add a gift message"}
+                                                        </Link>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="flex items-center justify-between mt-3">

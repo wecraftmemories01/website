@@ -40,6 +40,7 @@ export type ConfirmationHamper = {
     sellPrice?: number;
     totalPrice?: number;
     itemNotes?: string;
+    giftMessages?: string[];
 };
 
 type AddressSnapshot = {
@@ -580,11 +581,11 @@ export default function OrderConfirmationView({
                                                 Gift hamper · Qty:{" "}
                                                 {item.quantity ?? 1}
                                             </p>
-                                            {item.itemNotes && (
-                                                <p className="mt-1 break-words text-xs leading-5 text-[#657c6c]">
-                                                    Gift note: {item.itemNotes}
+                                            {(item.giftMessages?.length ? item.giftMessages : item.itemNotes ? [item.itemNotes] : []).map((message, index) => message ? (
+                                                <p key={index} className="mt-1 break-words text-xs leading-5 text-[#657c6c]">
+                                                    Gift {item.quantity && item.quantity > 1 ? index + 1 : ""} message: {message}
                                                 </p>
-                                            )}
+                                            ) : null)}
                                         </div>
                                         <p className="shrink-0 text-sm font-extrabold text-[#173b4a]">
                                             {money(

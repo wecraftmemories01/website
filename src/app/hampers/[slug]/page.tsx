@@ -22,7 +22,7 @@ export default function HamperDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [quantity, setQuantity] = useState(1);
-    const [note, setNote] = useState("");
+    const [notes, setNotes] = useState<string[]>([""]);
     const [saving, setSaving] = useState(false);
     const [added, setAdded] = useState(false);
     useEffect(() => {
@@ -31,6 +31,7 @@ export default function HamperDetailPage() {
         setError("");
         setAdded(false);
         setQuantity(1);
+        setNotes([""]);
         const slug = decodeURIComponent(params.slug);
         getHamper(slug, /^[a-f0-9]{24}$/i.test(slug))
             .then((h) => {
@@ -57,7 +58,9 @@ export default function HamperDetailPage() {
         setError("");
         setAdded(false);
         try {
-            await addHamperToCart(hamper, quantity, note);
+            await addHamperToCart(hamper, quantity, notes[0] || "", Array.from(
+                { length: quantity }, (_, i) => notes[i] || "",
+            ));
             setAdded(true);
         } catch (e: any) {
             setError(
@@ -250,30 +253,42 @@ export default function HamperDetailPage() {
                             </div>
                         </div>
                         <div>
-                            <label
-                                htmlFor="hamper-note"
-                                className="font-bold text-sm block mb-2"
-                            >
-                                Gift message{" "}
-                                <span className="font-normal text-slate-400">
-                                    (optional)
-                                </span>
-                            </label>
-                            <textarea
-                                id="hamper-note"
-                                value={note}
-                                onChange={(e) => {
-                                    setNote(e.target.value.slice(0, 5000));
-                                    setAdded(false);
-                                }}
-                                rows={2}
-                                placeholder="Write something sweet for the recipient…"
-                                className="site-field w-full resize-y"
-                                maxLength={5000}
-                            />
-                            <p className="mt-1 text-xs text-slate-500">
-                                Include a message with this hamper before adding
-                                it to your cart.
+                            <p className="font-bold text-sm mb-2">
+                                {quantity > 1 ? "Gift messages — one per hamper" : "Gift message"}
+                                <span className="font-normal text-slate-400"> (optional)</span>
+                            </p>
+                            {quantity > 1 && (
+                                <p className="text-xs text-slate-500 mb-3">
+                                    Buying gifts for different people? Add a unique message to each hamper.
+                                </p>
+                            )}
+                            <div className="space-y-3">
+                                {Array.from({ length: Math.min(quantity, 12) }, (_, i) => (
+                                    <label key={i} className="block text-xs font-semibold text-slate-600">
+                                        {quantity > 1 ? `Hamper ${i + 1} message` : "Your message"}
+                                        <textarea
+                                            value={notes[i] || ""}
+                                            onChange={event => {
+                                                const value = event.target.value.slice(0, 5000);
+                                                setNotes(previous => {
+                                                    const next = [...previous];
+                                                    next[i] = value;
+                                                    return next;
+                                                });
+                                                setAdded(false);
+                                            }}
+                                            rows={2}
+                                            maxLength={5000}
+                                            placeholder="Write something sweet for the recipient…"
+                                            className="site-field mt-1 w-full resize-y font-normal"
+                                        />
+                                    </label>
+                                ))}
+                            </div>
+                            <p className="mt-2 text-xs text-slate-500">
+                                {quantity > 12
+                                    ? "For larger quantities, you can personalize the remaining messages in your cart."
+                                    : "You can also edit each message in your cart before checkout."}
                             </p>
                         </div>
                         {error && (

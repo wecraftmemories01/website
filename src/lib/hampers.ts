@@ -25,6 +25,7 @@ export type HamperCartLine = {
     hamperId: string;
     quantity: number;
     note?: string;
+    giftMessages?: string[];
     hamper: Hamper | null;
     isAvailable?: boolean;
 };
@@ -33,7 +34,16 @@ export type GuestHamperLine = {
     hamperId: string;
     quantity: number;
     note?: string;
+    giftMessages?: string[];
 };
+
+/** Normalize existing single-note carts and preserve a slot for each physical gift. */
+export function hamperGiftMessages(line: { quantity: number; note?: string; giftMessages?: string[] }): string[] {
+    return Array.from({ length: Math.max(0, line.quantity) }, (_, i) => {
+        const value = Array.isArray(line.giftMessages) ? line.giftMessages[i] : line.note;
+        return typeof value === "string" ? value.slice(0, 5000) : "";
+    });
+}
 
 export function currencyINR(amount: number) {
     return new Intl.NumberFormat("en-IN", {
@@ -102,6 +112,7 @@ export async function addHamperToCart(
     hamper: Hamper,
     quantity: number,
     note = "",
+    giftMessages?: string[],
 ) {
     if (
         !Number.isSafeInteger(quantity) ||
@@ -118,6 +129,7 @@ export async function addHamperToCart(
             hamperId: hamper.hamperId,
             quantity,
             note: note.slice(0, 5000),
+            giftMessages: giftMessages ?? Array(quantity).fill(note.slice(0, 5000)),
         });
         if (data?.ack === "failure")
             throw new Error(data.error || "Unable to add hamper");
@@ -131,14 +143,18 @@ export async function addHamperToCart(
                 `Only ${hamper.maxOrderQuantity} hamper(s) are currently available`,
             );
         if (existing) {
+            existing.giftMessages = hamperGiftMessages(existing).concat(
+                giftMessages ?? Array(quantity).fill(note.slice(0, 5000)),
+            );
             existing.quantity = total;
-            existing.note = note || existing.note || "";
+            existing.note = existing.note || note || "";
         } else
             lines.push({
                 type: "HAMPER",
                 hamperId: hamper.hamperId,
                 quantity,
                 note: note.slice(0, 5000),
+                giftMessages: giftMessages ?? Array(quantity).fill(note.slice(0, 5000)),
             });
         writeGuestCart(lines);
     }
@@ -158,6 +174,7 @@ export async function hydrateGuestHampers(): Promise<HamperCartLine[]> {
                     hamperId: line.hamperId,
                     quantity: line.quantity,
                     note: line.note,
+                    giftMessages: hamperGiftMessages(line),
                     hamper,
                     isAvailable:
                         hamper.isAvailableForSale &&
@@ -169,6 +186,7 @@ export async function hydrateGuestHampers(): Promise<HamperCartLine[]> {
                     hamperId: line.hamperId,
                     quantity: line.quantity,
                     note: line.note,
+                    giftMessages: hamperGiftMessages(line),
                     hamper: null,
                     isAvailable: false,
                 };
@@ -185,6 +203,7 @@ export function cartHamperLines(rawCart: any): HamperCartLine[] {
         hamperId: String(line.hamperId),
         quantity: Number(line.quantity || 0),
         note: line.note,
+        giftMessages: hamperGiftMessages(line),
         hamper: line.hamper || null,
         isAvailable: line.isAvailable === true,
     }));
@@ -204,6 +223,7 @@ export async function syncGuestCartToServer(): Promise<void> {
                     hamperId: line.hamperId,
                     quantity: line.quantity,
                     note: line.note || "",
+                    giftMessages: hamperGiftMessages(line),
                 });
             } else if (line?.productId) {
                 await api.post("/cart", {

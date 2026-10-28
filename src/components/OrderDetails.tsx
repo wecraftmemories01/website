@@ -144,6 +144,7 @@ type ApiOrder = {
         sellPrice: number;
         totalPrice: number;
         itemNotes?: string;
+    giftMessages?: string[];
         products?: { productNameSnapshot: string; totalQuantity: number }[];
     }[];
     paymentMethods?: PaymentMethod[] | null;
@@ -608,11 +609,11 @@ export default function OrderDetails({
                                                 )}{" "}
                                                 each
                                             </p>
-                                            {h.itemNotes && (
-                                                <p className="mt-2 rounded-xl bg-[#fff9ef] px-3 py-2 text-xs leading-relaxed text-[#795c39] break-words">
-                                                    Gift note: {h.itemNotes}
+                                            {(h.giftMessages?.length ? h.giftMessages : h.itemNotes ? [h.itemNotes] : []).map((message, index) => message ? (
+                                                <p key={index} className="mt-2 rounded-xl bg-[#fff9ef] px-3 py-2 text-xs leading-relaxed text-[#795c39] break-words">
+                                                    Gift {h.quantity > 1 ? index + 1 : ""} message: {message}
                                                 </p>
-                                            )}
+                                            ) : null)}
                                             {Boolean(h.products?.length) && (
                                                 <p className="mt-2 text-xs leading-relaxed text-slate-500 break-words">
                                                     Inside:{" "}

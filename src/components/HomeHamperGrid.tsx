@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Gift, Package } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import HamperMediaImage from "@/components/HamperMediaImage";
+import HamperQuickAddButton from "@/components/HamperQuickAddButton";
 import {
     currencyINR,
     hamperPath,
@@ -82,10 +83,8 @@ export default function HomeHamperGrid() {
                             }}
                             className="min-w-0"
                         >
-                            <Link
-                                href={hamperPath(hamper)}
-                                className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[22px] border border-[#d8ebef] bg-white shadow-[0_10px_30px_rgba(33,67,46,.05)] transition-all duration-300 hover:-translate-y-1 hover:border-[#9ed5df] hover:shadow-[0_22px_45px_rgba(33,67,46,.12)] motion-reduce:transform-none"
-                            >
+                            <div className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[22px] border border-[#d8ebef] bg-white shadow-[0_10px_30px_rgba(33,67,46,.05)] transition-all duration-300 hover:-translate-y-1 hover:border-[#9ed5df] hover:shadow-[0_22px_45px_rgba(33,67,46,.12)] motion-reduce:transform-none">
+                                <Link href={hamperPath(hamper)} className="flex flex-1 flex-col">
                                 <div className="relative aspect-[5/4.5] overflow-hidden bg-[#eef9fa]">
                                     <HamperMediaImage
                                         src={hamper.hamperImage}
@@ -116,7 +115,11 @@ export default function HomeHamperGrid() {
                                         </span>
                                     </div>
                                 </div>
-                            </Link>
+                                </Link>
+                                <div className="px-3.5 pb-3.5 sm:px-5 sm:pb-5">
+                                    <HamperQuickAddButton hamper={hamper} />
+                                </div>
+                            </div>
                         </motion.div>
                     ))}
                 </div>

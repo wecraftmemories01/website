@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import HamperMediaImage from "@/components/HamperMediaImage";
+import HamperQuickAddButton from "@/components/HamperQuickAddButton";
 import { Hamper, currencyINR, hamperPath, listHampers } from "@/lib/hampers";
 import { plainTextFromHtml } from "@/lib/hamperDisplay";
 
@@ -201,10 +202,8 @@ export default function HampersPage() {
                                     delay: Math.min(i, 5) * 0.04,
                                 }}
                             >
-                                <Link
-                                    href={hamperPath(h)}
-                                    className="site-card site-card-hover block overflow-hidden h-full group"
-                                >
+                                <div className="site-card site-card-hover overflow-hidden h-full group flex flex-col">
+                                    <Link href={hamperPath(h)} className="block flex-1">
                                     <div className="relative aspect-[4/4.4] sm:aspect-square overflow-hidden bg-[#e6f7f9]">
                                         <HamperMediaImage
                                             src={h.hamperImage}
@@ -241,7 +240,11 @@ export default function HampersPage() {
                                             </span>
                                         </div>
                                     </div>
-                                </Link>
+                                    </Link>
+                                    <div className="px-3 pb-3 sm:px-5 sm:pb-5">
+                                        <HamperQuickAddButton hamper={h} />
+                                    </div>
+                                </div>
                             </motion.div>
                         ))}
                     </div>

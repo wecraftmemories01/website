@@ -23,6 +23,7 @@ import {
     currencyINR,
     hamperPath,
     isHamperGuestLine,
+    hamperGiftMessages,
     syncGuestCartToServer as syncGuestCartAfterLogin,
 } from "@/lib/hampers";
 
@@ -356,6 +357,7 @@ export default function ClientCart() {
     const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
     const [savingItemId, setSavingItemId] = useState<string | null>(null);
+    const [giftDrafts, setGiftDrafts] = useState<Record<string, string[]>>({});
     const [savingQuantityIds, setSavingQuantityIds] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
 
@@ -411,6 +413,12 @@ export default function ClientCart() {
     const hasUnavailableHamper = hamperLines.some(
         (it) => !it.hamper || it.isAvailable !== true,
     );
+    const hasUnsavedGiftMessages = hamperLines.some(line => {
+        const draft = giftDrafts[line.hamperId];
+        return !!draft && draft.slice(0, line.quantity).some(
+            (value, index) => value !== hamperGiftMessages(line)[index]
+        );
+    });
     const cartItemsCount = totalItemsCount + hamperCount;
     const cartSubtotal = orderTotal(activeSellItems) + hamperTotal;
     const hasItems =
@@ -898,6 +906,9 @@ export default function ClientCart() {
                                   ? {
                                         ...item,
                                         quantity: requestedQty,
+                                        giftMessages: hamperGiftMessages(item).slice(0, requestedQty).concat(
+                                            Array(Math.max(0, requestedQty - item.quantity)).fill(""),
+                                        ),
                                         isAvailable:
                                             Boolean(
                                                 item.hamper?.isAvailableForSale,
@@ -927,6 +938,9 @@ export default function ClientCart() {
                 guestLines[index] = {
                     ...guestLines[index],
                     quantity: requestedQty,
+                    giftMessages: hamperGiftMessages(line).slice(0, requestedQty).concat(
+                        Array(Math.max(0, requestedQty - line.quantity)).fill(""),
+                    ),
                 };
                 writeGuestCart(guestLines, "ClientCart"); // Update header without rehydrating this page.
             } else {
@@ -959,6 +973,42 @@ export default function ClientCart() {
             if (authenticated) await fetchCart();
             else await loadGuestCart();
             setError(message);
+        } finally {
+            setSavingItemId(null);
+        }
+    }
+
+    // Save independent recipient messages without changing prices, products or quantity.
+    async function saveHamperGiftMessages(line: HamperCartLine): Promise<void> {
+        if (savingItemId) return;
+        const messages = Array.from({ length: line.quantity }, (_, index) =>
+            (giftDrafts[line.hamperId]?.[index] ?? hamperGiftMessages(line)[index] ?? "").slice(0, 5000)
+        );
+        setError(null);
+        setSavingItemId(line._id);
+        try {
+            if (!getStoredAccessToken()) {
+                const lines = readGuestCart();
+                const found = lines.findIndex(item => isHamperGuestLine(item) && item.hamperId === line.hamperId);
+                if (found < 0) throw new Error("Gift hamper no longer in cart");
+                lines[found] = { ...lines[found], giftMessages: messages };
+                writeGuestCart(lines, "ClientCart");
+            } else {
+                const cartId = localCart?.cartId ?? localCart?._id;
+                if (!cartId) throw new Error("Cart identifier is missing.");
+                const { data } = await api.put(`/cart/${encodeURIComponent(cartId)}`, {
+                    type: "HAMPER", itemId: line._id, giftMessages: messages,
+                });
+                if (data?.ack === "failure") throw new Error(extractErrorMessage(data, "Unable to save gift messages."));
+            }
+            setLocalCart(prev => prev ? {
+                ...prev,
+                sellHamperItems: (prev.sellHamperItems ?? []).map(item => item.hamperId === line.hamperId
+                    ? { ...item, giftMessages: messages } : item),
+            } : prev);
+            setGiftDrafts(prev => { const next = { ...prev }; delete next[line.hamperId]; return next; });
+        } catch (err: any) {
+            setError(err?.response?.data?.error || err?.message || "Unable to save gift messages.");
         } finally {
             setSavingItemId(null);
         }
@@ -1839,11 +1889,48 @@ export default function ClientCart() {
                                                 )}{" "}
                                                 each
                                             </p>
-                                            {line.note && (
-                                                <p className="text-xs text-slate-600 mt-1">
-                                                    Gift note: {line.note}
+                                            <div className="mt-3 rounded-xl border border-[#d7e7e3] bg-[#f6faf9] p-3">
+                                                <p className="text-sm font-bold text-[#173b4a]">
+                                                    {line.quantity > 1 ? "Gift messages — one per hamper" : "Gift message (optional)"}
                                                 </p>
-                                            )}
+                                                <p className="mt-1 text-xs text-slate-500">
+                                                    {line.quantity > 1
+                                                        ? "Sending these to different people? Write a different message for each copy. Leave any blank if no message is needed."
+                                                        : "Add a personalized note for the recipient, or leave it blank."}
+                                                </p>
+                                                <div className="mt-3 space-y-3">
+                                                    {hamperGiftMessages(line).map((storedMessage, index) => (
+                                                        <label key={index} className="block text-xs font-semibold text-slate-600">
+                                                            {line.quantity > 1 ? `Hamper ${index + 1} message` : "Your message"}
+                                                            <textarea
+                                                                rows={2}
+                                                                maxLength={5000}
+                                                                value={giftDrafts[line.hamperId]?.[index] ?? storedMessage}
+                                                                onChange={event => {
+                                                                    const value = event.target.value;
+                                                                    setGiftDrafts(prev => {
+                                                                        const messages = prev[line.hamperId] ?? hamperGiftMessages(line);
+                                                                        const next = [...messages];
+                                                                        next[index] = value;
+                                                                        return { ...prev, [line.hamperId]: next };
+                                                                    });
+                                                                }}
+                                                                placeholder="Write a heartfelt message…"
+                                                                disabled={savingItemId === line._id}
+                                                                className="site-field mt-1 w-full resize-y font-normal"
+                                                            />
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                {Boolean(giftDrafts[line.hamperId]) && giftDrafts[line.hamperId].some((v, i) => v !== hamperGiftMessages(line)[i]) && (
+                                                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                                                        <button type="button" onClick={() => saveHamperGiftMessages(line)} disabled={Boolean(savingItemId)} className="site-button-primary !min-h-9 !px-4 text-xs disabled:opacity-50">
+                                                            {savingItemId === line._id ? "Saving…" : "Save gift messages"}
+                                                        </button>
+                                                        <span className="text-xs text-amber-700">Unsaved changes</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                             {!line.isAvailable && (
                                                 <p className="text-xs text-rose-600 mt-2">
                                                     Currently unavailable in
@@ -1950,6 +2037,9 @@ export default function ClientCart() {
                                 : "Sold-out products cannot be checked out. Remove unavailable items to continue."}
                         </p>
                     )}
+                    {hasUnsavedGiftMessages && (
+                        <p role="alert" className="text-sm text-amber-700">Please save your gift messages before checkout.</p>
+                    )}
                     {hasUnavailableHamper && (
                         <p role="alert" className="text-sm text-rose-600">
                             Some gift hampers are unavailable. Please update
@@ -1964,6 +2054,7 @@ export default function ClientCart() {
                             disabled={
                                 !hasItems ||
                                 savingQuantityIds.length > 0 ||
+                                hasUnsavedGiftMessages ||
                                 savingItemId !== null ||
                                 saving ||
                                 deleting
@@ -1981,6 +2072,7 @@ export default function ClientCart() {
                             disabled={
                                 !hasItems ||
                                 savingQuantityIds.length > 0 ||
+                                hasUnsavedGiftMessages ||
                                 savingItemId !== null ||
                                 saving ||
                                 deleting

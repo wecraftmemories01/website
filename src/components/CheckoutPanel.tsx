@@ -36,6 +36,7 @@ export type CartItem = {
     img?: string;
     type?: "SELL" | "HAMPER";
     available?: boolean;
+    giftMessages?: string[];
 };
 
 type Props = {
@@ -587,6 +588,7 @@ export default function CheckoutPanel({
             img: line.hamper?.hamperImage || undefined,
             type: "HAMPER",
             available: line.isAvailable === true && Boolean(line.hamper),
+            giftMessages: line.giftMessages,
         }));
         return [...mapped, ...hamperMapped];
     }
@@ -1392,6 +1394,12 @@ export default function CheckoutPanel({
             return;
         }
 
+        if (!isDeliveryReady) {
+            unlock();
+            alert(deliveryQuoteError || "Delivery charge is still being calculated. Please try again.");
+            return;
+        }
+
         if (!cart.length || cart.some((it) => it.available === false)) {
             if (cart.some((it) => it.available === false))
                 alert(
@@ -1772,16 +1780,20 @@ export default function CheckoutPanel({
 
     const hasAddress = addresses.length > 0 && selectedAddressId !== null;
 
-    const currentDeliveryCharge = useMemo(() => {
-        if (!selectedAddressId) return 0;
+    // Missing/loading/failed delivery quotes must NEVER be treated as free delivery.
+    const selectedDeliveryEntry = useMemo(() => {
         const addr = addresses.find((a) => a.id === selectedAddressId);
-        if (!addr) return 0;
-
-        const entry = deliveryMap[addr.pincode];
-        if (entry && typeof entry.value === "number") return entry.value;
-
-        return 0;
+        return addr ? deliveryMap[addr.pincode] : undefined;
     }, [selectedAddressId, addresses, deliveryMap]);
+    const currentDeliveryCharge =
+        selectedDeliveryEntry && !selectedDeliveryEntry.checking &&
+        typeof selectedDeliveryEntry.value === "number" &&
+        Number.isFinite(selectedDeliveryEntry.value) && selectedDeliveryEntry.value >= 0
+            ? selectedDeliveryEntry.value
+            : null;
+    const isDeliveryReady = currentDeliveryCharge !== null;
+    const deliveryQuoteError = selectedDeliveryEntry?.error;
+
 
     const total = Math.max(
         0,
@@ -2338,19 +2350,28 @@ export default function CheckoutPanel({
                                     <div className="text-xs text-amber-600 font-medium">
                                         Add address to calculate delivery
                                     </div>
+                                ) : !isDeliveryReady ? (
+                                    <div className="flex items-center gap-2 text-xs font-medium" role="status">
+                                        <span className={deliveryQuoteError ? "text-red-600" : "text-slate-500"}>
+                                            {deliveryQuoteError ? "Delivery quote unavailable" : "Calculating delivery…"}
+                                        </span>
+                                        {deliveryQuoteError && selectedAddressId && (
+                                            <button type="button" className="text-[#065975] underline"
+                                                onClick={() => {
+                                                    const address = addresses.find(a => a.id === selectedAddressId);
+                                                    if (address) void fetchAndCacheDeliveryCharge(address.pincode);
+                                                }}>
+                                                Retry
+                                            </button>
+                                        )}
+                                    </div>
                                 ) : (
                                     <div>
                                         {appliedCoupon && couponFreeShipping ? (
                                             <span className="font-bold text-[#087f67]">
                                                 Free with coupon
                                             </span>
-                                        ) : (
-                                            formatINR(
-                                                Number(
-                                                    currentDeliveryCharge || 0,
-                                                ),
-                                            )
-                                        )}
+                                        ) : formatINR(currentDeliveryCharge!)}
                                     </div>
                                 )}
                             </div>
@@ -2365,7 +2386,7 @@ export default function CheckoutPanel({
                                     </div>
                                 ) : (
                                     <div className="text-xl font-extrabold text-[#065975]">
-                                        {formatINR(total)}
+                                        {isDeliveryReady ? formatINR(total) : "Calculating…"}
                                     </div>
                                 )}
                             </div>
@@ -2383,19 +2404,21 @@ export default function CheckoutPanel({
                                     paymentInProgress ||
                                     cart.length === 0 ||
                                     cart.some((it) => it.available === false) ||
-                                    !hasAddress
+                                    !hasAddress ||
+                                    !isDeliveryReady
                                 }
                                 aria-disabled={
                                     creating ||
                                     paymentInProgress ||
                                     cart.length === 0 ||
                                     cart.some((it) => it.available === false) ||
-                                    !hasAddress
+                                    !hasAddress ||
+                                    !isDeliveryReady
                                 }
                             >
                                 {creating
                                     ? "Placing order…"
-                                    : `Place order • ${formatINR(total)}`}
+                                    : !isDeliveryReady ? "Calculating delivery…" : `Place order • ${formatINR(total)}`}
                             </button>
                         </div>
 
@@ -2465,6 +2488,19 @@ export default function CheckoutPanel({
                                                 <div className="text-sm text-slate-500 mt-1">
                                                     {formatINR(it.price)} each
                                                 </div>
+                                                {it.type === "HAMPER" && it.giftMessages?.some(Boolean) && (
+                                                    <div className="mt-2 space-y-1 rounded-lg bg-teal-50/70 px-2.5 py-2 text-xs text-teal-900">
+                                                        {it.giftMessages.map((message, index) => message && (
+                                                            <p key={index} className="break-words whitespace-pre-wrap">
+                                                                <strong>{it.qty > 1 ? `Hamper ${index + 1}: ` : "Gift message: "}</strong>{message}
+                                                            </p>
+                                                        ))}
+                                                        <Link href="/cart" className="inline-block font-semibold underline">Edit gift messages</Link>
+                                                    </div>
+                                                )}
+                                                {it.type === "HAMPER" && !it.giftMessages?.some(Boolean) && (
+                                                    <Link href="/cart" className="mt-2 inline-block text-xs font-semibold text-[#065975] underline">Add a gift message</Link>
+                                                )}
                                             </div>
 
                                             <div className="flex items-center justify-between mt-3">
@@ -2511,7 +2547,7 @@ export default function CheckoutPanel({
                         <div className="flex-1">
                             <div className="text-sm text-slate-500">Total</div>
                             <div className="text-lg font-extrabold">
-                                {formatINR(total)}
+                                {isDeliveryReady ? formatINR(total) : "Calculating…"}
                             </div>
                         </div>
                         <button
@@ -2522,19 +2558,21 @@ export default function CheckoutPanel({
                                 paymentInProgress ||
                                 cart.length === 0 ||
                                 cart.some((it) => it.available === false) ||
-                                !hasAddress
+                                !hasAddress ||
+                                !isDeliveryReady
                             }
                             aria-disabled={
                                 creating ||
                                 paymentInProgress ||
                                 cart.length === 0 ||
                                 cart.some((it) => it.available === false) ||
-                                !hasAddress
+                                !hasAddress ||
+                                !isDeliveryReady
                             }
                         >
                             {creating
                                 ? "Placing…"
-                                : `Place order • ${formatINR(total)}`}
+                                : !isDeliveryReady ? "Calculating delivery…" : `Place order • ${formatINR(total)}`}
                         </button>
                     </div>
                 </div>
