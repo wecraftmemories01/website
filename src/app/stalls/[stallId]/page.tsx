@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { permanentRedirect } from "next/navigation";
 import StallDetailClient from "@/components/stalls/StallDetailClient";
 import { fetchPublicStall, formatStallRange } from "@/lib/stalls";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 
 /** Kept as [stallId] so existing Next routes continue to work. It now accepts slugs. */
 type RouteProps = {
@@ -38,6 +39,8 @@ export async function generateMetadata({
         .filter(Boolean)
         .join(" · ");
 
+    const image = publicImageUrl(stall.products[0]?.image);
+
     return {
         title,
         description,
@@ -48,9 +51,13 @@ export async function generateMetadata({
             description,
             url: canonicalUrl,
             siteName: "We Craft Memories",
-            ...(stall.products[0]?.image
-                ? { images: [{ url: stall.products[0].image }] }
-                : {}),
+            ...(image ? { images: [{ url: image }] } : {}),
+        },
+        twitter: {
+            card: "summary_large_image",
+            title,
+            description,
+            ...(image ? { images: [image] } : {}),
         },
     };
 }

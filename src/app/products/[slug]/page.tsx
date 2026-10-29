@@ -1,8 +1,13 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import ProductClient from "../../../components/ProductDetails";
+import { publicImageUrl } from "@/lib/publicImageUrl";
 
 export const dynamic = "force-dynamic";
+
+const SITE_ORIGIN = (
+    process.env.NEXT_PUBLIC_SITE_URL || "https://wecraftmemories.com"
+).replace(/\/+$/, "");
 
 async function fetchProduct(value: string) {
     const API_BASE =
@@ -42,50 +47,37 @@ export async function generateMetadata({
         };
     }
 
+    const canonicalUrl =
+        product.seoCanonicalUrl ||
+        `${SITE_ORIGIN}/products/${encodeURIComponent(product.seoSlug || slug)}`;
+    const image = publicImageUrl(product.productImage);
+
     return {
-        title:
-            product.seoMetaTitle ||
-            product.productName,
+        title: product.seoMetaTitle || product.productName,
 
-        description:
-            product.seoMetaDescription ||
-            product.shortDescription,
+        description: product.seoMetaDescription || product.shortDescription,
 
-        alternates: {
-            canonical:
-                product.seoCanonicalUrl ||
-                `https://www.wecraftmemories.com/products/${slug}`,
-        },
+        alternates: { canonical: canonicalUrl },
 
         openGraph: {
-            title:
-                product.seoMetaTitle ||
-                product.productName,
+            url: canonicalUrl,
+            siteName: "We Craft Memories",
+            title: product.seoMetaTitle || product.productName,
 
-            description:
-                product.seoMetaDescription ||
-                product.shortDescription,
+            description: product.seoMetaDescription || product.shortDescription,
 
-            images: product.productImage
-                ? [product.productImage]
-                : [],
+            images: image ? [{ url: image }] : [],
 
             type: "website",
         },
 
         twitter: {
             card: "summary_large_image",
-            title:
-                product.seoMetaTitle ||
-                product.productName,
+            title: product.seoMetaTitle || product.productName,
 
-            description:
-                product.seoMetaDescription ||
-                product.shortDescription,
+            description: product.seoMetaDescription || product.shortDescription,
 
-            images: product.productImage
-                ? [product.productImage]
-                : [],
+            images: image ? [{ url: image }] : [],
         },
     };
 }
@@ -101,18 +93,20 @@ export default async function Page({
 
     if (!productData) notFound();
 
+    const canonicalUrl =
+        productData.seoCanonicalUrl ||
+        `${SITE_ORIGIN}/products/${encodeURIComponent(productData.seoSlug || slug)}`;
+    const productImage = publicImageUrl(productData.productImage);
+
     const productSchema = {
         "@context": "https://schema.org",
         "@type": "Product",
 
         name: productData.productName,
 
-        image: productData.productImage
-            ? [productData.productImage]
-            : [],
+        image: productImage ? [productImage] : [],
 
-        description:
-            productData.shortDescription,
+        description: productData.shortDescription,
 
         sku: String(productData.productNumber),
 
@@ -135,9 +129,7 @@ export default async function Page({
                     ? "https://schema.org/InStock"
                     : "https://schema.org/OutOfStock",
 
-            url:
-                productData.seoCanonicalUrl ||
-                `https://www.wecraftmemories.com/products/${slug}`,
+            url: canonicalUrl,
         },
     };
 
@@ -146,7 +138,10 @@ export default async function Page({
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(productSchema).replace(/</g, "\\u003c"),
+                    __html: JSON.stringify(productSchema).replace(
+                        /</g,
+                        "\\u003c",
+                    ),
                 }}
             />
 

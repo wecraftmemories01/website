@@ -24,6 +24,7 @@ import {
 } from "@/lib/stalls";
 import StallShowcaseGallery from "./StallShowcaseGallery";
 import StallProductImage from "./StallProductImage";
+import ShareMenu from "@/components/ui/ShareMenu";
 
 export default function StallDetailClient({ stallId }: { stallId: string }) {
     const [stall, setStall] = useState<PublicStall | null>(null);
@@ -210,6 +211,18 @@ export default function StallDetailClient({ stallId }: { stallId: string }) {
                             >
                                 <ShoppingBag size={16} /> Shop online
                             </Link>
+                            <ShareMenu
+                                kind="stall"
+                                title={stall.name}
+                                path={`/stalls/${encodeURIComponent(stall.slug || stallId)}`}
+                                description={[
+                                    stall.locationName || stall.address,
+                                    formatStallRange(stall),
+                                ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                className="min-h-11"
+                            />
                         </div>
                     </div>
                     <aside className="flex min-w-0 flex-col justify-between border-t border-[#ecede6] bg-[linear-gradient(145deg,#fff6ed,#f2faf8)] px-4 py-4 sm:px-7 xl:border-l xl:border-t-0 xl:px-5 xl:py-6">

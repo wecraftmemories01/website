@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { addToCart, isInCart } from "../lib/cart";
 import favouritesClient from "../lib/favouritesClient";
+import ShareMenu from "@/components/ui/ShareMenu";
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
@@ -21,6 +22,7 @@ type ProductImage = { imageId?: string; imagePath?: string; title?: string };
 type Product = {
     _id: string;
     productName: string;
+    seoSlug?: string;
     productImage?: string;
     shortDescription?: string;
     longDescription?: string;
@@ -979,43 +981,6 @@ export default function ProductClient({ product }: { product: Product }) {
         }
     }
 
-    function openSharePopup() {
-        if (typeof window === "undefined") return;
-
-        const url = window.location.href;
-        const title = productName ?? "Check this product";
-        const text = shortDescription ?? "";
-
-        // ✅ 1. Native Share (mobile + modern browsers)
-        if (navigator.share) {
-            navigator
-                .share({
-                    title,
-                    text,
-                    url,
-                })
-                .catch((err) => {
-                    // user cancelled → ignore
-                    if (err?.name !== "AbortError") {
-                        console.warn("Share failed:", err);
-                    }
-                });
-            return;
-        }
-
-        // ✅ 2. Fallback (desktop / unsupported browsers)
-        const encodedUrl = encodeURIComponent(url);
-        const encodedText = encodeURIComponent(title);
-
-        const shareLinks = [
-            `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
-            `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-            `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
-        ];
-
-        window.open(shareLinks[0], "_blank", "noopener,noreferrer");
-    }
-
     /** Gms to Kg and Cms to Inch */
     function formatNumber(n: number, decimals = 2) {
         return Number.isFinite(n)
@@ -1052,14 +1017,21 @@ export default function ProductClient({ product }: { product: Product }) {
                             {productName ?? "Product"}
                         </h1>
                     </div>
-                    <span
-                        className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${isOutOfStock ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-[#edf7ed] border-[#d5e8d8] text-[#0a7791]"}`}
-                    >
-                        <span
-                            className={`h-2 w-2 rounded-full ${isOutOfStock ? "bg-rose-500" : "bg-[#36a46c]"}`}
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <ShareMenu
+                            kind="product"
+                            title={productName}
+                            path={`/products/${encodeURIComponent(product.seoSlug || _id)}`}
                         />
-                        {isOutOfStock ? "Out of stock" : "Ready to order"}
-                    </span>
+                        <span
+                            className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${isOutOfStock ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-[#edf7ed] border-[#d5e8d8] text-[#0a7791]"}`}
+                        >
+                            <span
+                                className={`h-2 w-2 rounded-full ${isOutOfStock ? "bg-rose-500" : "bg-[#36a46c]"}`}
+                            />
+                            {isOutOfStock ? "Out of stock" : "Ready to order"}
+                        </span>
+                    </div>
                 </div>
                 <div className="mt-3 flex items-center gap-3 lg:hidden">
                     <span className="text-[1.65rem] font-extrabold tracking-tight text-[#065975]">

@@ -12,6 +12,7 @@ import {
     Truck,
 } from "lucide-react";
 import HamperMediaImage from "@/components/HamperMediaImage";
+import ShareMenu from "@/components/ui/ShareMenu";
 import HamperRichDescription from "@/components/HamperRichDescription";
 import { addHamperToCart, currencyINR, getHamper, Hamper } from "@/lib/hampers";
 import { plainTextFromHtml } from "@/lib/hamperDisplay";
@@ -58,9 +59,12 @@ export default function HamperDetailPage() {
         setError("");
         setAdded(false);
         try {
-            await addHamperToCart(hamper, quantity, notes[0] || "", Array.from(
-                { length: quantity }, (_, i) => notes[i] || "",
-            ));
+            await addHamperToCart(
+                hamper,
+                quantity,
+                notes[0] || "",
+                Array.from({ length: quantity }, (_, i) => notes[i] || ""),
+            );
             setAdded(true);
         } catch (e: any) {
             setError(
@@ -148,9 +152,16 @@ export default function HamperDetailPage() {
                     <span className="site-eyebrow">
                         <Gift size={14} /> Curated handmade hamper
                     </span>
-                    <h1 className="mt-3 text-[clamp(1.6rem,3vw,2.65rem)] font-extrabold tracking-[-.04em] leading-tight text-[#065975]">
-                        {hamper.hamperName}
-                    </h1>
+                    <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+                        <h1 className="min-w-0 flex-1 text-[clamp(1.6rem,3vw,2.65rem)] font-extrabold tracking-[-.04em] leading-tight text-[#065975]">
+                            {hamper.hamperName}
+                        </h1>
+                        <ShareMenu
+                            kind="hamper"
+                            title={hamper.hamperName}
+                            path={`/hampers/${encodeURIComponent(hamper.seo?.slug || hamper.hamperId)}`}
+                        />
+                    </div>
                     <p className="text-[clamp(1.8rem,3vw,2.5rem)] font-extrabold tracking-tight text-[#065975] mt-3">
                         {currencyINR(Number(hamper.price))}
                     </p>
@@ -254,36 +265,56 @@ export default function HamperDetailPage() {
                         </div>
                         <div>
                             <p className="font-bold text-sm mb-2">
-                                {quantity > 1 ? "Gift messages — one per hamper" : "Gift message"}
-                                <span className="font-normal text-slate-400"> (optional)</span>
+                                {quantity > 1
+                                    ? "Gift messages — one per hamper"
+                                    : "Gift message"}
+                                <span className="font-normal text-slate-400">
+                                    {" "}
+                                    (optional)
+                                </span>
                             </p>
                             {quantity > 1 && (
                                 <p className="text-xs text-slate-500 mb-3">
-                                    Buying gifts for different people? Add a unique message to each hamper.
+                                    Buying gifts for different people? Add a
+                                    unique message to each hamper.
                                 </p>
                             )}
                             <div className="space-y-3">
-                                {Array.from({ length: Math.min(quantity, 12) }, (_, i) => (
-                                    <label key={i} className="block text-xs font-semibold text-slate-600">
-                                        {quantity > 1 ? `Hamper ${i + 1} message` : "Your message"}
-                                        <textarea
-                                            value={notes[i] || ""}
-                                            onChange={event => {
-                                                const value = event.target.value.slice(0, 5000);
-                                                setNotes(previous => {
-                                                    const next = [...previous];
-                                                    next[i] = value;
-                                                    return next;
-                                                });
-                                                setAdded(false);
-                                            }}
-                                            rows={2}
-                                            maxLength={5000}
-                                            placeholder="Write something sweet for the recipient…"
-                                            className="site-field mt-1 w-full resize-y font-normal"
-                                        />
-                                    </label>
-                                ))}
+                                {Array.from(
+                                    { length: Math.min(quantity, 12) },
+                                    (_, i) => (
+                                        <label
+                                            key={i}
+                                            className="block text-xs font-semibold text-slate-600"
+                                        >
+                                            {quantity > 1
+                                                ? `Hamper ${i + 1} message`
+                                                : "Your message"}
+                                            <textarea
+                                                value={notes[i] || ""}
+                                                onChange={(event) => {
+                                                    const value =
+                                                        event.target.value.slice(
+                                                            0,
+                                                            5000,
+                                                        );
+                                                    setNotes((previous) => {
+                                                        const next = [
+                                                            ...previous,
+                                                        ];
+                                                        next[i] = value;
+                                                        return next;
+                                                    });
+                                                    setAdded(false);
+                                                }}
+                                                rows={2}
+                                                maxLength={5000}
+                                                placeholder="Write something sweet for the recipient…"
+                                                className="site-field mt-1 w-full resize-y font-normal"
+                                            />
+                                        </label>
+                                    ),
+                                )}
                             </div>
                             <p className="mt-2 text-xs text-slate-500">
                                 {quantity > 12

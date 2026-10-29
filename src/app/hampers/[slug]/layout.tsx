@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { plainTextFromHtml, resolveHamperImageUrl } from '@/lib/hamperDisplay';
 
+const SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://wecraftmemories.com').replace(/\/+$/, '');
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const base = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/+$/, '') || '';
@@ -16,7 +18,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const title = hamper.seo?.metaTitle || `${hamper.hamperName} | We Craft Memories`;
     const description = plainTextFromHtml(hamper.seo?.metaDescription || hamper.shortDescription) || 'A thoughtfully curated gift hamper.';
     const image = resolveHamperImageUrl(hamper.hamperImage);
-    return { title, description, openGraph: { title, description, images: image ? [image] : [] } };
+    const canonicalUrl = `${SITE_ORIGIN}/hampers/${encodeURIComponent(hamper.seo?.slug || hamper.hamperId || slug)}`;
+    return {
+      title,
+      description,
+      alternates: { canonical: canonicalUrl },
+      openGraph: { type: 'website', title, description, url: canonicalUrl, siteName: 'We Craft Memories', images: image ? [{ url: image }] : [] },
+      twitter: { card: 'summary_large_image', title, description, images: image ? [image] : [] },
+    };
   } catch {
     return { title: 'Gift Hampers | We Craft Memories', description: 'Explore our curated gift hampers.' };
   }
