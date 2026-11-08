@@ -10,6 +10,7 @@ import { getStoredAccessToken, getAuth, logout } from "@/lib/auth";
 import MobileCartItem from "@/components/ui/MobileCartItem";
 import HamperMediaImage from "@/components/HamperMediaImage";
 import DesktopCartItem from "@/components/ui/DesktopCartItem";
+import ProductRecommendations from "@/components/ProductRecommendations";
 
 // adjust these imports if your project paths differ
 import { updateCartItem, removeFromCart } from "@/lib/cart";
@@ -2032,6 +2033,14 @@ export default function ClientCart() {
                             </div>
                         )}
                     </div>
+                    {/* Offer complementary handmade products before checkout. */}
+                    <ProductRecommendations
+                        context="cart"
+                        showPopularWhenEmpty={(localCart?.sellHamperItems?.length || 0) > 0}
+                        productIds={(localCart?.sellItems || [])
+                            .filter((item) => item.inUse !== false && item.productId)
+                            .map((item) => String(item.productId))}
+                    />
                 </section>
 
                 <aside className="site-card p-5 sm:p-6 lg:sticky lg:top-28 space-y-5">

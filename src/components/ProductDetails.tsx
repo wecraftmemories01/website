@@ -9,6 +9,7 @@ import { addToCart, isInCart } from "../lib/cart";
 import { hasValidSellPrice } from "@/lib/productPricing";
 import favouritesClient from "../lib/favouritesClient";
 import ShareMenu from "@/components/ui/ShareMenu";
+import ProductRecommendations from "@/components/ProductRecommendations";
 
 /* ---------------- Types ---------------- */
 type SalePrice = { discountedPrice?: number; actualPrice?: number };
@@ -1531,6 +1532,11 @@ export default function ProductClient({ product }: { product: Product }) {
                             </div>
                         </div>
                     </aside>
+                </div>
+
+                {/* Suggested handmade gifts after the main product information. */}
+                <div className="mt-8 sm:mt-10">
+                    <ProductRecommendations context="product" productId={_id} />
                 </div>
 
                 {/* Lightbox */}
