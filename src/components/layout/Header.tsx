@@ -39,6 +39,7 @@ export default function Header({
     const reduceMotion = useReducedMotion();
     const searchRef = useRef<HTMLInputElement>(null);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
+    const cartCountRequestRef = useRef(0);
     const [menuOpen, setMenuOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -50,10 +51,14 @@ export default function Header({
         setReady(true);
         let active = true;
         const sync = () => {
+            const requestId = ++cartCountRequestRef.current;
             setIsAuthenticated(Boolean(getStoredAccessToken()));
             setCartCount(Number(localStorage.getItem("cartCount") || 0));
             void fetchCartCountUtil().then((count) => {
-                if (active) setCartCount(count);
+                // Older requests must not restore a stale badge after the cart changes.
+                if (active && requestId === cartCountRequestRef.current) {
+                    setCartCount(count);
+                }
             });
         };
         sync();

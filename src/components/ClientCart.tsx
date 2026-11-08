@@ -13,6 +13,12 @@ import DesktopCartItem from "@/components/ui/DesktopCartItem";
 
 // adjust these imports if your project paths differ
 import { updateCartItem, removeFromCart } from "@/lib/cart";
+import { hasValidSellPrice } from "@/lib/productPricing";
+import {
+    getSavedProductAvailability,
+    savedProductActionTitle,
+    savedProductStatusLabel,
+} from "@/lib/savedProductAvailability";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import {
     HamperCartLine,
@@ -66,7 +72,7 @@ type Cart = {
 type SavedItem = {
     id: string; // product id or saved id fallback
     title: string;
-    price?: number | null;
+    price?: PriceShape | null;
     img?: string | null;
     qty?: number;
     _savedId?: string; // server saved id
@@ -88,9 +94,30 @@ function safeNumber(v: any): number | null {
 function isProductUnavailable(item: {
     sellStockQuantity?: number | string | null;
     isAvailableForSale?: boolean | null;
+    price?: PriceShape | null;
 }): boolean {
     const stock = safeNumber(item.sellStockQuantity);
-    return (stock !== null && stock <= 0) || item.isAvailableForSale === false;
+    const hasPrice = hasValidSellPrice(item.price);
+    return (stock !== null && stock <= 0) || item.isAvailableForSale === false || !hasPrice;
+}
+
+function normalizeSavedSellPrice(raw: any): PriceShape | null {
+    if (!raw || typeof raw !== "object") return null;
+    return {
+        priceId: raw.priceId ?? raw._id,
+        actualPrice: safeNumber(raw.actualPrice),
+        discountedPrice: safeNumber(raw.discountedPrice),
+    };
+}
+
+// Apply the same current selling snapshot that powers the product detail page.
+// Do not invent zero stock when a product has no price.
+function applySavedProductSnapshot(saved: SavedItem, product: any): void {
+    if (!product || typeof product !== "object") return;
+    const latestPrice = product.price ?? product.salePrice ?? product.latestSalePrice;
+    saved.price = normalizeSavedSellPrice(latestPrice);
+    saved.sellStockQuantity = product.sellStockQuantity ?? null;
+    saved.isAvailableForSale = product.isAvailableForSale ?? null;
 }
 
 function formatCurrency(amount: number | null | undefined): string {
@@ -224,9 +251,12 @@ async function apiGetSaved(customerId: string): Promise<SavedItem[]> {
             return {
                 id: productId,
                 title: product?.productName ?? s.title ?? "Untitled",
-                price:
-                    safeNumber(product?.price?.discountedPrice) ??
-                    safeNumber(product?.price?.actualPrice),
+                // Prices live in product_prices, not the products document.
+                // The saved API now exposes the active SELL price as `price`;
+                // list/detail fallbacks below cover an older API deployment.
+                price: normalizeSavedSellPrice(
+                    product?.price ?? product?.salePrice ?? product?.latestSalePrice,
+                ),
                 img: product?.productImage ?? s.img ?? null,
                 _savedId: s._id,
                 productId,
@@ -340,9 +370,6 @@ export default function ClientCart() {
     const autoMoveFailedRef = React.useRef(new Set<string>());
     const [autoMovingIds, setAutoMovingIds] = useState<string[]>([]);
     const [automaticallySavedCount, setAutomaticallySavedCount] = useState(0);
-    const [savedStockOverrides, setSavedStockOverrides] = useState<
-        Record<string, number>
-    >({});
 
     // Notify the header and other shopping widgets without reloading this page.
     const notifyOwnCartChange = () =>
@@ -360,6 +387,7 @@ export default function ClientCart() {
     const [giftDrafts, setGiftDrafts] = useState<Record<string, string[]>>({});
     const [savingQuantityIds, setSavingQuantityIds] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [guestCartNotice, setGuestCartNotice] = useState<string | null>(null);
 
     const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
     const [savedLoading, setSavedLoading] = useState<boolean>(false);
@@ -644,10 +672,6 @@ export default function ClientCart() {
                 for (const item of candidates) {
                     try {
                         await moveCartProductToSaved(localCart, item);
-                        setSavedStockOverrides((prev) => ({
-                            ...prev,
-                            [String(item.productId)]: 0,
-                        }));
                         setAutomaticallySavedCount((n) => n + 1);
                         // Do not leave sold-out products in the payable UI.
                         fetchIdRef.current += 1;
@@ -677,6 +701,9 @@ export default function ClientCart() {
                 // Reconcile against the server and show the saved items even if
                 // this was the last product in the cart.
                 await Promise.all([fetchCart(), fetchSavedItems()]);
+                // Also reconcile the header if the server removed the line as
+                // part of saving and our explicit DELETE was unnecessary.
+                notifyOwnCartChange();
             }
         })();
     }, [isAuthenticated, localCart]);
@@ -691,63 +718,52 @@ export default function ClientCart() {
                 return;
             }
             const items = await apiGetSaved(customerId);
-            const missingStockIds = items
-                .filter(
-                    (item) =>
-                        item.productId &&
-                        item.sellStockQuantity == null &&
-                        item.isAvailableForSale !== false,
-                )
-                .map((item) => String(item.productId));
-            if (missingStockIds.length) {
+            // Older API deployments omitted current SELL pricing from saved
+            // items. Refresh missing price/stock from the product endpoints so
+            // an in-stock, newly repriced item becomes movable immediately.
+            const needsRefresh = items.filter(
+                (item) =>
+                    item.productId &&
+                    (item.sellStockQuantity == null || !hasValidSellPrice(item.price)),
+            );
+            if (needsRefresh.length) {
                 try {
                     const response = await api.get("/product/sell", {
-                        params: { ids: [...new Set(missingStockIds)].join(",") },
+                        params: {
+                            ids: [...new Set(needsRefresh.map((item) => String(item.productId)))].join(","),
+                            limit: Math.max(10, needsRefresh.length),
+                        },
                     });
                     const products = Array.isArray(response.data?.productData)
                         ? response.data.productData
                         : [];
                     const byId = new Map<string, any>(
-                        products.map((p: any) => [
-                            String(p.productId ?? p._id),
-                            p,
-                        ]),
+                        products.map((p: any) => [String(p.productId ?? p._id), p]),
                     );
-                    for (const saved of items) {
+                    for (const saved of needsRefresh) {
                         const matched = byId.get(String(saved.productId));
-                        if (matched) {
-                            saved.sellStockQuantity =
-                                matched.sellStockQuantity ?? null;
-                            saved.isAvailableForSale =
-                                matched.isAvailableForSale ?? null;
-                        }
+                        if (matched) applySavedProductSnapshot(saved, matched);
                     }
-                    // The sell list may omit sold-out products. Its individual
-                    // detail endpoint still exposes sellStockQuantity.
-                    const stillUnknown = items.filter(
-                        (item) =>
-                            item.productId &&
-                            item.sellStockQuantity == null &&
-                            item.isAvailableForSale !== false,
-                    );
-                    const individual = await Promise.allSettled(
-                        stillUnknown.map((item) =>
-                            api.get(`/product/sell/${encodeURIComponent(String(item.productId))}`),
-                        ),
-                    );
-                    individual.forEach((result, index) => {
-                        if (result.status !== "fulfilled") return;
-                        const product = result.value.data?.productData;
-                        if (!product) return;
-                        stillUnknown[index].sellStockQuantity =
-                            product.sellStockQuantity ?? null;
-                        stillUnknown[index].isAvailableForSale =
-                            product.isAvailableForSale ?? null;
-                    });
                 } catch (err) {
-                    // Saved items are still usable even if the stock lookup fails.
-                    console.warn("Could not refresh saved product stock", err);
+                    console.warn("Could not refresh saved products from sell list", err);
                 }
+
+                // The sell list intentionally excludes out-of-stock products.
+                // The detail endpoint includes their actual stock and price,
+                // so refresh any item still lacking either field.
+                const stillUnresolved = needsRefresh.filter(
+                    (item) => item.sellStockQuantity == null || !hasValidSellPrice(item.price),
+                );
+                const individual = await Promise.allSettled(
+                    stillUnresolved.map((item) =>
+                        api.get(`/product/sell/${encodeURIComponent(String(item.productId))}`),
+                    ),
+                );
+                individual.forEach((result, index) => {
+                    if (result.status !== "fulfilled") return;
+                    if (result.value.data?.ack === "failure") return;
+                    applySavedProductSnapshot(stillUnresolved[index], result.value.data?.productData);
+                });
             }
             setSavedItems(items);
         } catch (err: any) {
@@ -775,9 +791,10 @@ export default function ClientCart() {
             try {
                 items = JSON.parse(raw);
             } catch {
-                window.dispatchEvent(new Event("cartChanged"));
                 localStorage.removeItem("wcm_guest_cart_v1");
+                localStorage.setItem("cartCount", "0");
                 setLocalCart(null);
+                notifyOwnCartChange();
                 return;
             }
 
@@ -803,7 +820,7 @@ export default function ClientCart() {
 
             const sellItems = products
                 .filter((p: any) =>
-                    items.some(
+                    hasValidSellPrice(p.latestSalePrice) && items.some(
                         (i: any) => String(i.productId) === String(p._id),
                     ),
                 )
@@ -829,7 +846,7 @@ export default function ClientCart() {
                     };
                 });
 
-            const validIds = new Set(products.map((p: any) => String(p._id)));
+            const validIds = new Set(products.filter((p: any) => hasValidSellPrice(p.latestSalePrice)).map((p: any) => String(p._id)));
 
             const cleanedItems = items.filter(
                 (i: any) =>
@@ -837,11 +854,10 @@ export default function ClientCart() {
             );
             const sellHamperItems = await hydrateGuestHampers();
 
-            // FIX: remove invalid productIds
-            if (cleanedItems.length !== items.length) {
-                console.warn(
-                    "Removed invalid cart items:",
-                    items.filter((i) => !validIds.has(String(i.productId))),
+            const removedCount = items.length - cleanedItems.length;
+            if (removedCount > 0) {
+                setGuestCartNotice(
+                    `${removedCount} product${removedCount === 1 ? " was" : "s were"} removed from your bag because ${removedCount === 1 ? "it is" : "they are"} no longer available or ${removedCount === 1 ? "has" : "have"} no selling price.`,
                 );
             }
 
@@ -849,6 +865,16 @@ export default function ClientCart() {
                 "wcm_guest_cart_v1",
                 JSON.stringify(cleanedItems),
             );
+            if (removedCount > 0) {
+                // A same-tab localStorage write does NOT fire a storage event.
+                // Correct the cached badge before notifying Header and product cards.
+                const remainingQty = cleanedItems.reduce(
+                    (total: number, line: any) => total + (Number(line.quantity) || 0),
+                    0,
+                );
+                localStorage.setItem("cartCount", String(remainingQty));
+                notifyOwnCartChange();
+            }
 
             setLocalCart({
                 _id: "guest",
@@ -1435,16 +1461,8 @@ export default function ClientCart() {
             return;
         }
         if (!saved) return;
-        if (
-            isProductUnavailable({
-                ...saved,
-                sellStockQuantity:
-                    saved.sellStockQuantity ??
-                    savedStockOverrides[String(saved.productId ?? saved.id)] ??
-                    null,
-            })
-        ) {
-            setError("This product is out of stock. You can move it back when it is available.");
+        if (getSavedProductAvailability(saved) !== "available") {
+            setError("This saved product cannot be moved to the cart until stock and a valid selling price are available.");
             return;
         }
 
@@ -1677,6 +1695,11 @@ export default function ClientCart() {
     ) {
         return (
             <div className="p-8">
+                {guestCartNotice && (
+                    <p role="status" className="max-w-xl mx-auto mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {guestCartNotice}
+                    </p>
+                )}
                 <EmptyIllustration isAuthenticated={isAuthenticated} />
             </div>
         );
@@ -1684,12 +1707,17 @@ export default function ClientCart() {
 
     return (
         <>
+            {guestCartNotice && (
+                <p role="status" className="max-w-4xl mx-auto mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {guestCartNotice}
+                </p>
+            )}
             {automaticallySavedCount > 0 && (
                 <div
                     role="status"
                     className="max-w-4xl mx-auto mb-4 rounded-2xl border border-[#c9e4d7] bg-[#f3fbf6] px-4 py-3 text-sm text-[#286347]"
                 >
-                    {automaticallySavedCount} out-of-stock product
+                    {automaticallySavedCount} unavailable product
                     {automaticallySavedCount === 1 ? " was" : "s were"} automatically
                     moved to <strong>Saved for later</strong>. You can find
                     {automaticallySavedCount === 1 ? " it" : " them"} below.
@@ -2033,8 +2061,8 @@ export default function ClientCart() {
                     {unavailableSellItems.length > 0 && (
                         <p role="alert" className="text-sm text-amber-700">
                             {autoMovingIds.length > 0
-                                ? "Moving sold-out products to Saved for later…"
-                                : "Sold-out products cannot be checked out. Remove unavailable items to continue."}
+                                ? "Moving unavailable products to Saved for later…"
+                                : "Products with missing prices or unavailable stock cannot be checked out. Remove unavailable items to continue."}
                         </p>
                     )}
                     {hasUnsavedGiftMessages && (
@@ -2135,118 +2163,66 @@ export default function ClientCart() {
                                 </div>
                             ) : (
                                 <ul className="space-y-3">
-                                    {savedItems.map((s) => (
-                                        <li
-                                            key={s._savedId ?? s.id}
-                                            className={`flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 rounded-xl p-2 transition-colors ${
-                                                isProductUnavailable({
-                                                    ...s,
-                                                    sellStockQuantity:
-                                                        s.sellStockQuantity ??
-                                                        savedStockOverrides[String(s.productId ?? s.id)] ??
-                                                        null,
-                                                })
-                                                    ? "bg-slate-100 border border-slate-200"
-                                                    : ""
-                                            }`}
-                                        >
-                                            <div className="w-16 h-16 rounded-md overflow-hidden border bg-white">
-                                                <Link
-                                                    href={
-                                                        s.productId
-                                                            ? `/products/${s.productId}`
-                                                            : "/products"
-                                                    }
-                                                    className="block w-full h-full"
-                                                >
-                                                    <SavedProductImage
-                                                        src={s.img}
-                                                        alt={s.title}
-                                                        unavailable={isProductUnavailable({
-                                                            ...s,
-                                                            sellStockQuantity:
-                                                                s.sellStockQuantity ??
-                                                                savedStockOverrides[String(s.productId ?? s.id)] ??
-                                                                null,
-                                                        })}
-                                                    />
-                                                </Link>
-                                            </div>
-
-                                            <div className="flex-1 min-w-0">
-                                                <div className={`text-sm font-medium ${
-                                                    isProductUnavailable({
-                                                        ...s,
-                                                        sellStockQuantity:
-                                                            s.sellStockQuantity ??
-                                                            savedStockOverrides[String(s.productId ?? s.id)] ??
-                                                            null,
-                                                    }) ? "text-slate-500" : "text-slate-900"
-                                                }`}>
-                                                    {s.title}
+                                    {savedItems.map((s) => {
+                                        const status = getSavedProductAvailability(s);
+                                        const unavailable = status !== "available";
+                                        return (
+                                            <li
+                                                key={s._savedId ?? s.id}
+                                                className={`flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 rounded-xl p-2 transition-colors ${
+                                                    unavailable ? "bg-slate-100 border border-slate-200" : ""
+                                                }`}
+                                            >
+                                                <div className="w-16 h-16 rounded-md overflow-hidden border bg-white">
+                                                    <Link
+                                                        href={s.productId ? `/products/${s.productId}` : "/products"}
+                                                        className="block w-full h-full"
+                                                    >
+                                                        <SavedProductImage
+                                                            src={s.img}
+                                                            alt={s.title}
+                                                            unavailable={unavailable}
+                                                        />
+                                                    </Link>
                                                 </div>
-                                                {isProductUnavailable({
-                                                    ...s,
-                                                    sellStockQuantity:
-                                                        s.sellStockQuantity ??
-                                                        savedStockOverrides[String(s.productId ?? s.id)] ??
-                                                        null,
-                                                }) && (
-                                                    <span className="mt-1 inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                                                        Out of stock · Saved for later
-                                                    </span>
-                                                )}
-                                                {typeof s.price ===
-                                                    "number" && (
-                                                    <div className="text-xs text-gray-500 mt-1">
-                                                        {formatCurrency(
-                                                            s.price,
-                                                        )}
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className={`text-sm font-medium ${unavailable ? "text-slate-500" : "text-slate-900"}`}>
+                                                        {s.title}
                                                     </div>
-                                                )}
-                                            </div>
+                                                    {unavailable && (
+                                                        <span className="mt-1 inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                            {savedProductStatusLabel(status)}
+                                                        </span>
+                                                    )}
+                                                    {hasValidSellPrice(s.price) && (
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            {formatCurrency(Number(s.price!.discountedPrice))}
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() =>
-                                                        moveSavedToCart(s)
-                                                    }
-                                                    disabled={
-                                                        saving ||
-                                                        isProductUnavailable({
-                                                            ...s,
-                                                            sellStockQuantity:
-                                                                s.sellStockQuantity ??
-                                                                savedStockOverrides[String(s.productId ?? s.id)] ??
-                                                                null,
-                                                        })
-                                                    }
-                                                    title={isProductUnavailable({
-                                                        ...s,
-                                                        sellStockQuantity:
-                                                            s.sellStockQuantity ??
-                                                            savedStockOverrides[String(s.productId ?? s.id)] ??
-                                                            null,
-                                                    }) ? "Available again when stock returns" : "Move to cart"}
-                                                    className="text-xs px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    Move to cart
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => moveSavedToCart(s)}
+                                                        disabled={saving || unavailable}
+                                                        title={savedProductActionTitle(status)}
+                                                        className="text-xs px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        Move to cart
+                                                    </button>
 
-                                                <button
-                                                    onClick={() =>
-                                                        openSavedConfirm(s)
-                                                    }
-                                                    disabled={
-                                                        saving || deletingSaved
-                                                    }
-                                                    className="text-xs px-3 py-1 rounded text-rose-600 hover:bg-rose-50"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </li>
-                                    ))}
+                                                    <button
+                                                        onClick={() => openSavedConfirm(s)}
+                                                        disabled={saving || deletingSaved}
+                                                        className="text-xs px-3 py-1 rounded text-rose-600 hover:bg-rose-50"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>

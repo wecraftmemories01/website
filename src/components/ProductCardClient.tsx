@@ -8,6 +8,7 @@ import Link from "next/link";
 import type { Product as ProdType } from "../types/product";
 import { ShoppingCart, Check, Heart, ArrowUpRight } from "lucide-react";
 import { addToCart, isInCart } from "../lib/cart";
+import { hasValidSellPrice } from "@/lib/productPricing";
 import favouritesClient from "../lib/favouritesClient";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 
@@ -138,6 +139,7 @@ export default function ProductCardClient({
 
     const actualPrice = product.latestSalePrice?.actualPrice;
     const discountedPrice = product.latestSalePrice?.discountedPrice;
+    const hasPrice = hasValidSellPrice(product.latestSalePrice);
     const stock = useMemo(
         () =>
             formatStock(
@@ -283,7 +285,7 @@ export default function ProductCardClient({
 
                         {/* PRICE */}
                         <div className="mt-3 flex min-h-9 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            {discountedPrice ? (
+                            {hasPrice ? (
                                 <>
                                     <span className="text-lg font-extrabold tracking-tight text-[#065975] sm:text-xl">
                                         ₹{formatPrice(discountedPrice)}
@@ -304,13 +306,13 @@ export default function ProductCardClient({
 
                         {/* ADD TO CART */}
                         <div className="mt-auto pt-4">
-                            {stock.isInStock && !added ? (
+                            {stock.isInStock && hasPrice && !added ? (
                                 <button
                                     onClick={async (ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
 
-                                        if (added || loadingAdd) return;
+                                        if (added || loadingAdd || !hasPrice || !stock.isInStock) return;
 
                                         setLoadingAdd(true);
 
@@ -428,7 +430,7 @@ export default function ProductCardClient({
                                     disabled
                                     className="flex min-h-11 w-full items-center justify-center rounded-xl border border-[#e5e9e2] bg-[#f4f5f2] px-2 text-xs font-bold text-[#94a096] sm:text-sm"
                                 >
-                                    Currently unavailable
+                                    {!hasPrice ? "Price unavailable" : "Currently unavailable"}
                                 </button>
                             )}
                         </div>

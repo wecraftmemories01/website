@@ -2,6 +2,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { publicImageUrl } from "@/lib/publicImageUrl";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { hasValidSellPrice } from "@/lib/productPricing";
 
 type Props = {
     item: any;
@@ -54,15 +55,13 @@ export default function MobileCartItem({
                     </h3>
                     {outOfStock && (
                         <span className="mt-1 inline-flex rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                            Out of stock · Excluded from checkout
+                            {!hasValidSellPrice(item.price) ? "Price unavailable · Excluded from checkout" : "Out of stock · Excluded from checkout"}
                         </span>
                     )}
                     <p className="mt-1 font-semibold text-[#065975]">
-                        {formatCurrency(
-                            item.price?.discountedPrice ??
-                                item.price?.actualPrice ??
-                                0,
-                        )}
+                        {hasValidSellPrice(item.price)
+                            ? formatCurrency(item.price.discountedPrice)
+                            : "Price not available"}
                     </p>
                     <button
                         type="button"

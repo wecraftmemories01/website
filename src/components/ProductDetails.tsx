@@ -6,6 +6,7 @@ import DOMPurify from "dompurify";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { addToCart, isInCart } from "../lib/cart";
+import { hasValidSellPrice } from "@/lib/productPricing";
 import favouritesClient from "../lib/favouritesClient";
 import ShareMenu from "@/components/ui/ShareMenu";
 
@@ -757,9 +758,11 @@ export default function ProductClient({ product }: { product: Product }) {
     const stockNumber = parseStockValue(sellStockQuantity);
     const stockDisplay =
         sellStockDisplayQuantity ?? (stockNumber > 0 ? stockNumber : 0);
-    const priceDisplay =
-        salePrice?.discountedPrice ?? salePrice?.actualPrice ?? null;
+    const hasPrice = hasValidSellPrice(salePrice);
+    const priceDisplay = hasPrice ? salePrice!.discountedPrice! : null;
     const isOutOfStock = stockNumber === 0 || !isAvailableForSale;
+    const cannotPurchase = isOutOfStock || !hasPrice;
+    const availabilityLabel = isOutOfStock ? "Out of stock" : !hasPrice ? "Price not available" : "In stock";
 
     // infer SELL or RENT for addToCart helper (similar to ProductCardClient)
     const inferredType: "SELL" | "RENT" = useMemo(() => {
@@ -879,8 +882,8 @@ export default function ProductClient({ product }: { product: Product }) {
 
     // ===== add to cart using shared helper OR fallback to raw fetch =====
     async function handleAddToCart() {
-        if (isOutOfStock) {
-            setToast("Cannot add — out of stock");
+        if (cannotPurchase) {
+            setToast(isOutOfStock ? "Cannot add — out of stock" : "Price not available for this product");
             return;
         }
 
@@ -1024,20 +1027,20 @@ export default function ProductClient({ product }: { product: Product }) {
                             path={`/products/${encodeURIComponent(product.seoSlug || _id)}`}
                         />
                         <span
-                            className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${isOutOfStock ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-[#edf7ed] border-[#d5e8d8] text-[#0a7791]"}`}
+                            className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${cannotPurchase ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-[#edf7ed] border-[#d5e8d8] text-[#0a7791]"}`}
                         >
                             <span
-                                className={`h-2 w-2 rounded-full ${isOutOfStock ? "bg-rose-500" : "bg-[#36a46c]"}`}
+                                className={`h-2 w-2 rounded-full ${cannotPurchase ? "bg-rose-500" : "bg-[#36a46c]"}`}
                             />
-                            {isOutOfStock ? "Out of stock" : "Ready to order"}
+                            {cannotPurchase ? availabilityLabel : "Ready to order"}
                         </span>
                     </div>
                 </div>
                 <div className="mt-3 flex items-center gap-3 lg:hidden">
                     <span className="text-[1.65rem] font-extrabold tracking-tight text-[#065975]">
-                        {priceDisplay != null ? formatINR(priceDisplay) : "—"}
+                        {priceDisplay != null ? formatINR(priceDisplay) : "Price unavailable"}
                     </span>
-                    {salePrice?.actualPrice != null &&
+                    {hasPrice && salePrice?.actualPrice != null &&
                         salePrice.actualPrice !== salePrice.discountedPrice && (
                             <span className="text-sm text-slate-400 line-through">
                                 {formatINR(salePrice.actualPrice)}
@@ -1287,11 +1290,11 @@ export default function ProductClient({ product }: { product: Product }) {
                                         Your handmade favourite
                                     </div>
                                     <div className="text-4xl font-extrabold tracking-tight text-[#065975] mt-1">
-                                        {priceDisplay
+                                        {priceDisplay != null
                                             ? formatINR(priceDisplay)
-                                            : "—"}
+                                            : "Price unavailable"}
                                     </div>
-                                    {salePrice?.actualPrice &&
+                                    {hasPrice && salePrice?.actualPrice &&
                                         salePrice.actualPrice !==
                                             salePrice.discountedPrice && (
                                             <div className="text-sm text-gray-400 line-through mt-1">
@@ -1307,11 +1310,9 @@ export default function ProductClient({ product }: { product: Product }) {
                                         Availability
                                     </div>
                                     <div
-                                        className={`text-sm font-semibold ${isOutOfStock ? "text-red-600" : "text-green-700"}`}
+                                        className={`text-sm font-semibold ${cannotPurchase ? "text-red-600" : "text-green-700"}`}
                                     >
-                                        {isOutOfStock
-                                            ? "Out of stock"
-                                            : `In stock (${stockDisplay})`}
+                                        {cannotPurchase ? availabilityLabel : `In stock (${stockDisplay})`}
                                     </div>
 
                                     {stockNumber > 0 && stockNumber <= 5 && (
@@ -1324,11 +1325,11 @@ export default function ProductClient({ product }: { product: Product }) {
 
                             <div className="mt-6 flex items-center gap-4">
                                 <div
-                                    className={`flex items-center border rounded-lg overflow-hidden ${cartState !== "not_added" || isOutOfStock ? "opacity-50 pointer-events-none" : ""}`}
+                                    className={`flex items-center border rounded-lg overflow-hidden ${cartState !== "not_added" || cannotPurchase ? "opacity-50 pointer-events-none" : ""}`}
                                 >
                                     <button
                                         onClick={() => handleQuantity(-1)}
-                                        disabled={quantity <= 1 || isOutOfStock}
+                                        disabled={quantity <= 1 || cannotPurchase}
                                         className="px-3 py-2 disabled:opacity-50"
                                     >
                                         −
@@ -1354,7 +1355,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                     <button
                                         onClick={() => handleQuantity(1)}
                                         disabled={
-                                            isOutOfStock ||
+                                            cannotPurchase ||
                                             Boolean(
                                                 stockNumber &&
                                                 quantity >= stockNumber,
@@ -1379,10 +1380,10 @@ export default function ProductClient({ product }: { product: Product }) {
                                         disabled={
                                             cartState !== "not_added" ||
                                             adding ||
-                                            isOutOfStock
+                                            cannotPurchase
                                         }
                                         className={`flex-1 min-h-12 py-3 rounded-xl text-white font-bold shadow-md transition ${
-                                            isOutOfStock
+                                            cannotPurchase
                                                 ? "bg-gray-300 cursor-not-allowed"
                                                 : "bg-[#065975] hover:bg-[#03465e]"
                                         }`}
@@ -1391,7 +1392,9 @@ export default function ProductClient({ product }: { product: Product }) {
                                             ? "Checking cart…"
                                             : adding
                                               ? "Adding…"
-                                              : "Add to cart"}
+                                              : cannotPurchase
+                                                ? availabilityLabel
+                                                : "Add to cart"}
                                     </button>
                                 )}
                             </div>
@@ -1568,24 +1571,24 @@ export default function ProductClient({ product }: { product: Product }) {
                             {/* Price */}
                             <div className="flex flex-col shrink-0">
                                 <span className="text-base sm:text-lg font-extrabold text-[#065975] leading-tight">
-                                    {priceDisplay
+                                    {priceDisplay != null
                                         ? formatINR(priceDisplay)
-                                        : "—"}
+                                        : "Price unavailable"}
                                 </span>
                                 <span
-                                    className={`text-xs font-medium ${isOutOfStock ? "text-red-600" : "text-green-700"}`}
+                                    className={`text-xs font-medium ${cannotPurchase ? "text-red-600" : "text-green-700"}`}
                                 >
-                                    {isOutOfStock ? "Out of stock" : "In stock"}
+                                    {availabilityLabel}
                                 </span>
                             </div>
 
                             {/* Quantity */}
                             <div
-                                className={`flex items-center border rounded-xl overflow-hidden ${cartState !== "not_added" || isOutOfStock ? "opacity-50 pointer-events-none" : ""}`}
+                                className={`flex items-center border rounded-xl overflow-hidden ${cartState !== "not_added" || cannotPurchase ? "opacity-50 pointer-events-none" : ""}`}
                             >
                                 <button
                                     onClick={() => handleQuantity(-1)}
-                                    disabled={quantity <= 1 || isOutOfStock}
+                                    disabled={quantity <= 1 || cannotPurchase}
                                     className="px-3 py-2 text-lg disabled:opacity-40"
                                 >
                                     −
@@ -1598,7 +1601,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                 <button
                                     onClick={() => handleQuantity(1)}
                                     disabled={
-                                        isOutOfStock ||
+                                        cannotPurchase ||
                                         Boolean(
                                             stockNumber &&
                                             quantity >= stockNumber,
@@ -1624,15 +1627,15 @@ export default function ProductClient({ product }: { product: Product }) {
                                     disabled={
                                         cartState !== "not_added" ||
                                         adding ||
-                                        isOutOfStock
+                                        cannotPurchase
                                     }
                                     className={`min-w-0 flex-1 min-h-11 px-3 py-2 rounded-xl text-white text-sm font-bold shadow-md ${
-                                        isOutOfStock
+                                        cannotPurchase
                                             ? "bg-gray-300 cursor-not-allowed"
                                             : "bg-[#0c7d96] hover:brightness-95"
                                     }`}
                                 >
-                                    {adding ? "Adding…" : "Add to Cart"}
+                                    {adding ? "Adding…" : cannotPurchase ? availabilityLabel : "Add to Cart"}
                                 </button>
                             )}
                         </div>
@@ -1651,12 +1654,12 @@ export default function ProductClient({ product }: { product: Product }) {
                             {productName}
                         </span>
                         <span className="font-extrabold text-xl text-[#065975] shrink-0">
-                            {priceDisplay ? formatINR(priceDisplay) : "—"}
+                            {priceDisplay != null ? formatINR(priceDisplay) : "Price unavailable"}
                         </span>
                         <span
-                            className={`text-xs font-semibold shrink-0 ${isOutOfStock ? "text-rose-600" : "text-[#0c7d96]"}`}
+                            className={`text-xs font-semibold shrink-0 ${cannotPurchase ? "text-rose-600" : "text-[#0c7d96]"}`}
                         >
-                            {isOutOfStock ? "Out of stock" : "In stock"}
+                            {availabilityLabel}
                         </span>
                         {cartState === "added" ? (
                             <button
@@ -1673,7 +1676,7 @@ export default function ProductClient({ product }: { product: Product }) {
                                 disabled={
                                     adding ||
                                     cartState !== "not_added" ||
-                                    isOutOfStock
+                                    cannotPurchase
                                 }
                                 className="site-button-primary !min-h-11 !px-8 disabled:opacity-50"
                             >
@@ -1681,8 +1684,8 @@ export default function ProductClient({ product }: { product: Product }) {
                                     ? "Checking cart…"
                                     : adding
                                       ? "Adding…"
-                                      : isOutOfStock
-                                        ? "Out of stock"
+                                      : cannotPurchase
+                                        ? availabilityLabel
                                         : "Add to cart"}
                             </button>
                         )}

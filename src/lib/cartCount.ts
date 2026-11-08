@@ -1,5 +1,6 @@
 import api from "@/services/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { hasValidSellPrice } from "@/lib/productPricing";
 
 /* ---------------- Helpers ---------------- */
 
@@ -68,14 +69,23 @@ export async function fetchCartCountUtil(): Promise<number> {
             return 0;
         }
 
-        let count = 0;
-
-        if (typeof raw.totalItems === "number") {
-            count = raw.totalItems;
-        } else {
-            count = [...(raw.sellItems || []), ...(raw.sellHamperItems || []), ...(raw.rentItems || [])]
-                .reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
-        }
+        // totalItems is the number of stored lines/units and still includes
+        // products whose price was removed after they were added. Only show
+        // purchasable SELL lines in the header badge.
+        const sellCount = (raw.sellItems || []).reduce(
+            (sum: number, item: any) =>
+                sum + (item.inUse !== false && hasValidSellPrice(item.product?.price)
+                    ? Number(item.quantity) || 0
+                    : 0),
+            0,
+        );
+        const hamperCount = (raw.sellHamperItems || []).reduce(
+            (sum: number, item: any) => sum + (Number(item.quantity) || 0), 0,
+        );
+        const rentCount = (raw.rentItems || []).reduce(
+            (sum: number, item: any) => sum + (Number(item.quantity) || 0), 0,
+        );
+        const count = sellCount + hamperCount + rentCount;
 
         localStorage.setItem("cartCount", String(count));
 

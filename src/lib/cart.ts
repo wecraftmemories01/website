@@ -1,3 +1,5 @@
+import { hasValidSellPrice } from "@/lib/productPricing";
+
 const API_BASE = (
     process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3000"
 ).replace(/\/+$/, "");
@@ -247,7 +249,7 @@ export async function fetchCartFromApi(): Promise<number> {
             count += Number(item.quantity) || 0;
         }
         for (const item of cart?.sellItems || []) {
-            if (item.inUse !== false && item.productId) {
+            if (item.inUse !== false && item.productId && hasValidSellPrice(item.product?.price)) {
                 productIds.push(String(item.productId));
                 count += Number(item.quantity) || 0;
             }
